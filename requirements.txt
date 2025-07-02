@@ -1,0 +1,6 @@
+langchain-mcp-adapters
+fastmcp
+langchain
+langchain-openai
+langgraph
+fastapi

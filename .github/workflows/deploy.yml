@@ -1,0 +1,49 @@
+name: Deploy to Azure Container Instance
+
+on:
+  push:
+    branches:
+      - main  # or your preferred branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v4
+
+    - name: Log in to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: prithviraj90/mcp-tutorial:latest
+
+    - name: Deploy to Azure Container Instance
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          az container create \
+            --resource-group RG2 \
+            --name pruthviraj-chavan-container \
+            --image prithviraj90/mcp-tutorial:latest \
+            --registry-login-server index.docker.io \
+            --registry-username prithviraj90 \
+            --registry-password ${{ secrets.DOCKERHUB_PASSWORD }} \
+            --dns-name-label pruthviraj-demo-app \
+            --ports 8050 \
+            --cpu 1 \
+            --memory 1.5 \
+            --os-type Linux \
+            --location canadaeast \
+            --restart-policy OnFailure || \
+          az container update \
+            --resource-group RG2 \
+            --name pruthviraj-chavan-container \
+            --image prithviraj90/mcp-tutorial:latest
