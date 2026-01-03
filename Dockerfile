@@ -22,8 +22,8 @@ RUN uv pip install -r requirements.txt --system
 # Copy the full project
 COPY . .
 
-# Expose port if server.py runs an app (like FastAPI, Flask, etc.)
+# Expose port if serverNew.py runs an app (like FastAPI, Flask, etc.)
 EXPOSE 8050
 
 # Command to run your server file
-CMD ["uv", "run", "server.py"]
+CMD ["uv", "run", "serverNew.py"]
