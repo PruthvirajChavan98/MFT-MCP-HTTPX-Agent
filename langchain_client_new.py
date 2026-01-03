@@ -20,6 +20,20 @@ llm = AzureChatOpenAI(
     streaming=True
 )
 
+# connections = {
+# "hero_fincorp": {
+#     "url": "http://0.0.0.0:8050/sse",
+#     "transport": "sse",
+#     "headers": {
+#         "X-Session-ID": request.session_id
+#     }
+# }
+# }
+
+# # Initialize client and tools
+# client = MultiServerMCPClient(connections)
+# tools = await client.get_tools()
+
 @app.post("/agent/query")
 async def query_agent(request: AgentRequest):
     try:

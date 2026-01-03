@@ -5,10 +5,10 @@ from fastmcp.server.dependencies import get_http_request
 
 from HFCL_Auth_APIs import HeroFincorpAuthAPIs
 from HFCLAPIsNew import HeroFincorpAPIs
-from image_store import ImageStore
+from redis_image_store import RedisImageStore
 
 mcp = FastMCP(name="HFCL MCP Server httpx tools")
-image_store = ImageStore(db_path="/Users/pruthvi/Developer/HFCL-Langchain-MCP-Client-New/image_store.db")
+image_store = RedisImageStore(redis_uri="redis://default:1rGWxYHyLEJRYskcZ3MT0UEbssESjiwI@redis-11508.c266.us-east-1-3.ec2.redns.redis-cloud.com:11508")
 
 def extract_custom_headers():
     """
