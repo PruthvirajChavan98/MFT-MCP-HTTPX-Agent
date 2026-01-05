@@ -1,0 +1,49 @@
+services:
+  mcp:
+    build:
+      context: .
+    container_name: hfcl_mcp
+    command: ["uv", "run", "serverNew.py"]
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8050:8050"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: .
+    container_name: hfcl_agent
+    command: ["uv", "run", "langchain_client_new.py"]
+    env_file:
+      - .env
+    environment:
+      PORT: "8000"
+      MCP_SERVER_URL: "http://mcp:8050/sse"
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8085:8000"
+    depends_on:
+      - mcp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: hfcl_cloudflared
+    env_file:
+      - .env
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+    # IMPORTANT: "tunnel" subcommand must be present
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
+    depends_on:
+      - agent
+      - mcp
+    restart: unless-stopped
+

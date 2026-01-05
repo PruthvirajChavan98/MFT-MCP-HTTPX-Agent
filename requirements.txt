@@ -3,5 +3,6 @@ fastmcp
 langchain
 langchain-openai
 langgraph
+langgraph-checkpoint-redis
 fastapi
 redis

@@ -6,20 +6,20 @@ from Loggers.StdOutLogger import StdoutLogger
 
 log = StdoutLogger(name="redis_image_store")
 
-# One shared session store (also gives us the resolved redis_uri)
-session_store = RedisSessionStore()
-
 class RedisImageStore:
-    def __init__(self, redis_uri: Optional[str] = None):
-        # ✅ If no redis_uri passed, use the SAME redis that session_store connected to
-        uri = (redis_uri or session_store.redis_uri)
+    def __init__(self, session_store: Optional[RedisSessionStore] = None, redis_uri: Optional[str] = None):
+        # Use shared session_store if provided (recommended)
+        self.session_store = session_store or RedisSessionStore()
+
+        uri = (redis_uri or self.session_store.redis_uri)
         if not uri:
             raise RuntimeError("RedisImageStore: could not resolve redis_uri")
+
         log.info(f"Using Redis URI: {uri}")
         self.client = redis.from_url(uri, decode_responses=True)
 
     def save_image(self, image_base64: str, session_id: str) -> str:
-        session_data = session_store.get(session_id=session_id)
+        session_data = self.session_store.get(session_id=session_id)
         if not session_data:
             raise ValueError(f"No session data found for session_id: {session_id}")
 
