@@ -15,11 +15,11 @@ def _valid_session_id(session_id: object) -> str:
 
 class HeroFincorpAuthAPIs:
     """
-    Wraps REST auth-ish endpoints from your Postman collection:
-
-      GET  /herofin-service/get-contact-hint/{appId}/        (Basic)
-      POST /herofin-service/otp/generate_new/                (Basic)
-      POST /herofin-service/otp/validate_new/                (Basic)
+    Wraps REST auth-ish endpoints from your Postman collection.
+    
+    CRITICAL CHANGE:
+    - validate_otp now writes the access_token to Redis.
+    - validate_otp returns a SANITIZED dictionary (no token) to the caller.
     """
 
     def __init__(
@@ -66,11 +66,10 @@ class HeroFincorpAuthAPIs:
                     return {"status_code": resp.status_code, "error": resp.text}
 
                 data = resp.json()
-                # commonly returns phone_number + app_id
                 phone = data.get("phone_number")
                 resolved_app_id = data.get("app_id") or app_id
 
-                # persist
+                # Persist hints
                 self.session_store.update(self.session_id, {
                     "phone_number": phone,
                     "app_id": resolved_app_id,
@@ -85,18 +84,15 @@ class HeroFincorpAuthAPIs:
 
     def generate_otp(self, user_input: str):
         """
-        Accepts either:
-          - 10 digit phone number (e.g. 9000000000)
-          - app_id (e.g. 5115292 or APP-9000000000)
+        Accepts: 10 digit phone OR app_id.
+        Resolves to phone_number and triggers OTP.
         """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         user_input = (user_input or "").strip()
 
-        # touch session so key exists
         self.session_store.update(self.session_id, {"last_generate_otp_input": user_input})
 
         if not user_input:
-            self.session_store.update(self.session_id, {"last_generate_otp_error": "empty"})
             return {"error": "Provide phone_number or app_id"}
 
         try:
@@ -104,39 +100,33 @@ class HeroFincorpAuthAPIs:
                 phone_number: Optional[str] = None
                 app_id: Optional[str] = None
 
-                # phone path
+                # 1. Resolve Input to Phone/AppID
                 if user_input.isdigit() and len(user_input) == 10:
                     phone_number = user_input
-                    # keep whatever app_id we might already have
+                    # Keep existing app_id if we have it
                     existing = self.session_store.get(self.session_id) or {}
                     app_id = existing.get("app_id")
-
                 else:
-                    # treat as app_id (supports numeric or "APP-xxxx")
+                    # Treat as app_id -> call contact hint
                     app_id = user_input
                     hint = client.get(self._url(f"/herofin-service/get-contact-hint/{app_id}/"))
-                    self.session_store.update(self.session_id, {
-                        "last_contact_hint_status": hint.status_code,
-                        "last_contact_hint_response": hint.text[:5000],
-                    })
-
                     if hint.status_code != 200:
                         return {"status_code": hint.status_code, "error": hint.text}
-
+                    
                     hint_data = hint.json()
                     phone_number = hint_data.get("phone_number")
                     app_id = hint_data.get("app_id") or app_id
 
-                # persist resolved values even if OTP fails
+                # Save resolved context
                 self.session_store.update(self.session_id, {
                     "phone_number": phone_number,
                     "app_id": app_id,
                 })
 
                 if not phone_number:
-                    self.session_store.update(self.session_id, {"last_generate_otp_error": "phone_number not resolved"})
-                    return {"error": "Could not resolve phone number"}
+                    return {"error": "Could not resolve phone number for OTP generation"}
 
+                # 2. Call Generate OTP
                 payload = {"phone_number": phone_number, "app_id": app_id}
                 resp = client.post(self._url("/herofin-service/otp/generate_new/"), json=payload)
                 self.logger.info(f"POST otp/generate_new - {resp.status_code}")
@@ -147,16 +137,24 @@ class HeroFincorpAuthAPIs:
                 })
 
                 if resp.status_code in (200, 201):
-                    return {"status": "OTP Sent", "phone_number": phone_number, "app_id": app_id}
+                    return {
+                        "status": "OTP Sent", 
+                        "phone_number": phone_number, 
+                        "app_id": app_id,
+                        "message": "OTP has been sent to your registered mobile number."
+                    }
 
                 return {"status_code": resp.status_code, "error": resp.text}
 
         except Exception as e:
             self.logger.error(f"OTP Generation Error: {e}")
-            self.session_store.update(self.session_id, {"last_generate_otp_exception": str(e)})
             return {"error": str(e)}
 
     def validate_otp(self, otp: str):
+        """
+        Validates OTP.
+        ON SUCCESS: Saves access_token to Redis. Returns SANITIZED dict (no token) to LLM.
+        """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         otp = (otp or "").strip()
 
@@ -167,7 +165,7 @@ class HeroFincorpAuthAPIs:
         app_id = session_data.get("app_id")
 
         if not phone_number:
-            return {"error": "phone_number missing in session (run generate_otp first)"}
+            return {"error": "Phone number missing in session. Please request OTP first."}
 
         payload = {"phone_number": phone_number, "app_id": app_id, "otp": otp}
 
@@ -176,30 +174,37 @@ class HeroFincorpAuthAPIs:
                 resp = client.post(self._url("/herofin-service/otp/validate_new/"), json=payload)
                 self.logger.info(f"POST otp/validate_new - {resp.status_code}")
 
-                self.session_store.update(self.session_id, {
-                    "last_validate_otp_status": resp.status_code,
-                    "last_validate_otp_response": resp.text[:5000],
-                })
-
                 if resp.status_code not in (200, 201):
                     return {"status_code": resp.status_code, "error": resp.text}
 
                 data = resp.json()
+                
+                # --- CRITICAL: CAPTURE STATE ---
                 access_token = data.get("access_token")
                 resolved_app_id = data.get("loan_id") or data.get("app_id") or app_id
+                user_details = data.get("user", {})
 
                 if access_token:
                     self.session_store.update(self.session_id, {
                         "access_token": access_token,
                         "app_id": resolved_app_id,
                         "phone_number": phone_number,
+                        "user_details": user_details # Optional: save user profile bits
                     })
-
-                return data
+                    self.logger.info(f"✅ Session {self.session_id} authenticated. Token saved to Redis.")
+                
+                # --- CRITICAL: SANITIZE RETURN ---
+                # We return a success message but deliberately exclude the raw token.
+                return {
+                    "status": "success",
+                    "message": "OTP Verified. You are now logged in.",
+                    "loan_id": resolved_app_id,
+                    "user_details": user_details,
+                    "action": "Token secured in backend session."
+                }
 
         except Exception as e:
             self.logger.error(f"OTP Validation Error: {e}")
-            self.session_store.update(self.session_id, {"last_validate_otp_exception": str(e)})
             return {"error": str(e)}
 
     def is_logged_in(self):

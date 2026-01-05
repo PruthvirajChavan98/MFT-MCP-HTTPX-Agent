@@ -8,6 +8,8 @@ services:
       - .env
     environment:
       PYTHONUNBUFFERED: "1"
+      # Both services talk to the SAME Redis host
+      REDIS_URL: "redis://host.docker.internal:6379/0" 
     ports:
       - "8050:8050"
     extra_hosts:
@@ -25,6 +27,8 @@ services:
       PORT: "8000"
       MCP_SERVER_URL: "http://mcp:8050/sse"
       PYTHONUNBUFFERED: "1"
+      # Must match the MCP Redis URL for state sharing
+      REDIS_URL: "redis://host.docker.internal:6379/0" 
     ports:
       - "8085:8000"
     depends_on:
@@ -40,10 +44,8 @@ services:
       - .env
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
-    # IMPORTANT: "tunnel" subcommand must be present
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
     depends_on:
       - agent
       - mcp
     restart: unless-stopped
-
