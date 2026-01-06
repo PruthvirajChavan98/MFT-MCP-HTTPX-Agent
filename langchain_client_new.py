@@ -6,6 +6,7 @@ import inspect
 from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, create_model
 
@@ -16,6 +17,7 @@ except Exception:
     from langchain_mcp_adapters.tool import load_mcp_tools
 
 from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState
@@ -179,12 +181,40 @@ def rebuild_tools_for_user(session_id: str) -> List[StructuredTool]:
 # -------------------------------
 # LLM
 # -------------------------------
-llm = ChatOpenAI(
+# llm = ChatOpenAI(
+#     api_key="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",
+#     base_url=os.getenv("BASE_URL", "https://api.groq.com/openai/v1"),
+#     model=os.getenv("MODEL", "openai/gpt-oss-120b"),
+#     streaming=True,
+#     reasoning_effort="high",
+#     extra_body={"reasoning": {"enabled": True}}
+# )
+
+llm = ChatGroq(
     api_key="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",
-    base_url=os.getenv("BASE_URL", "https://api.groq.com/openai/v1"),
+    base_url="https://api.groq.com",
     model=os.getenv("MODEL", "openai/gpt-oss-120b"),
     streaming=True,
+    temperature=0.0,
+    reasoning_format="parsed"
 )
+
+# llm_with_reasoning = llm.bind(extra_body={"reasoning": {"enabled": True}})
+
+# llm = llm_with_reasoning
+
+# llm = ChatOpenAI(
+#     api_key="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",
+#     base_url="https://openrouter.ai/api/v1",
+#     model="openai/gpt-5-mini",
+#     streaming=True,
+#     reasoning_effort="high",
+#     model_kwargs={
+#         "extra_body": {
+#             "include_reasoning": True 
+#         }
+#     }
+# )
 
 class AgentRequest(BaseModel):
     session_id: str
@@ -245,6 +275,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+origins = [
+    "*"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      # List of allowed origins
+    allow_credentials=True,     # Allow cookies and authentication headers
+    allow_methods=["*"],        # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],        # Allow all headers
+)
+
 @app.post("/agent/query")
 async def query_agent(request: AgentRequest):
     try:
@@ -268,7 +310,8 @@ async def query_agent(request: AgentRequest):
     except Exception as e:
         log.error(f"Query Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+                    
+
 @app.post("/agent/stream")
 async def stream_agent(request: AgentRequest):
     sid = _valid_session_id(request.session_id)
@@ -293,21 +336,20 @@ async def stream_agent(request: AgentRequest):
                 if kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"]
                     
-                    # A. Specialized Reasoning (DeepSeek R1, etc.)
-                    # Check additional_kwargs for 'reasoning_content'
-                    if "reasoning_content" in chunk.additional_kwargs:
-                        reasoning_chunk = chunk.additional_kwargs["reasoning_content"]
-                        if reasoning_chunk:
-                            yield {"event": "reasoning_token", "data": reasoning_chunk}
+                    # A. Reasoning Token (from your logs: additional_kwargs['reasoning_content'])
+                    reasoning = chunk.additional_kwargs.get("reasoning_content")
+                    if reasoning:
+                        yield {"event": "reasoning_token", "data": reasoning}
+                        # Continue to next iteration to avoid double-processing if content is empty
+                        continue 
 
-                    # B. Standard Content (ReAct thoughts or Final Answer)
+                    # B. Standard Content Token (from your logs: content='  ')
+                    # Only yield if content is not empty/None
                     if chunk.content:
-                        # In ReAct, text before a tool call is the "thought"
                         yield {"event": "token", "data": chunk.content}
 
                 # --- 2. Detect Tool Calls ---
                 elif kind == "on_tool_start":
-                    # Ignorable system tools if any (like __arg1)
                     if event["name"] not in ["_Exception"]: 
                         tool_info = {
                             "tool": event["name"],
@@ -315,7 +357,7 @@ async def stream_agent(request: AgentRequest):
                         }
                         yield {"event": "tool_start", "data": json.dumps(tool_info)}
 
-                # --- 3. Optional: Tool Output ---
+                # --- 3. Tool Output ---
                 elif kind == "on_tool_end":
                      yield {"event": "tool_end", "data": str(event["data"].get("output"))}
 

@@ -1,4 +1,13 @@
 services:
+  redis:
+    # Changed from redis:7-alpine to redis-stack-server to support FT._LIST
+    image: redis/redis-stack-server:latest
+    container_name: hfcl_redis
+    ports:
+      # HOST:CONTAINER -> Expose on 6380 to avoid conflict with CRM (6379)
+      - "6380:6379"
+    restart: unless-stopped
+
   mcp:
     build:
       context: .
@@ -8,10 +17,12 @@ services:
       - .env
     environment:
       PYTHONUNBUFFERED: "1"
-      # Both services talk to the SAME Redis host
-      REDIS_URL: "redis://host.docker.internal:6379/0" 
+      # Internal docker networking still uses port 6379
+      REDIS_URL: "redis://redis:6379/0" 
     ports:
       - "8050:8050"
+    depends_on:
+      - redis
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -27,12 +38,13 @@ services:
       PORT: "8000"
       MCP_SERVER_URL: "http://mcp:8050/sse"
       PYTHONUNBUFFERED: "1"
-      # Must match the MCP Redis URL for state sharing
-      REDIS_URL: "redis://host.docker.internal:6379/0" 
+      # Internal docker networking still uses port 6379
+      REDIS_URL: "redis://redis:6379/0" 
     ports:
       - "8085:8000"
     depends_on:
       - mcp
+      - redis
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

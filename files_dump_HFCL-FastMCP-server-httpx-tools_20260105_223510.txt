@@ -1,28 +1,17 @@
 ================================================================================
 ### PROJECT STRUCTURE
 ================================================================================
-[NOTE] Ignore patterns hid everything in tree view; showing unfiltered tree:
 .
 ├── cloudflared
 │   └── config.yml
 ├── Loggers
-│   ├── __pycache__
-│   │   └── StdOutLogger.cpython-311.pyc
 │   └── StdOutLogger.py
-├── __pycache__
-│   ├── HFCLAPIsNew.cpython-311.pyc
-│   ├── HFCL_Auth_APIs.cpython-311.pyc
-│   ├── langchain_client_new.cpython-311.pyc
-│   ├── redis_image_store.cpython-311.pyc
-│   ├── redis_session_store.cpython-311.pyc
-│   └── redis_session_store.cpython-313.pyc
+├── debug_auth_flow.py
 ├── docker-compose.yml
 ├── Dockerfile
-├── files_dump_HFCL-FastMCP-server-httpx-tools_20260105_132144.txt
 ├── HFCLAPIsNew.py
 ├── HFCL_Auth_APIs.py
 ├── langchain_client_new.py
-├── notebook.ipynb
 ├── pyproject.toml
 ├── README.md
 ├── redis_image_store.py
@@ -31,66 +20,48 @@
 ├── serverNew.py
 ├── session_store.db
 ├── session_store.py
-├── uv.lock
 └── verify_refactor.py
 
-5 directories, 26 files
+3 directories, 17 files
 
 ================================================================================
 ### PACKAGE / REPO METADATA
 ================================================================================
-Repo language profile: python
-Max file size (bytes): 2097152
+File: ./pyproject.toml
+  [project]
+  name = "mcp-tutorial"
+  version = "0.1.0"
+  description = "Add your description here"
+  readme = "README.md"
+  requires-python = ">=3.11"
+  dependencies = [
+      "fastapi>=0.115.13",
+      "fastmcp>=2.8.1",
+      "langchain>=0.3.25",
+      "langchain-groq>=0.3.8",
+      "langchain-mcp-adapters>=0.1.7",
+
+File: ./requirements.txt
+  langchain-mcp-adapters
+  fastmcp
+  langchain
+  langchain-openai
+  langchain-groq
+  langgraph
+  langgraph-checkpoint-redis
+  fastapi
+  redis
 
 ================================================================================
 ### FILE CONTENTS
 ================================================================================
 
 
-===== ./session_store.db =====
+===== session_store.db =====
 [binary skipped]
 
 
-===== ./Loggers/StdOutLogger.py =====
-import logging
-import sys
-
-class StdoutLogger:
-    def __init__(self, name='logger', level=logging.INFO):
-        # Create a logger
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(level)
-
-        # Check if handlers already exist to avoid adding them multiple times
-        if not self.logger.handlers:
-
-        # Create a handler for writing to stdout
-            handler = logging.StreamHandler(sys.stdout)
-            handler.setLevel(level)
-
-            # Create a formatter and set it for the handler
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-
-            # Add the handler to the logger
-            self.logger.addHandler(handler)
-
-    def debug(self, message):
-        self.logger.debug(message)
-
-    def info(self, message):
-        self.logger.info(message)
-
-    def warning(self, message):
-        self.logger.warning(message)
-
-    def error(self, message):
-        self.logger.error(message)
-
-    def critical(self, message):
-        self.logger.critical(message)   
-
-===== ./Dockerfile =====
+===== Dockerfile =====
 # Use slim Python image
 FROM python:3.11-slim
 
@@ -122,70 +93,124 @@ EXPOSE 8050
 CMD ["uv", "run", "serverNew.py"]
 
 
-===== ./cloudflared/config.yml =====
-# Ingress rules inside Docker network (service names resolve via docker DNS)
-ingress:
-  - hostname: agent.pruthvirajchavan.codes
-    service: http://agent:8000
-  - hostname: mcp.pruthvirajchavan.codes
-    service: http://mcp:8050
-  - service: http_status:404
+
+===== debug_auth_flow.py =====
+import sys
+import logging
+from redis_session_store import RedisSessionStore
+from HFCL_Auth_APIs import HeroFincorpAuthAPIs
+from HFCLAPIsNew import HeroFincorpAPIs
+
+# --- CONFIGURATION (Match your real Dev/Prod Data) ---
+# Use a fresh session ID to ensure no old data interferes
+SESSION_ID = "LIVE_TEST_BLIND_002"
+PHONE_NUMBER = "9412322182"  # Ensure this is a valid user in your system
+OTP = "123456"             # Ensure this is the correct magic/mock OTP for your dev env
+
+# Redis Config (Make sure this matches your docker-compose or local setup)
+# If running outside docker but redis is exposed on 6380:
+REDIS_URL = "redis://localhost:6380/0" 
+
+# Setup Logging
+logging.basicConfig(level=logging.INFO, format='%(name)s - %(message)s')
+log = logging.getLogger("LIVE_TEST")
+
+def run_live_test():
+    print(f"\n{'='*60}")
+    print(f"🚀 STARTING LIVE BLIND-STATE TEST against {REDIS_URL}")
+    print(f"{'='*60}")
+
+    # 1. Initialize Real Redis Store
+    try:
+        store = RedisSessionStore(REDIS_URL)
+        # Clear previous test session to start fresh
+        store.delete(SESSION_ID)
+        log.info(f"Cleared session: {SESSION_ID}")
+    except Exception as e:
+        log.error(f"Failed to connect to Redis: {e}")
+        return
+
+    # 2. Initialize Auth Client
+    auth_client = HeroFincorpAuthAPIs(SESSION_ID, session_store=store)
+
+    # ------------------------------------------------------------------
+    # STEP 1: Generate OTP (This seeds phone_number into Redis)
+    # ------------------------------------------------------------------
+    log.info(f"\n--- [Step 1] Requesting OTP for {PHONE_NUMBER} ---")
+    gen_resp = auth_client.generate_otp(PHONE_NUMBER)
+    print(f"Response: {gen_resp}")
+
+    if "error" in gen_resp:
+        log.error("❌ Generate OTP failed. Stopping.")
+        return
+
+    # Verify State: Redis should have Phone, but NO App ID yet (Blind State)
+    state = store.get(SESSION_ID)
+    log.info(f"Current Redis State: app_id={state.get('app_id')}, phone={state.get('phone_number')}")
+
+    # ------------------------------------------------------------------
+    # STEP 2: Validate OTP (The Critical Self-Healing Step)
+    # ------------------------------------------------------------------
+    log.info(f"\n--- [Step 2] Validating OTP {OTP} ---")
+    val_resp = auth_client.validate_otp(OTP)
+    print(f"Response: {val_resp}")
+
+    if "error" in val_resp:
+        log.error("❌ Validate OTP failed. Stopping.")
+        return
+
+    # ------------------------------------------------------------------
+    # STEP 3: Verify "Self-Healing"
+    # ------------------------------------------------------------------
+    log.info(f"\n--- [Step 3] Verifying App ID Recovery ---")
+    
+    # Check 1: Did the function return the ID?
+    returned_id = val_resp.get("loan_id")
+    
+    # Check 2: Is it saved in Redis?
+    final_state = store.get(SESSION_ID)
+    saved_id = final_state.get("app_id")
+    token = final_state.get("access_token")
+
+    if saved_id:
+        print(f"✅ SUCCESS: App ID recovered and saved: {saved_id}")
+    else:
+        print(f"❌ FAILURE: Session is authenticated but 'app_id' is MISSING.")
+        print(f"   Redis State: {final_state}")
+        print("   This confirms the Self-Heal logic (Strategy A or B) failed on the real API.")
+        return
+
+    # ------------------------------------------------------------------
+    # STEP 4: Prove API Access (Loan Details)
+    # ------------------------------------------------------------------
+    log.info(f"\n--- [Step 4] Fetching Loan Details (Proof of Life) ---")
+    
+    # Initialize API Client (Automatically loads the context we just saved)
+    api_client = HeroFincorpAPIs(SESSION_ID, session_store=store)
+    
+    loan_resp = api_client.get_loan_details()
+    print(f"Loan Details Response: {loan_resp}")
+
+    if "error" not in loan_resp and loan_resp.get("status_code") != 404:
+        print("\n🎉 TEST PASSED: Full flow from Phone -> Login -> Recovery -> Data Fetch worked.")
+    else:
+        print("\n⚠️ TEST PARTIAL: Login worked, ID recovered, but Loan Details endpoint failed.")
+
+if __name__ == "__main__":
+    run_live_test()
 
 
-===== ./.github/workflows/deploy.yml =====
-name: Deploy to Azure Container Instance
-
-on:
-  push:
-    branches:
-      - main  # or your preferred branch
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
-
-    - name: Log in to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: prithviraj90/mcp-tutorial:latest
-
-    - name: Deploy to Azure Container Instance
-      uses: azure/CLI@v1
-      with:
-        inlineScript: |
-          az container create \
-            --resource-group RG2 \
-            --name pruthviraj-chavan-container \
-            --image prithviraj90/mcp-tutorial:latest \
-            --registry-login-server index.docker.io \
-            --registry-username prithviraj90 \
-            --registry-password ${{ secrets.DOCKERHUB_PASSWORD }} \
-            --dns-name-label pruthviraj-demo-app \
-            --ports 8050 \
-            --cpu 1 \
-            --memory 1.5 \
-            --os-type Linux \
-            --location canadaeast \
-            --restart-policy OnFailure || \
-          az container update \
-            --resource-group RG2 \
-            --name pruthviraj-chavan-container \
-            --image prithviraj90/mcp-tutorial:latest
-
-
-===== ./docker-compose.yml =====
+===== docker-compose.yml =====
 services:
+  redis:
+    # Changed from redis:7-alpine to redis-stack-server to support FT._LIST
+    image: redis/redis-stack-server:latest
+    container_name: hfcl_redis
+    ports:
+      # HOST:CONTAINER -> Expose on 6380 to avoid conflict with CRM (6379)
+      - "6380:6379"
+    restart: unless-stopped
+
   mcp:
     build:
       context: .
@@ -195,10 +220,12 @@ services:
       - .env
     environment:
       PYTHONUNBUFFERED: "1"
-      # Both services talk to the SAME Redis host
-      REDIS_URL: "redis://host.docker.internal:6379/0" 
+      # Internal docker networking still uses port 6379
+      REDIS_URL: "redis://redis:6379/0" 
     ports:
       - "8050:8050"
+    depends_on:
+      - redis
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -214,12 +241,13 @@ services:
       PORT: "8000"
       MCP_SERVER_URL: "http://mcp:8050/sse"
       PYTHONUNBUFFERED: "1"
-      # Must match the MCP Redis URL for state sharing
-      REDIS_URL: "redis://host.docker.internal:6379/0" 
+      # Internal docker networking still uses port 6379
+      REDIS_URL: "redis://redis:6379/0" 
     ports:
       - "8085:8000"
     depends_on:
       - mcp
+      - redis
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -238,7 +266,8 @@ services:
     restart: unless-stopped
 
 
-===== ./redis_image_store.py =====
+
+===== redis_image_store.py =====
 import redis
 from typing import Optional, cast
 
@@ -278,7 +307,8 @@ class RedisImageStore:
     def cleanup_image(self, image_ref: str):
         self.client.delete(image_ref)
 
-===== ./pyproject.toml =====
+
+===== pyproject.toml =====
 [project]
 name = "mcp-tutorial"
 version = "0.1.0"
@@ -289,6 +319,7 @@ dependencies = [
     "fastapi>=0.115.13",
     "fastmcp>=2.8.1",
     "langchain>=0.3.25",
+    "langchain-groq>=0.3.8",
     "langchain-mcp-adapters>=0.1.7",
     "langchain-openai>=0.3.23",
     "langgraph>=0.4.8",
@@ -298,15 +329,8 @@ dependencies = [
 ]
 
 
-===== ./.dumperignore =====
-uv.lock
-*.ipynb
 
-===== ./.python-version =====
-3.11
-
-
-===== ./redis_session_store.py =====
+===== redis_session_store.py =====
 import json
 import os
 from typing import Optional, cast, Iterable
@@ -426,17 +450,8 @@ class RedisSessionStore:
         log.info(f"[Redis] DEL {sid}")
 
 
-===== ./.env =====
-CRM_BASE_URL=https://test-mock-crm.pruthvirajchavan.codes
-BASIC_AUTH_USERNAME=crm
-BASIC_AUTH_PASSWORD=crm
-# REDIS_URL=redis://127.0.0.1:6379/0
-REDIS_URL=redis://host.docker.internal:6379/0
-BASE_URL=https://api.groq.com/openai/v1
-API_KEY=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
-TUNNEL_TOKEN=eyJhIjoiZWI5YmYyZmVlNTE4Mjc5NmY1ODQzYjA0NGJiNjM3ZjQiLCJ0IjoiNzg5YjI3MWEtMTY2Yy00ZDU1LTgwNjUtYzA5ZmZkODU5NzI5IiwicyI6Ik4yRmlZbVV4T0dZdE1URmhNeTAwWXpBekxXRXhOakF0TUdVM09EUTNOVFF5TjJKayJ9
 
-===== ./verify_refactor.py =====
+===== verify_refactor.py =====
 import sys
 import logging
 from redis_session_store import RedisSessionStore
@@ -498,7 +513,8 @@ if __name__ == "__main__":
         log.error(f"Test Crashed: {e}")
 
 
-===== ./session_store.py =====
+
+===== session_store.py =====
 import sqlite3
 import json
 from typing import Optional
@@ -545,7 +561,8 @@ class SessionStore:
     def close(self):
         self.conn.close()
 
-===== ./serverNew.py =====
+
+===== serverNew.py =====
 import os
 import time
 import httpx
@@ -726,31 +743,20 @@ if __name__ == "__main__":
     mcp.run(transport="sse", host="0.0.0.0", port=8050)
 
 
-===== ./requirements.txt =====
+===== requirements.txt =====
 langchain-mcp-adapters
 fastmcp
 langchain
 langchain-openai
+langchain-groq
 langgraph
 langgraph-checkpoint-redis
 fastapi
 redis
 
 
-===== ./.gitignore =====
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
 
-# Virtual environments
-.venv
-
-
-===== ./langchain_client_new.py =====
+===== langchain_client_new.py =====
 import os
 import json
 import asyncio
@@ -759,6 +765,7 @@ import inspect
 from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, create_model
 
@@ -769,6 +776,7 @@ except Exception:
     from langchain_mcp_adapters.tool import load_mcp_tools
 
 from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState
@@ -932,12 +940,40 @@ def rebuild_tools_for_user(session_id: str) -> List[StructuredTool]:
 # -------------------------------
 # LLM
 # -------------------------------
-llm = ChatOpenAI(
+# llm = ChatOpenAI(
+#     api_key="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",
+#     base_url=os.getenv("BASE_URL", "https://api.groq.com/openai/v1"),
+#     model=os.getenv("MODEL", "openai/gpt-oss-120b"),
+#     streaming=True,
+#     reasoning_effort="high",
+#     extra_body={"reasoning": {"enabled": True}}
+# )
+
+llm = ChatGroq(
     api_key="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",
-    base_url=os.getenv("BASE_URL", "https://api.groq.com/openai/v1"),
+    base_url="https://api.groq.com",
     model=os.getenv("MODEL", "openai/gpt-oss-120b"),
     streaming=True,
+    temperature=0.0,
+    reasoning_format="parsed"
 )
+
+# llm_with_reasoning = llm.bind(extra_body={"reasoning": {"enabled": True}})
+
+# llm = llm_with_reasoning
+
+# llm = ChatOpenAI(
+#     api_key="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",
+#     base_url="https://openrouter.ai/api/v1",
+#     model="openai/gpt-5-mini",
+#     streaming=True,
+#     reasoning_effort="high",
+#     model_kwargs={
+#         "extra_body": {
+#             "include_reasoning": True 
+#         }
+#     }
+# )
 
 class AgentRequest(BaseModel):
     session_id: str
@@ -998,6 +1034,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+origins = [
+    "*"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      # List of allowed origins
+    allow_credentials=True,     # Allow cookies and authentication headers
+    allow_methods=["*"],        # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],        # Allow all headers
+)
+
 @app.post("/agent/query")
 async def query_agent(request: AgentRequest):
     try:
@@ -1022,6 +1070,58 @@ async def query_agent(request: AgentRequest):
         log.error(f"Query Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
+# @app.post("/agent/stream")
+# async def stream_agent(request: AgentRequest):
+#     sid = _valid_session_id(request.session_id)
+#     tools = rebuild_tools_for_user(sid)
+    
+#     agent = create_react_agent(
+#         model=llm,
+#         tools=tools,
+#         checkpointer=CHECKPOINTER,
+#         pre_model_hook=keep_only_last_n_messages,
+#     )
+
+#     inputs = {"messages": [{"role": "user", "content": request.question}]}
+#     config = {"configurable": {"thread_id": sid}}
+
+#     async def event_generator():
+#         try:
+#             async for event in agent.astream_events(inputs, config, version="v2"):
+#                 kind = event["event"]
+
+#                 # Inside your event_generator function...
+#                 if kind == "on_chat_model_stream":
+#                     chunk = event["data"]["chunk"]
+                    
+#                     # DEBUG: Print keys to see what Groq is actually sending
+#                     # print(f"DEBUG CHUNK: {chunk.additional_kwargs.keys()}", flush=True)
+
+#                     # 1. Check Standard Reasoning Field (DeepSeek/Groq style)
+#                     reasoning = chunk.additional_kwargs.get("reasoning_content", "")
+                    
+#                     # 2. Check for alternate "reasoning" field in delta (common in raw streams)
+#                     if not reasoning and "reasoning" in chunk.response_metadata.get("delta", {}):
+#                         reasoning = chunk.response_metadata["delta"]["reasoning"]
+
+#                     if reasoning:
+#                         yield {"event": "reasoning_token", "data": reasoning}
+                    
+#                     # 3. Handle Standard Content
+#                     if chunk.content:
+#                         yield {"event": "token", "data": chunk.content}
+
+#             yield {"event": "done", "data": "[DONE]"}
+
+#         except Exception as e:
+#             yield {"event": "error", "data": str(e)}
+
+#     return EventSourceResponse(
+#         event_generator(),
+#         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+#     )
+
+
 @app.post("/agent/stream")
 async def stream_agent(request: AgentRequest):
     sid = _valid_session_id(request.session_id)
@@ -1040,11 +1140,39 @@ async def stream_agent(request: AgentRequest):
     async def event_generator():
         try:
             async for event in agent.astream_events(inputs, config, version="v2"):
-                if event["event"] == "on_chat_model_stream":
+                kind = event["event"]
+
+                # --- 1. Stream Tokens (Reasoning & Content) ---
+                if kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"]
+                    
+                    # A. Reasoning Token (from your logs: additional_kwargs['reasoning_content'])
+                    reasoning = chunk.additional_kwargs.get("reasoning_content")
+                    if reasoning:
+                        yield {"event": "reasoning_token", "data": reasoning}
+                        # Continue to next iteration to avoid double-processing if content is empty
+                        continue 
+
+                    # B. Standard Content Token (from your logs: content='  ')
+                    # Only yield if content is not empty/None
                     if chunk.content:
                         yield {"event": "token", "data": chunk.content}
+
+                # --- 2. Detect Tool Calls ---
+                elif kind == "on_tool_start":
+                    if event["name"] not in ["_Exception"]: 
+                        tool_info = {
+                            "tool": event["name"],
+                            "input": event["data"].get("input")
+                        }
+                        yield {"event": "tool_start", "data": json.dumps(tool_info)}
+
+                # --- 3. Tool Output ---
+                elif kind == "on_tool_end":
+                     yield {"event": "tool_end", "data": str(event["data"].get("output"))}
+
             yield {"event": "done", "data": "[DONE]"}
+
         except Exception as e:
             yield {"event": "error", "data": str(e)}
 
@@ -1058,7 +1186,8 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
 
 
-===== ./HFCL_Auth_APIs.py =====
+
+===== HFCL_Auth_APIs.py =====
 import os
 import httpx
 from typing import Optional, Any, Dict
@@ -1076,11 +1205,8 @@ def _valid_session_id(session_id: object) -> str:
 
 class HeroFincorpAuthAPIs:
     """
-    Wraps REST auth-ish endpoints from your Postman collection.
-    
-    CRITICAL CHANGE:
-    - validate_otp now writes the access_token to Redis.
-    - validate_otp returns a SANITIZED dictionary (no token) to the caller.
+    Wraps REST auth-ish endpoints.
+    STRICT MODE: Checks JSON bodies for "soft errors" (HTTP 200 with error messages).
     """
 
     def __init__(
@@ -1130,12 +1256,10 @@ class HeroFincorpAuthAPIs:
                 phone = data.get("phone_number")
                 resolved_app_id = data.get("app_id") or app_id
 
-                # Persist hints
                 self.session_store.update(self.session_id, {
                     "phone_number": phone,
                     "app_id": resolved_app_id,
                 })
-
                 return data
 
         except Exception as e:
@@ -1144,13 +1268,8 @@ class HeroFincorpAuthAPIs:
             return {"error": str(e)}
 
     def generate_otp(self, user_input: str):
-        """
-        Accepts: 10 digit phone OR app_id.
-        Resolves to phone_number and triggers OTP.
-        """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         user_input = (user_input or "").strip()
-
         self.session_store.update(self.session_id, {"last_generate_otp_input": user_input})
 
         if not user_input:
@@ -1161,50 +1280,60 @@ class HeroFincorpAuthAPIs:
                 phone_number: Optional[str] = None
                 app_id: Optional[str] = None
 
-                # 1. Resolve Input to Phone/AppID
+                # 1. Resolve Input
                 if user_input.isdigit() and len(user_input) == 10:
                     phone_number = user_input
-                    # Keep existing app_id if we have it
                     existing = self.session_store.get(self.session_id) or {}
                     app_id = existing.get("app_id")
                 else:
-                    # Treat as app_id -> call contact hint
                     app_id = user_input
-                    hint = client.get(self._url(f"/herofin-service/get-contact-hint/{app_id}/"))
-                    if hint.status_code != 200:
-                        return {"status_code": hint.status_code, "error": hint.text}
-                    
-                    hint_data = hint.json()
-                    phone_number = hint_data.get("phone_number")
-                    app_id = hint_data.get("app_id") or app_id
+                    # Try fetch hint, but don't fail hard if it fails
+                    try:
+                        hint = client.get(self._url(f"/herofin-service/get-contact-hint/{app_id}/"))
+                        if hint.status_code == 200:
+                            hint_data = hint.json()
+                            phone_number = hint_data.get("phone_number")
+                            app_id = hint_data.get("app_id") or app_id
+                    except Exception:
+                        pass
 
-                # Save resolved context
-                self.session_store.update(self.session_id, {
-                    "phone_number": phone_number,
-                    "app_id": app_id,
-                })
+                self.session_store.update(self.session_id, {"phone_number": phone_number, "app_id": app_id})
 
                 if not phone_number:
                     return {"error": "Could not resolve phone number for OTP generation"}
 
-                # 2. Call Generate OTP
-                payload = {"phone_number": phone_number, "app_id": app_id}
+                # 2. Generate OTP
+                safe_app_id = app_id if app_id is not None else ""
+                payload = {"phone_number": phone_number, "app_id": safe_app_id}
+                
                 resp = client.post(self._url("/herofin-service/otp/generate_new/"), json=payload)
                 self.logger.info(f"POST otp/generate_new - {resp.status_code}")
 
+                # Save raw response for debug
                 self.session_store.update(self.session_id, {
                     "last_generate_otp_status": resp.status_code,
                     "last_generate_otp_response": resp.text[:5000],
                 })
 
                 if resp.status_code in (200, 201):
+                    # --- STRICT CHECK ---
+                    # Sometimes API returns 200 but body says "Invalid Phone"
+                    try:
+                        body = resp.json()
+                        msg = body.get("message", "").lower()
+                        # If message contains failure keywords, treat as error
+                        if "invalid" in msg or "expired" in msg or "failed" in msg:
+                             return {"status_code": 422, "error": body.get("message")}
+                    except:
+                        pass # Non-JSON body on 200 is technically success
+
                     return {
                         "status": "OTP Sent", 
                         "phone_number": phone_number, 
-                        "app_id": app_id,
+                        "app_id": app_id, 
                         "message": "OTP has been sent to your registered mobile number."
                     }
-
+                
                 return {"status_code": resp.status_code, "error": resp.text}
 
         except Exception as e:
@@ -1212,23 +1341,19 @@ class HeroFincorpAuthAPIs:
             return {"error": str(e)}
 
     def validate_otp(self, otp: str):
-        """
-        Validates OTP.
-        ON SUCCESS: Saves access_token to Redis. Returns SANITIZED dict (no token) to LLM.
-        """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         otp = (otp or "").strip()
-
         self.session_store.update(self.session_id, {"last_validate_otp_input": otp})
 
         session_data = self.session_store.get(self.session_id) or {}
         phone_number = session_data.get("phone_number")
-        app_id = session_data.get("app_id")
+        current_app_id = session_data.get("app_id")
 
         if not phone_number:
             return {"error": "Phone number missing in session. Please request OTP first."}
 
-        payload = {"phone_number": phone_number, "app_id": app_id, "otp": otp}
+        safe_app_id = current_app_id if current_app_id is not None else ""
+        payload = {"phone_number": phone_number, "app_id": safe_app_id, "otp": otp}
 
         try:
             with httpx.Client(auth=self.auth, headers=headers, follow_redirects=True, timeout=30.0) as client:
@@ -1240,27 +1365,82 @@ class HeroFincorpAuthAPIs:
 
                 data = resp.json()
                 
-                # --- CRITICAL: CAPTURE STATE ---
-                access_token = data.get("access_token")
-                resolved_app_id = data.get("loan_id") or data.get("app_id") or app_id
-                user_details = data.get("user", {})
-
-                if access_token:
-                    self.session_store.update(self.session_id, {
-                        "access_token": access_token,
-                        "app_id": resolved_app_id,
-                        "phone_number": phone_number,
-                        "user_details": user_details # Optional: save user profile bits
-                    })
-                    self.logger.info(f"✅ Session {self.session_id} authenticated. Token saved to Redis.")
+                # Check for Token (Accept 'access_token' or 'token')
+                access_token = data.get("access_token") or data.get("token")
                 
-                # --- CRITICAL: SANITIZE RETURN ---
-                # We return a success message but deliberately exclude the raw token.
+                # --- STRICT CHECK ---
+                if not access_token:
+                    # If status is 200 but no token, it's a Logic Failure
+                    msg = data.get("message") or "Unknown error"
+                    self.logger.error(f"Validate OTP: HTTP 200 but No Token. Msg: {msg}")
+                    return {"status": "failed", "error": f"OTP Validation Failed: {msg}"}
+
+                # Try to get App ID from Auth Response
+                resolved_app_id = (
+                    data.get("loan_id") or 
+                    data.get("app_id") or 
+                    data.get("application_id") or 
+                    data.get("loan_application_id") or 
+                    current_app_id
+                )
+
+                # ---------------------------------------------------------
+                # SELF-HEALING (Only runs if we have a valid Token)
+                # ---------------------------------------------------------
+                if not resolved_app_id:
+                    self.logger.info("⚠️ Login success but App ID missing. Attempting robust self-heal...")
+
+                    # Strategy A: Contact Hint 
+                    try:
+                        hint_resp = client.get(self._url(f"/herofin-service/get-contact-hint/{phone_number}/"))
+                        if hint_resp.status_code == 200:
+                            hint_data = hint_resp.json()
+                            resolved_app_id = hint_data.get("app_id") or hint_data.get("loan_application_id")
+                    except Exception:
+                        pass
+
+                    # Strategy B: Dashboard/Home with Token
+                    if not resolved_app_id:
+                        self.logger.info("⚠️ Strategy A failed. Trying Strategy B: Fetch Dashboard with Token...")
+                        try:
+                            bearer_headers = {
+                                "Authorization": f"Bearer {access_token}",
+                                "Accept": "application/json"
+                            }
+                            dash_resp = client.get(self._url("/herofin-service/home/"), headers=bearer_headers)
+                            if dash_resp.status_code == 200:
+                                dash_data = dash_resp.json()
+                                resolved_app_id = (
+                                    dash_data.get("loan_id") or 
+                                    dash_data.get("app_id") or
+                                    dash_data.get("application_id") or
+                                    (dash_data.get("loans") and dash_data["loans"][0].get("loan_id"))
+                                )
+                        except Exception as ex:
+                            self.logger.warning(f"Strategy B failed: {ex}")
+
+                    if resolved_app_id:
+                        self.logger.info(f"✅ Self-heal successful. Found App ID: {resolved_app_id}")
+                    else:
+                        self.logger.error("❌ Self-heal failed. Session is authenticated but blind.")
+
+                # Persist State
+                updates = {
+                    "access_token": access_token,
+                    "phone_number": phone_number,
+                    "user_details": data.get("user", {})
+                }
+                if resolved_app_id:
+                    updates["app_id"] = resolved_app_id
+                
+                self.session_store.update(self.session_id, updates)
+                self.logger.info(f"✅ Session {self.session_id} authenticated. keys_updated={list(updates.keys())}")
+                
                 return {
                     "status": "success",
                     "message": "OTP Verified. You are now logged in.",
                     "loan_id": resolved_app_id,
-                    "user_details": user_details,
+                    "user_details": data.get("user", {}),
                     "action": "Token secured in backend session."
                 }
 
@@ -1273,7 +1453,7 @@ class HeroFincorpAuthAPIs:
         return bool(data.get("access_token"))
 
 
-===== ./HFCLAPIsNew.py =====
+===== HFCLAPIsNew.py =====
 import os
 import httpx
 from typing import Optional, Any, Dict
@@ -1465,4 +1645,57 @@ class HeroFincorpAPIs:
         return out
 
 
-===== ./README.md =====
+
+===== README.md =====
+
+
+
+===== Loggers/StdOutLogger.py =====
+import logging
+import sys
+
+class StdoutLogger:
+    def __init__(self, name='logger', level=logging.INFO):
+        # Create a logger
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(level)
+
+        # Check if handlers already exist to avoid adding them multiple times
+        if not self.logger.handlers:
+
+        # Create a handler for writing to stdout
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setLevel(level)
+
+            # Create a formatter and set it for the handler
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+
+            # Add the handler to the logger
+            self.logger.addHandler(handler)
+
+    def debug(self, message):
+        self.logger.debug(message)
+
+    def info(self, message):
+        self.logger.info(message)
+
+    def warning(self, message):
+        self.logger.warning(message)
+
+    def error(self, message):
+        self.logger.error(message)
+
+    def critical(self, message):
+        self.logger.critical(message)   
+
+
+===== cloudflared/config.yml =====
+# Ingress rules inside Docker network (service names resolve via docker DNS)
+ingress:
+  - hostname: agent.pruthvirajchavan.codes
+    service: http://agent:8000
+  - hostname: mcp.pruthvirajchavan.codes
+    service: http://mcp:8050
+  - service: http_status:404
+

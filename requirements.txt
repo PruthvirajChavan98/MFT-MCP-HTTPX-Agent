@@ -2,6 +2,7 @@ langchain-mcp-adapters
 fastmcp
 langchain
 langchain-openai
+langchain-groq
 langgraph
 langgraph-checkpoint-redis
 fastapi
