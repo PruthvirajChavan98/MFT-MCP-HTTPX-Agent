@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.13",
     "fastmcp>=2.8.1",
+    "ipykernel>=7.1.0",
     "langchain>=0.3.25",
     "langchain-groq>=0.3.8",
     "langchain-mcp-adapters>=0.1.7",
@@ -15,4 +16,8 @@ dependencies = [
     "langgraph-checkpoint-redis>=0.1.0",
     "mcp>=1.9.4",
     "redis>=6.2.0",
+    "toon-format>=0.1.0",
 ]
+
+[tool.uv.sources]
+toon-format = { git = "https://github.com/toon-format/toon-python.git" }

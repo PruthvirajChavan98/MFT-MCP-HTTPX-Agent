@@ -1,9 +1,12 @@
 import os
 import httpx
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Union, Literal
 
 from Loggers.StdOutLogger import StdoutLogger
 from redis_session_store import RedisSessionStore
+from token_reducer import ToonOptions, JsonConverter
+
+conv = JsonConverter(sep=".")
 
 log = StdoutLogger(name="hfcl_auth")
 
@@ -42,7 +45,7 @@ class HeroFincorpAuthAPIs:
             path = "/" + path
         return f"{self.base_url}{path}"
 
-    def get_contact_hint(self, app_id: str) -> Dict[str, Any]:
+    def get_contact_hint(self, app_id: str) -> Union[Dict[str, Any], str]:
         app_id = (app_id or "").strip()
         if not app_id:
             return {"error": "app_id is required"}
@@ -70,7 +73,8 @@ class HeroFincorpAuthAPIs:
                     "phone_number": phone,
                     "app_id": resolved_app_id,
                 })
-                return data
+                vsc, cols = conv.json_to_vsc_text(data)
+                return vsc
 
         except Exception as e:
             self.logger.error(f"Contact hint error: {e}")
@@ -81,11 +85,11 @@ class HeroFincorpAuthAPIs:
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         user_input = (user_input or "").strip()
 
-        # NOTE: This can contain phone/app_id; keep only if you really want it persisted.
         self.session_store.update(self.session_id, {"last_generate_otp_input": user_input})
 
         if not user_input:
-            return {"error": "Provide phone_number or app_id"}
+            vsc, _ = conv.json_to_vsc_text({"error": "Provide phone_number or app_id"})
+            return vsc
 
         def _is_phone(s: str) -> bool:
             return s.isdigit() and len(s) == 10
@@ -96,7 +100,6 @@ class HeroFincorpAuthAPIs:
                 app_id: Optional[str] = None
 
                 def _try_contact_hint(value: str) -> Dict[str, Any]:
-                    # Try a couple variants; some deployments differ on trailing slash
                     paths = [
                         f"/herofin-service/get-contact-hint/{value}/",
                         f"/herofin-service/get-contact-hint/{value}",
@@ -116,7 +119,6 @@ class HeroFincorpAuthAPIs:
                     existing = self.session_store.get(self.session_id) or {}
                     app_id = (existing.get("app_id") or "").strip() or None
 
-                    # If app_id is missing, try resolving it via contact-hint using phone
                     if not app_id:
                         hint_data = _try_contact_hint(phone_number)
                         app_id = (
@@ -127,21 +129,20 @@ class HeroFincorpAuthAPIs:
                         )
                 else:
                     app_id = user_input
-                    # Try to resolve phone from app_id
                     hint_data = _try_contact_hint(app_id)
                     phone_number = hint_data.get("phone_number")
                     app_id = hint_data.get("app_id") or app_id
 
-                # Persist what we know (avoid empty strings)
                 self.session_store.update(self.session_id, {
                     "phone_number": phone_number,
                     "app_id": app_id,
                 })
 
                 if not phone_number:
-                    return {"error": "Could not resolve phone number for OTP generation"}
+                    vsc, _ = conv.json_to_vsc_text({"error": "Could not resolve phone number for OTP generation"})
+                    return vsc
 
-                # 2) Generate OTP (CRITICAL: do NOT send app_id if you don't have it)
+                # 2) Generate OTP
                 payload: Dict[str, Any] = {"phone_number": phone_number}
                 if app_id:
                     payload["app_id"] = app_id
@@ -156,31 +157,38 @@ class HeroFincorpAuthAPIs:
                 })
 
                 if resp.status_code in (200, 201):
-                    # STRICT CHECK: treat "soft errors" in a 200 body as errors
+                    # STRICT CHECK: soft-error in a 200 body
                     try:
                         body = resp.json()
                         msg = (body.get("message") or body.get("detail") or "").lower()
                         if any(k in msg for k in ("invalid", "expired", "failed", "error")):
-                            return {
+                            data = {
                                 "status_code": 422,
                                 "error": body.get("message") or body.get("detail") or resp.text,
                                 "hint": "OTP generate returned a soft-error body. Verify phone/app_id mapping in CRM.",
                             }
+                            vsc, _ = conv.json_to_vsc_text(data)
+                            return vsc
                     except Exception:
                         pass
 
-                    return {
+                    data = {
                         "status": "OTP Sent",
                         "phone_number": phone_number,
                         "app_id": app_id,
                         "message": "OTP has been sent to your registered mobile number.",
                     }
+                    vsc, _ = conv.json_to_vsc_text(data)
+                    return vsc
 
-                return {"status_code": resp.status_code, "error": resp.text}
+                vsc, _ = conv.json_to_vsc_text({"status_code": resp.status_code, "error": resp.text})
+                return vsc
 
         except Exception as e:
             self.logger.error(f"OTP Generation Error: {e}")
-            return {"error": str(e)}
+            vsc, _ = conv.json_to_vsc_text({"error": str(e)})
+            return vsc
+
 
     def validate_otp(self, otp: str):
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -192,7 +200,8 @@ class HeroFincorpAuthAPIs:
         current_app_id = session_data.get("app_id")
 
         if not phone_number:
-            return {"error": "Phone number missing in session. Please request OTP first."}
+            vsc, _ = conv.json_to_vsc_text({"error": "Phone number missing in session. Please request OTP first."})
+            return vsc
 
         safe_app_id = current_app_id if current_app_id is not None else ""
         payload = {"phone_number": phone_number, "app_id": safe_app_id, "otp": otp}
@@ -203,36 +212,32 @@ class HeroFincorpAuthAPIs:
                 self.logger.info(f"POST otp/validate_new - {resp.status_code}")
 
                 if resp.status_code not in (200, 201):
-                    return {"status_code": resp.status_code, "error": resp.text}
+                    vsc, _ = conv.json_to_vsc_text({"status_code": resp.status_code, "error": resp.text})
+                    return vsc
 
-                data = resp.json()
-                
-                # Check for Token (Accept 'access_token' or 'token')
-                access_token = data.get("access_token") or data.get("token")
-                
-                # --- STRICT CHECK ---
+                auth_data = resp.json()
+
+                access_token = auth_data.get("access_token") or auth_data.get("token")
+
                 if not access_token:
-                    # If status is 200 but no token, it's a Logic Failure
-                    msg = data.get("message") or "Unknown error"
+                    msg = auth_data.get("message") or "Unknown error"
                     self.logger.error(f"Validate OTP: HTTP 200 but No Token. Msg: {msg}")
-                    return {"status": "failed", "error": f"OTP Validation Failed: {msg}"}
+                    vsc, _ = conv.json_to_vsc_text({"status": "failed", "error": f"OTP Validation Failed: {msg}"})
+                    return vsc
 
-                # Try to get App ID from Auth Response
                 resolved_app_id = (
-                    data.get("loan_id") or 
-                    data.get("app_id") or 
-                    data.get("application_id") or 
-                    data.get("loan_application_id") or 
-                    current_app_id
+                    auth_data.get("loan_id")
+                    or auth_data.get("app_id")
+                    or auth_data.get("application_id")
+                    or auth_data.get("loan_application_id")
+                    or current_app_id
                 )
 
-                # ---------------------------------------------------------
-                # SELF-HEALING (Only runs if we have a valid Token)
-                # ---------------------------------------------------------
+                # SELF-HEAL (only with valid token)
                 if not resolved_app_id:
                     self.logger.info("⚠️ Login success but App ID missing. Attempting robust self-heal...")
 
-                    # Strategy A: Contact Hint 
+                    # Strategy A: Contact Hint
                     try:
                         hint_resp = client.get(self._url(f"/herofin-service/get-contact-hint/{phone_number}/"))
                         if hint_resp.status_code == 200:
@@ -245,18 +250,15 @@ class HeroFincorpAuthAPIs:
                     if not resolved_app_id:
                         self.logger.info("⚠️ Strategy A failed. Trying Strategy B: Fetch Dashboard with Token...")
                         try:
-                            bearer_headers = {
-                                "Authorization": f"Bearer {access_token}",
-                                "Accept": "application/json"
-                            }
+                            bearer_headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
                             dash_resp = client.get(self._url("/herofin-service/home/"), headers=bearer_headers)
                             if dash_resp.status_code == 200:
                                 dash_data = dash_resp.json()
                                 resolved_app_id = (
-                                    dash_data.get("loan_id") or 
-                                    dash_data.get("app_id") or
-                                    dash_data.get("application_id") or
-                                    (dash_data.get("loans") and dash_data["loans"][0].get("loan_id"))
+                                    dash_data.get("loan_id")
+                                    or dash_data.get("app_id")
+                                    or dash_data.get("application_id")
+                                    or (dash_data.get("loans") and dash_data["loans"][0].get("loan_id"))
                                 )
                         except Exception as ex:
                             self.logger.warning(f"Strategy B failed: {ex}")
@@ -266,29 +268,34 @@ class HeroFincorpAuthAPIs:
                     else:
                         self.logger.error("❌ Self-heal failed. Session is authenticated but blind.")
 
-                # Persist State
-                updates = {
+                # Persist State (token stays backend)
+                updates: Dict[str, Any] = {
                     "access_token": access_token,
                     "phone_number": phone_number,
-                    "user_details": data.get("user", {})
+                    "user_details": auth_data.get("user", {}),
                 }
                 if resolved_app_id:
                     updates["app_id"] = resolved_app_id
-                
+
                 self.session_store.update(self.session_id, updates)
                 self.logger.info(f"✅ Session {self.session_id} authenticated. keys_updated={list(updates.keys())}")
-                
-                return {
+
+                result = {
                     "status": "success",
                     "message": "OTP Verified. You are now logged in.",
                     "loan_id": resolved_app_id,
-                    "user_details": data.get("user", {}),
-                    "action": "Token secured in backend session."
+                    "user_details": auth_data.get("user", {}),
+                    "action": "Token secured in backend session.",
                 }
+
+                vsc, _ = conv.json_to_vsc_text(result)
+                return vsc
 
         except Exception as e:
             self.logger.error(f"OTP Validation Error: {e}")
-            return {"error": str(e)}
+            vsc, _ = conv.json_to_vsc_text({"error": str(e)})
+            return vsc
+
 
     def is_logged_in(self):
         data = self.session_store.get(self.session_id) or {}
