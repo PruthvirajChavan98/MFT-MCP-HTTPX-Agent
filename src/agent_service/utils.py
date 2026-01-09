@@ -1,8 +1,7 @@
 import json
-import logging
 from typing import Any
 from langchain_core.messages import RemoveMessage
-from agent_config import KEEP_LAST
+from .config import KEEP_LAST
 
 def valid_session_id(session_id: object) -> str:
     """Ensures session_id is a valid non-empty string."""
@@ -14,7 +13,6 @@ def valid_session_id(session_id: object) -> str:
 def normalize_result(result: Any) -> Any:
     """Sanitizes output (truncates massive JSONs) for logging/LLM context."""
     if isinstance(result, list) and result:
-        # If result is a list of objects (like ToolMessages)
         first = result[0]
         text = getattr(first, "text", None)
         if isinstance(text, str):
@@ -27,11 +25,11 @@ def normalize_result(result: Any) -> Any:
             except Exception:
                 return text
     
-    # If it's a direct dictionary
     if isinstance(result, dict):
         dump = json.dumps(result, ensure_ascii=False)
         if len(dump) > 8000:
             return dump[:8000] + "... [TRUNCATED]"
+        return dump  # Return stringified dict even if small
             
     return result
 

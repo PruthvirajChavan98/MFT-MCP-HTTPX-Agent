@@ -1,5 +1,5 @@
 from langchain_groq import ChatGroq
-from agent_config import GROQ_API_KEY, GROQ_BASE_URL, MODEL_NAME
+from .config import GROQ_API_KEY, GROQ_BASE_URL, MODEL_NAME
 
 # Initialize LLM
 llm = ChatGroq(
@@ -8,5 +8,5 @@ llm = ChatGroq(
     model=MODEL_NAME,
     streaming=True,
     temperature=0.0,
-    reasoning_format="parsed" # Uncomment if supported by the specific model version
+    reasoning_format="parsed" 
 )

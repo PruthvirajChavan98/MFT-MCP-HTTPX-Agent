@@ -21,3 +21,10 @@ dependencies = [
 
 [tool.uv.sources]
 toon-format = { git = "https://github.com/toon-format/toon-python.git" }
+
+[dependency-groups]
+dev = [
+    "fakeredis>=2.33.0",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]

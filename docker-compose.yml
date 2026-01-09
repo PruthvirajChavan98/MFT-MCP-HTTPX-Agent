@@ -1,23 +1,19 @@
 services:
   redis:
-    # Changed from redis:7-alpine to redis-stack-server to support FT._LIST
     image: redis/redis-stack-server:latest
     container_name: hfcl_redis
-    # Ports removed: Access only available to other containers (mcp, agent)
     restart: unless-stopped
 
   mcp:
     build:
       context: .
     container_name: hfcl_mcp
-    command: ["python", "serverNew.py"]
+    command: ["python", "src/main_mcp.py"]
     env_file:
       - .env
     environment:
       PYTHONUNBUFFERED: "1"
-      # Internal docker networking uses internal port 6379 and service name 'redis'
       REDIS_URL: "redis://redis:6379/0" 
-    # Ports removed: Cloudflare accesses this via http://mcp:8050 internally
     depends_on:
       - redis
     extra_hosts:
@@ -28,7 +24,7 @@ services:
     build:
       context: .
     container_name: hfcl_agent
-    command: ["uvicorn", "langchain_client_new:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "src.main_agent:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file:
       - .env
     environment:
@@ -36,7 +32,6 @@ services:
       MCP_SERVER_URL: "http://mcp:8050/sse"
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0" 
-    # Ports removed: Cloudflare accesses this via http://agent:8000 internally
     depends_on:
       - mcp
       - redis
