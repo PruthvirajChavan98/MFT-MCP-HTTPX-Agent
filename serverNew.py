@@ -48,7 +48,7 @@ def get_api_client(session_id: str) -> HeroFincorpAPIs:
 # ---------------------------------------------------------
 
 @mcp.tool(name="get_contact_hint")
-def get_contact_hint(app_id: str, session_id: str) -> dict:
+def get_contact_hint(app_id: str, session_id: str) -> str:
     """
     Step 0: Resolves a masked phone number from a Loan App ID.
     """
@@ -56,7 +56,7 @@ def get_contact_hint(app_id: str, session_id: str) -> dict:
     return get_auth_api_client(session_id).get_contact_hint(app_id)
 
 @mcp.tool(name="generate_otp")
-def generate_otp(user_input: str, session_id: str) -> dict:
+def generate_otp(user_input: str, session_id: str) -> str:
     """
     Step 1: Generates OTP.
     Input: Phone Number OR Loan App ID.
@@ -65,7 +65,7 @@ def generate_otp(user_input: str, session_id: str) -> dict:
     return get_auth_api_client(session_id).generate_otp(user_input)
 
 @mcp.tool(name="validate_otp")
-def validate_otp(otp: str, session_id: str) -> dict:
+def validate_otp(otp: str, session_id: str) -> str:
     """
     Step 2: Validates OTP.
     Returns: Success/Fail status. (Token is HIDDEN from LLM).
@@ -84,49 +84,49 @@ def is_logged_in(session_id: str) -> dict:
 # ---------------------------------------------------------
 
 @mcp.tool(name="dashboard_home")
-def dashboard_home(session_id: str) -> dict:
+def dashboard_home(session_id: str) -> str:
     """Fetches the home dashboard for the logged-in user."""
     _touch(session_id, "dashboard_home")
     return get_api_client(session_id).get_dashboard_home()
 
 @mcp.tool(name="loan_details")
-def loan_details(session_id: str) -> dict:
+def loan_details(session_id: str) -> str:
     """Fetches details for the active loan in session."""
     _touch(session_id, "loan_details")
     return get_api_client(session_id).get_loan_details()
 
 @mcp.tool(name="foreclosure_details")
-def foreclosure_details(session_id: str) -> dict:
+def foreclosure_details(session_id: str) -> str:
     """Fetches foreclosure details for the active loan."""
     _touch(session_id, "foreclosure_details")
     return get_api_client(session_id).get_foreclosure_details()
 
 @mcp.tool(name="overdue_details")
-def overdue_details(session_id: str) -> dict:
+def overdue_details(session_id: str) -> str:
     """Fetches overdue/payment status for the active loan."""
     _touch(session_id, "overdue_details")
     return get_api_client(session_id).get_overdue_details()
 
 @mcp.tool(name="noc_details")
-def noc_details(session_id: str) -> dict:
+def noc_details(session_id: str) -> str:
     """Fetches NOC availability status."""
     _touch(session_id, "noc_details")
     return get_api_client(session_id).get_noc_details()
 
 @mcp.tool(name="repayment_schedule")
-def repayment_schedule(session_id: str) -> dict:
+def repayment_schedule(session_id: str) -> str:
     """Fetches future repayment schedule."""
     _touch(session_id, "repayment_schedule")
     return get_api_client(session_id).get_repayment_schedule()
 
 @mcp.tool(name="download_welcome_letter")
-def download_welcome_letter(session_id: str) -> dict:
+def download_welcome_letter(session_id: str) -> str:
     """Downloads the Welcome Letter."""
     _touch(session_id, "download_welcome_letter")
     return get_api_client(session_id).download_welcome_letter()
 
 @mcp.tool(name="download_soa")
-def download_soa(session_id: str, start_date: str, end_date: str) -> dict:
+def download_soa(session_id: str, start_date: str, end_date: str) -> str:
     """
     Downloads Statement of Account (SOA).
     Requires: start_date, end_date (YYYY-MM-DD).
@@ -144,7 +144,7 @@ def initiate_transaction(
     otp: str, 
     session_id: str,
     payment_mode: str = "UPI"
-) -> dict:
+) -> str:
     """
     Initiates a payment transaction.
     Requires: amount, otp. 
@@ -162,13 +162,13 @@ def initiate_transaction(
 # ---------------------------------------------------------
 
 @mcp.tool(name="profile_phone_generate_otp")
-def profile_phone_generate_otp(session_id: str, new_phone: str) -> dict:
+def profile_phone_generate_otp(session_id: str, new_phone: str) -> str:
     """Request OTP to update profile phone number."""
     _touch(session_id, "profile_phone_generate_otp", {"new_phone": new_phone})
     return get_api_client(session_id).profile_phone_generate_otp(new_phone)
 
 @mcp.tool(name="profile_phone_validate_otp")
-def profile_phone_validate_otp(session_id: str, new_phone: str, otp: str) -> dict:
+def profile_phone_validate_otp(session_id: str, new_phone: str, otp: str) -> str:
     """Verify OTP to update profile phone number."""
     _touch(session_id, "profile_phone_validate_otp", {"new_phone": new_phone})
     return get_api_client(session_id).profile_phone_validate_otp(new_phone, otp)

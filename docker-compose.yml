@@ -12,7 +12,7 @@ services:
     build:
       context: .
     container_name: hfcl_mcp
-    command: ["uv", "run", "serverNew.py"]
+    command: ["python", "serverNew.py"]
     env_file:
       - .env
     environment:
@@ -31,7 +31,7 @@ services:
     build:
       context: .
     container_name: hfcl_agent
-    command: ["uv", "run", "langchain_client_new.py"]
+    command: ["uvicorn", "langchain_client_new:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file:
       - .env
     environment:

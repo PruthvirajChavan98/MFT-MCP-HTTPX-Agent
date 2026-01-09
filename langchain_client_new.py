@@ -23,7 +23,9 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langchain_core.tools import StructuredTool
-from langchain_core.messages import RemoveMessage
+from langchain_core.messages import RemoveMessage, SystemMessage, HumanMessage
+
+from prompts import SYSTEM_PROMPT
 
 # Import Redis Checkpointer
 try:
@@ -50,6 +52,7 @@ _SHARED_CLIENT: Optional[MultiServerMCPClient] = None
 _SHARED_SESSION = None
 _SHARED_CALL_LOCK = asyncio.Lock()
 TOOL_BLUEPRINTS: List[Dict[str, Any]] = []
+DEBUG_MODE = False  # global or per-session in Redis
 
 # -------------------------------
 # Helpers
@@ -121,21 +124,15 @@ def _is_system_message(m: Any) -> bool:
 
 def keep_only_last_n_messages(state: MessagesState, config: dict):
     msgs = list(state.get("messages", []))
-    if len(msgs) <= KEEP_LAST + 1:
+    if len(msgs) <= KEEP_LAST:
         return {}
-
-    kept: list[Any] = []
-    if msgs and _is_system_message(msgs[0]):
-        kept.append(msgs[0])
-        msgs = msgs[1:]
-
-    kept.extend(msgs[-KEEP_LAST:])
-    return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *kept]}
+    return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *msgs[-KEEP_LAST:]]}
 
 def rebuild_tools_for_user(session_id: str) -> List[StructuredTool]:
     """
     Rebuilds tools for a specific request.
     Wraps the raw MCP tool to INJECT session_id automatically.
+    Ensures tool outputs are dict-compatible for structured_content.
     """
     sid = _valid_session_id(session_id)
     if not TOOL_BLUEPRINTS:
@@ -144,23 +141,29 @@ def rebuild_tools_for_user(session_id: str) -> List[StructuredTool]:
     tools: List[StructuredTool] = []
     for bp in TOOL_BLUEPRINTS:
         tool_name = bp.get("name", "").strip()
-        if not tool_name: continue
-        
+        if not tool_name:
+            continue
+
         raw_desc = bp.get("description", "").strip()
         description = raw_desc[:1000] if len(raw_desc) > 1000 else raw_desc
-        if not description: description = f"Tool: {tool_name}"
+        if not description:
+            description = f"Tool: {tool_name}"
 
         safe_schema = bp["safe_schema"]
         raw_tool = bp["raw_tool"]
 
-        # --- THE INJECTOR ---
         async def tool_wrapper(_tool=raw_tool, _sid=sid, **kwargs):
             full_args = dict(kwargs)
-            # Inject session_id
             full_args["session_id"] = _sid
-            
+
             async with _SHARED_CALL_LOCK:
                 res = await _tool.ainvoke(full_args)
+
+            # IMPORTANT: MCP tools like generate_otp return VSC strings.
+            # LangGraph wants structured_content as dict or None.
+            if isinstance(res, str):
+                return {"text": res}
+
             return _normalize_result(res)
 
         try:
@@ -299,13 +302,22 @@ async def query_agent(request: AgentRequest):
             model=llm,
             tools=tools,
             checkpointer=CHECKPOINTER,          
-            pre_model_hook=keep_only_last_n_messages,  
         )
 
+        system_text = SYSTEM_PROMPT.strip()
+        inputs = {
+            "messages": [
+                SystemMessage(system_text),
+                HumanMessage(request.question),
+            ]
+        }
+        
         resp = await agent.ainvoke(
-            {"messages": [{"role": "user", "content": request.question}]},
-            {"configurable": {"thread_id": sid}},
-        )
+            inputs,
+            {
+                "configurable": {"thread_id": sid}
+                },
+            )
         return {"response": resp}
     except Exception as e:
         log.error(f"Query Error: {e}")
@@ -320,11 +332,17 @@ async def stream_agent(request: AgentRequest):
     agent = create_react_agent(
         model=llm,
         tools=tools,
-        checkpointer=CHECKPOINTER,
-        pre_model_hook=keep_only_last_n_messages,
+        checkpointer=CHECKPOINTER
     )
 
-    inputs = {"messages": [{"role": "user", "content": request.question}]}
+    system_text = SYSTEM_PROMPT.strip()
+    inputs = {
+        "messages": [
+            SystemMessage(system_text),
+            HumanMessage(request.question),
+        ]
+    }
+    
     config = {"configurable": {"thread_id": sid}}
 
     async def event_generator():
