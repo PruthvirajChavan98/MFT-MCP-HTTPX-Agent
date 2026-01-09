@@ -7,3 +7,4 @@ langgraph
 langgraph-checkpoint-redis
 fastapi
 redis
+https://github.com/toon-format/toon-python.git

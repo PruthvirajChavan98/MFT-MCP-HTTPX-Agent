@@ -7,37 +7,36 @@ import json
 import inspect
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Literal
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Literal, Union
 
 
 @dataclass(frozen=True)
 class ToonOptions:
     delimiter: Literal[",", "\t", "|"] = ","
     indent: int = 2
-    length_marker: Literal["", "#"] = ""  # e.g. "#"
+    length_marker: Literal["", "#"] = ""
 
 
 class JsonConverter:
     """
-    Convert JSON -> VSC (headerless CSV) and JSON -> TOON.
+    JSON -> VSC (CSV text) + JSON -> TOON.
 
-    - VSC: flattens nested dicts into dotted keys.
-    - TOON: uses whichever TOON encoder is available (prefers toon_format).
+    VSC behavior:
+      - dicts flatten into dotted keys
+      - lists are JSON-stringified by default
+      - explode_key:
+          * str key: explode that key if it's a list
+          * Sequence[str]: pick first key that exists as a list and explode it
+        exploding means: one output row per list item, while repeating other fields.
     """
 
     def __init__(self, *, sep: str = "."):
         self.sep = sep
 
-    # -------------------------
-    # Loading
-    # -------------------------
     @staticmethod
     def load_json_file(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
 
-    # -------------------------
-    # Common helpers
-    # -------------------------
     def flatten(self, obj: Any, parent: str = "") -> Dict[str, Any]:
         out: Dict[str, Any] = {}
 
@@ -48,10 +47,13 @@ class JsonConverter:
             return out
 
         if isinstance(obj, list):
-            out[parent] = json.dumps(obj, ensure_ascii=False)
+            # default: keep list as JSON string (unless exploded earlier)
+            key = parent if parent else "value"
+            out[key] = json.dumps(obj, ensure_ascii=False)
             return out
 
-        out[parent] = obj
+        key = parent if parent else "value"
+        out[key] = obj
         return out
 
     @staticmethod
@@ -67,50 +69,97 @@ class JsonConverter:
 
         return [{"value": data}]
 
-    # -------------------------
-    # JSON -> VSC
-    # -------------------------
+    @staticmethod
+    def _pick_explode_key(
+        records: List[Dict[str, Any]],
+        explode_key: Optional[Union[str, Sequence[str]]],
+    ) -> Optional[str]:
+        if explode_key is None:
+            return None
+        if isinstance(explode_key, str):
+            return explode_key.strip() or None
+
+        # explode_key is a list/tuple of candidates
+        for k in explode_key:
+            kk = (k or "").strip()
+            if not kk:
+                continue
+            for r in records:
+                if isinstance(r, dict) and isinstance(r.get(kk), list):
+                    return kk
+        return None
+
+    def _explode_records(self, records: List[Dict[str, Any]], explode_key: Optional[str]) -> List[Dict[str, Any]]:
+        if not explode_key:
+            return records
+
+        out: List[Dict[str, Any]] = []
+        for r in records:
+            val = r.get(explode_key)
+            if isinstance(val, list):
+                base = dict(r)
+                base.pop(explode_key, None)
+
+                if not val:
+                    row = dict(base)
+                    row[explode_key] = None
+                    out.append(row)
+                    continue
+
+                for item in val:
+                    row = dict(base)
+                    # if list item is not dict, keep it as scalar
+                    row[explode_key] = item if isinstance(item, dict) else {"value": item}
+                    out.append(row)
+            else:
+                out.append(r)
+
+        return out
+
     def json_to_vsc_text(
         self,
         data: Any,
         *,
         columns: Optional[Sequence[str]] = None,
+        include_header: bool = False,
+        preserve_key_order: bool = True,
+        explode_key: Optional[Union[str, Sequence[str]]] = None,
     ) -> Tuple[str, List[str]]:
         records = self.guess_records(data)
+
+        chosen = self._pick_explode_key(records, explode_key)
+        records = self._explode_records(records, chosen)
+
         flat_rows = [self.flatten(r) for r in records]
 
-        col_list = sorted({k for row in flat_rows for k in row.keys()}) if columns is None else list(columns)
+        if columns is not None:
+            col_list = list(columns)
+        else:
+            if preserve_key_order:
+                col_list: List[str] = []
+                seen: set[str] = set()
+                for row in flat_rows:
+                    for k in row.keys():
+                        if k not in seen:
+                            seen.add(k)
+                            col_list.append(k)
+            else:
+                col_list = sorted({k for row in flat_rows for k in row.keys()})
 
         buf = io.StringIO()
         writer = csv.writer(buf)
+
+        if include_header:
+            writer.writerow(col_list)
+
         for row in flat_rows:
             writer.writerow([row.get(c, "") for c in col_list])
 
         return buf.getvalue(), col_list
 
-    def json_file_to_vsc_file(
-        self,
-        input_json: Path,
-        output_vsc: Path,
-        *,
-        columns: Optional[Sequence[str]] = None,
-    ) -> List[str]:
-        data = self.load_json_file(input_json)
-        text, cols = self.json_to_vsc_text(data, columns=columns)
-        output_vsc.write_text(text, encoding="utf-8")
-        return cols
-
-    # -------------------------
-    # JSON -> TOON
-    # -------------------------
+    # ---- TOON unchanged below ----
     @staticmethod
     def _call_encode(encode_fn: Any, data: Any, opts: dict) -> str:
-        """
-        Try to call encode in a signature-tolerant way:
-        - encode(data)
-        - encode(data, opts)
-        - encode(data, options=opts)
-        """
         try:
             sig = inspect.signature(encode_fn)
             params = sig.parameters
@@ -120,7 +169,6 @@ class JsonConverter:
                 return encode_fn(data, options=opts)
             return encode_fn(data, opts)
         except Exception:
-            # last resort
             try:
                 return encode_fn(data, opts)
             except TypeError:
@@ -137,53 +185,19 @@ class JsonConverter:
             "lengthMarker": options.length_marker,
         }
 
-        # 1) Preferred: official module name in the repo: toon_format
         try:
-            from toon_format import encode as encode_toon  # pip install git+https://github.com/toon-format/toon-python.git :contentReference[oaicite:1]{index=1}
+            from toon_format import encode as encode_toon
             try:
                 return JsonConverter._call_encode(encode_toon, data, opts)
             except NotImplementedError:
-                # your current situation: stub build installed
                 pass
         except ImportError:
             pass
 
-        # # 2) Some guides/packages expose toon_python
-        # try:
-        #     from toon_python import encode as encode_toon_python  # alt package name in the wild
-        #     return JsonConverter._call_encode(encode_toon_python, data, opts)
-        # except ImportError:
-        #     pass
-
-        # # 3) Deprecated python-toon uses module "toon"
-        # try:
-        #     from toon import encode as encode_toon_deprecated
-        #     return JsonConverter._call_encode(encode_toon_deprecated, data, opts)
-        # except ImportError:
-        #     pass
-
-        # # 4) Fallback: pytoony API takes JSON string
-        # try:
-        #     from pytoony import json2toon
-        #     return json2toon(json.dumps(data, ensure_ascii=False))
-        # except ImportError:
-        #     pass
-
         raise RuntimeError(
             "No working TOON encoder found.\n\n"
-            "If you currently get NotImplementedError from toon_format, you installed a stub.\n"
+            "If toon_format raises NotImplementedError, you installed a stub.\n"
             "Fix:\n"
             "  pip uninstall -y toon-format toon_format\n"
             "  pip install -U git+https://github.com/toon-format/toon-python.git\n"
         )
-
-    def json_file_to_toon_file(
-        self,
-        input_json: Path,
-        output_toon: Path,
-        *,
-        options: Optional[ToonOptions] = None,
-    ) -> None:
-        data = self.load_json_file(input_json)
-        toon_str = self.json_to_toon_text(data, options=options)
-        output_toon.write_text(toon_str, encoding="utf-8")

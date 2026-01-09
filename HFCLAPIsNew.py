@@ -1,11 +1,10 @@
 import os
 import httpx
-import json
 from typing import Optional, Any, Dict
 
 from Loggers.StdOutLogger import StdoutLogger
 from redis_session_store import RedisSessionStore
-from token_reducer import JsonConverter  # <-- add this
+from token_reducer import JsonConverter
 
 conv = JsonConverter(sep=".")
 log = StdoutLogger(name="hfcl_api")
@@ -24,21 +23,36 @@ class HeroFincorpAPIs:
 
     Output policy (token-safe + token-cheap):
     - Public methods return VSC (string) ALWAYS.
-    - Any token fields are stripped from output.
+    - Token fields are stripped from output.
+    - IMPORTANT: we re-hydrate token/app_id from Redis on every request.
     """
 
-    def __init__(self, session_id: str, session_store: Optional[RedisSessionStore] = None, base_url: Optional[str] = None):
+    def __init__(
+        self,
+        session_id: str,
+        session_store: Optional[RedisSessionStore] = None,
+        base_url: Optional[str] = None,
+    ):
         self.session_id = _valid_session_id(session_id)
         self.logger = log
         self.base_url = (base_url or os.getenv("CRM_BASE_URL", "http://localhost:8080")).rstrip("/")
 
         self.session_store = session_store or RedisSessionStore()
 
-        # Hydrate Context from Redis
-        session_data = self.session_store.get(self.session_id) or {}
-        self.bearer_token = session_data.get("access_token")
-        self.app_id = session_data.get("app_id")
-        self.phone_number = session_data.get("phone_number")
+        # cached (will be refreshed every request)
+        self.bearer_token: Optional[str] = None
+        self.app_id: Optional[str] = None
+        self.loan_id: Optional[str] = None
+        self.phone_number: Optional[str] = None
+
+        self._hydrate()
+
+    def _hydrate(self) -> None:
+        s = self.session_store.get(self.session_id) or {}
+        self.bearer_token = s.get("access_token")
+        self.app_id = s.get("app_id")
+        self.loan_id = s.get("loan_id")
+        self.phone_number = s.get("phone_number")
 
     def _url(self, path: str) -> str:
         if not path.startswith("/"):
@@ -46,6 +60,8 @@ class HeroFincorpAPIs:
         return f"{self.base_url}{path}"
 
     def _headers(self) -> Dict[str, str]:
+        # ALWAYS hydrate before building headers
+        self._hydrate()
         if not self.bearer_token:
             return {}
         return {
@@ -55,10 +71,11 @@ class HeroFincorpAPIs:
         }
 
     def _check_context(self) -> Optional[dict]:
+        self._hydrate()
         if not self.bearer_token:
             return {"error": "Authentication required. Please log in with OTP first."}
         if not self.app_id:
-            return {"error": "No Loan Application ID found in session. Please log in."}
+            return {"error": "No app_id found in session. Please log in."}
         return None
 
     # -------------------------
@@ -66,32 +83,69 @@ class HeroFincorpAPIs:
     # -------------------------
     @staticmethod
     def _sanitize(obj: Any) -> Any:
-        """Strip secrets from tool output (never leak tokens)."""
+        """
+        Strip secrets from tool output (never leak tokens) + normalize list-heavy payloads
+        to keep VSC readable.
+
+        Rules:
+        - Drop token-like fields anywhere.
+        - Recursively sanitize dicts/lists.
+        - If both 'loans' and 'all_loans' exist and are identical lists, drop 'all_loans'
+        (avoids duplicate huge JSON blobs in VSC).
+        - Optionally: if a list is *empty*, keep it as [] (converter will stringify unless exploded).
+        """
         if isinstance(obj, dict):
             clean: Dict[str, Any] = {}
+
             for k, v in obj.items():
                 lk = str(k).lower()
+
+                # hard drop secrets
                 if lk in {"access_token", "token", "refresh_token", "id_token", "authorization"}:
                     continue
+
                 clean[k] = HeroFincorpAPIs._sanitize(v)
+
+            # de-dupe common dashboard shape
+            try:
+                if "loans" in clean and "all_loans" in clean:
+                    loans_v = clean.get("loans")
+                    all_loans_v = clean.get("all_loans")
+                    if isinstance(loans_v, list) and isinstance(all_loans_v, list):
+                        if loans_v == all_loans_v:
+                            del clean["all_loans"]
+            except Exception:
+                # never fail sanitize
+                pass
+
             return clean
+
         if isinstance(obj, list):
             return [HeroFincorpAPIs._sanitize(x) for x in obj]
+
         return obj
 
-    def _to_vsc(self, obj: Any) -> str:
+    def _to_vsc(self, obj: Any, explode_key: Optional[str] = None) -> str:
         obj = self._sanitize(obj)
-        # Ensure CSV has a key if primitive
         if not isinstance(obj, (dict, list)):
             obj = {"value": "" if obj is None else obj}
-        vsc, _ = conv.json_to_vsc_text(obj)
+
+        vsc, _ = conv.json_to_vsc_text(
+            obj,
+            include_header=True,
+            preserve_key_order=True,
+            explode_key=explode_key,
+        )
         return vsc
 
     # -------------------------
     # HTTP plumbing (internal returns JSON-ish)
     # -------------------------
     def _handle(self, resp: httpx.Response) -> Any:
-        if resp.status_code in (200, 201, 204, 208):
+        ok = resp.status_code in (200, 201, 204, 208)
+        ctype = (resp.headers.get("content-type") or "").lower()
+
+        if ok:
             try:
                 out = resp.json()
                 if isinstance(out, dict):
@@ -99,12 +153,23 @@ class HeroFincorpAPIs:
                     return out
                 return {"status_code": resp.status_code, "data": out}
             except Exception:
-                return {"status_code": resp.status_code, "raw": resp.text[:5000]}
-        return {"status_code": resp.status_code, "error": resp.text[:5000]}
+                return {"status_code": resp.status_code, "raw": resp.text[:5000], "content_type": ctype}
+
+        # error path
+        # Cloudflare 5xx returns HTML; keep it trimmed
+        return {
+            "status_code": resp.status_code,
+            "error": resp.text[:5000],
+            "content_type": ctype,
+        }
 
     def _request(self, method: str, path: str, json_body: Optional[dict] = None) -> Any:
+        # hydrate before context check
+        self._hydrate()
+
+        # home usually needs auth too, but allow it to return clean error
         ctx_err = self._check_context()
-        if ctx_err and path != "/herofin-service/home":
+        if ctx_err and path not in ("/herofin-service/home", "/herofin-service/home/"):
             return ctx_err
 
         url = self._url(path)
@@ -129,32 +194,64 @@ class HeroFincorpAPIs:
         out = self._request("GET", "/herofin-service/home")
         if isinstance(out, dict) and out.get("status_code") == 404:
             out = self._request("GET", "/herofin-service/home/")
-        return self._to_vsc(out)
+        return self._to_vsc(out, explode_key="loans")
 
     def get_loan_details(self) -> str:
+        self._hydrate()
         if not self.app_id:
-            return self._to_vsc({"error": "No App ID in session."})
-        return self._to_vsc(self._request("GET", f"/herofin-service/loan/details/{self.app_id}/"))
+            return self._to_vsc({"error": "No app_id in session."})
+        return self._to_vsc(self._request("GET", f"/herofin-service/loan/details/{self.app_id}/"), explode_key=("loans", "all_loans"))
 
     def get_foreclosure_details(self) -> str:
+        self._hydrate()
         if not self.app_id:
-            return self._to_vsc({"error": "No App ID in session."})
+            return self._to_vsc({"error": "No app_id in session."})
         return self._to_vsc(self._request("GET", f"/herofin-service/loan/foreclosuredetails/{self.app_id}/"))
 
     def get_overdue_details(self) -> str:
+        self._hydrate()
         if not self.app_id:
-            return self._to_vsc({"error": "No App ID in session."})
+            return self._to_vsc({"error": "No app_id in session."})
         return self._to_vsc(self._request("GET", f"/herofin-service/loan/overdue-details/{self.app_id}/"))
 
     def get_noc_details(self) -> str:
+        self._hydrate()
         if not self.app_id:
-            return self._to_vsc({"error": "No App ID in session."})
+            return self._to_vsc({"error": "No app_id in session."})
         return self._to_vsc(self._request("GET", f"/herofin-service/loan/noc-details/{self.app_id}/"))
 
     def get_repayment_schedule(self) -> str:
-        if not self.app_id:
-            return self._to_vsc({"error": "No App ID in session."})
-        return self._to_vsc(self._request("GET", f"/herofin-service/loan/repayment-schedule/{self.app_id}/"))
+        """
+        Your curl shows DIRECT works. So:
+        - prefer app_id
+        - fallback to loan_id
+        - explode installments into rows
+        """
+        self._hydrate()
+        if not self.app_id and not self.loan_id:
+            return self._to_vsc({"error": "No app_id/loan_id in session."})
+
+        candidates = []
+        if self.app_id:
+            candidates.append(str(self.app_id))
+        if self.loan_id:
+            candidates.append(str(self.loan_id))
+
+        last: Any = None
+        for ident in candidates:
+            for path in (
+                f"/herofin-service/loan/repayment-schedule/{ident}/",
+                f"/herofin-service/loan/repayment-schedule/{ident}",
+            ):
+                out = self._request("GET", path)
+                last = out
+                if isinstance(out, dict) and out.get("status_code") in (200, 201):
+                    # explode installments so you get full table (not JSON-in-a-cell)
+                    return self._to_vsc(out, explode_key="installments")
+                if isinstance(out, dict) and out.get("status_code") == 404:
+                    continue
+
+        return self._to_vsc({"error": "repayment schedule failed", "tried": candidates, "last": last})
 
     def download_welcome_letter(self) -> str:
         return self._to_vsc(self._request("GET", "/herofin-service/download/welcome-letter/"))
@@ -173,6 +270,7 @@ class HeroFincorpAPIs:
         longitude: str = "0",
         emi_count: str = "1",
     ) -> str:
+        self._hydrate()
         if not self.app_id:
             return self._to_vsc({"error": "app_id missing in session"})
         if not self.phone_number:
@@ -191,9 +289,6 @@ class HeroFincorpAPIs:
         }
         return self._to_vsc(self._request("POST", "/payments/initiate_transaction/", json_body=payload))
 
-    # -------------------------
-    # Profile update: phone_number (Public: VSC-only + token-safe)
-    # -------------------------
     def profile_phone_generate_otp(self, new_phone: str) -> str:
         payload = {"phone_number": new_phone}
         out = self._request("PUT", "/herofin-service/profiles/?update=phone_number", json_body=payload)
