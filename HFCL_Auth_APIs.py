@@ -1,6 +1,3 @@
-# =========================
-# HFCL_Auth_APIs.py
-# =========================
 import os
 import json
 import httpx
