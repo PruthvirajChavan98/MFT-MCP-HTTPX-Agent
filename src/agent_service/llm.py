@@ -22,7 +22,10 @@ def get_llm(model_name: str = None): # type: ignore
 llm = get_llm()
 
 async def get_available_models() -> dict:
-    """Fetches the list of available models from Groq API."""
+    """
+    Fetches the list of available models from Groq API.
+    Filters out 'whisper' models to ensure only chat models are returned.
+    """
     url = f"{GROQ_BASE_URL}/openai/v1/models"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -33,6 +36,16 @@ async def get_available_models() -> dict:
         try:
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+            
+            # Logic: Filter out models where ID contains "whisper" (case-insensitive)
+            if "data" in data and isinstance(data["data"], list):
+                filtered_models = [
+                    model for model in data["data"]
+                    if "whisper" not in model.get("id", "").lower()
+                ]
+                data["data"] = filtered_models
+                
+            return data
         except Exception as e:
             raise RuntimeError(f"Failed to fetch models from Groq: {e}")
