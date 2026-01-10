@@ -175,6 +175,7 @@ async def stream_agent(request: AgentRequest):
     try:
         sid = valid_session_id(request.session_id)
         model, tools, sys_prompt = await _resolve_agent_resources(sid, request)
+        
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
         inputs = {"messages": [SystemMessage(sys_prompt), HumanMessage(request.question)]}
         
@@ -182,11 +183,33 @@ async def stream_agent(request: AgentRequest):
             try:
                 async for event in agent.astream_events(inputs, {"configurable": {"thread_id": sid}}, version="v2"):
                     kind = event["event"]
+                    
                     if kind == "on_chat_model_stream":
-                        chunk = event["data"]["chunk"]  # type: ignore
+                        chunk = event["data"]["chunk"] # type: ignore
+                        
+                        # --- 1. Primary Extraction (ChatDeepSeek / OpenAI Standard) ---
+                        # langchain-deepseek maps the 'reasoning' field from OpenRouter to 'reasoning_content'
                         reasoning = chunk.additional_kwargs.get("reasoning_content")
-                        if reasoning: yield {"event": "reasoning_token", "data": reasoning}; continue
-                        if chunk.content: yield {"event": "token", "data": chunk.content}
+                        
+                        # --- 2. Fallback Extraction (Raw OpenRouter / Gemini) ---
+                        # Some providers might still send it as 'reasoning' or nested in metadata
+                        if not reasoning:
+                            reasoning = chunk.additional_kwargs.get("reasoning")
+                        
+                        if not reasoning:
+                            reasoning = chunk.response_metadata.get("reasoning")
+
+                        # --- 3. Emit Reasoning ---
+                        if reasoning:
+                            # Handle both streaming tokens (DeepSeek) and bulk blocks (Gemini)
+                            # The frontend just needs to append whatever string it gets.
+                            yield {"event": "reasoning_token", "data": reasoning}
+                            continue
+                        
+                        # --- 4. Standard Content ---
+                        if chunk.content:
+                            yield {"event": "token", "data": chunk.content}
+
                     elif kind == "on_tool_start":
                         if event["name"] not in ["_Exception"]: 
                             tool_info = {"tool": event["name"], "input": event["data"].get("input")}
@@ -195,6 +218,7 @@ async def stream_agent(request: AgentRequest):
                          yield {"event": "tool_end", "data": str(event["data"].get("output"))}
                 yield {"event": "done", "data": "[DONE]"}
             except Exception as e:
+                log.error(f"Stream Error: {e}")
                 yield {"event": "error", "data": str(e)}
 
         return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

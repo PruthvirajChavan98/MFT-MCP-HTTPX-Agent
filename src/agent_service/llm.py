@@ -1,9 +1,11 @@
 import httpx
-import re
 import asyncio
-from typing import Optional
+from typing import List, Dict, Any, Optional
+
 from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
+# Ensure you have installed: pip install langchain-deepseek
+from langchain_deepseek import ChatDeepSeek
+
 from .config import (
     GROQ_API_KEY, GROQ_BASE_URL, 
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
@@ -12,60 +14,77 @@ from .config import (
 
 def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_effort: str = None): # type: ignore
     """
-    Returns an LLM instance.
+    Factory function to return the appropriate LLM client (Groq or OpenRouter).
+    Handles specific parameter injection for Reasoning models.
     """
     target_model = model_name or MODEL_NAME
     
-    # Heuristic: OpenRouter models contain '/' and are not from Groq
-    is_openrouter = "/" in target_model and "groq" not in target_model.lower()
+    # 1. Determine Provider
+    # Heuristic: Groq models typically contain "groq" or are "gpt-oss" (special case)
+    # OpenRouter models usually follow "provider/model-name" format.
+    is_groq = (
+        "groq" in target_model.lower() or 
+        "gpt-oss" in target_model.lower() or 
+        "/" not in target_model
+    )
     
-    if is_openrouter:
+    if not is_groq:
+        # --- OPENROUTER CONFIGURATION (via ChatDeepSeek) ---
         effective_key = openrouter_api_key or OPENROUTER_API_KEY
         if not effective_key:
             raise ValueError(f"OpenRouter API Key required for model {target_model}")
 
-        # Check for OpenAI O-series (o1, o3) which use 'reasoning_effort'
-        is_openai_reasoning = any(x in target_model.lower() for x in ["openai/o", "o1-", "o3-"])
+        # Check for native OpenAI reasoning models (o1, o3)
+        # These support 'reasoning_effort' but NOT 'reasoning: {enabled: true}'
+        is_openai_native = any(x in target_model.lower() for x in ["openai/o1", "openai/o3"])
         
         extra_body = {}
         
-        # LOGIC FIX: Mutually exclusive parameters
-        if is_openai_reasoning:
-            # OpenAI models: Use standard 'reasoning_effort' param, DO NOT send 'reasoning' toggle
-            pass 
+        if is_openai_native:
+            # OpenAI o-series specific parameter
+            if reasoning_effort:
+                extra_body["reasoning_effort"] = reasoning_effort
         else:
-            # DeepSeek R1 / Others: Use OpenRouter-specific toggle
+            # For DeepSeek R1, Llama-3.1-Reasoning, etc.
+            # They need this explicit toggle to return the reasoning text field.
             extra_body["reasoning"] = {"enabled": True}
 
-        return ChatOpenAI(
-            api_key=effective_key, # type: ignore
-            base_url=OPENROUTER_BASE_URL,
+        # Use ChatDeepSeek for OpenRouter connections.
+        # It natively maps the 'reasoning' field (OpenRouter standard) to LangChain's
+        # 'reasoning_content', solving the issue where ChatOpenAI dropped it.
+        return ChatDeepSeek(
             model=target_model,
-            streaming=True,
+            api_key=effective_key, # type: ignore
+            api_base=OPENROUTER_BASE_URL, # Note: ChatDeepSeek uses 'api_base', not 'base_url'
             temperature=0.0,
-            # Only pass reasoning_effort if it's an OpenAI reasoning model
-            reasoning_effort=reasoning_effort if is_openai_reasoning else None,
+            streaming=True,
             model_kwargs={
                 "extra_body": extra_body
             }
         )
     else:
+        # --- GROQ CONFIGURATION ---
+        if not GROQ_API_KEY:
+             raise ValueError(f"Groq API Key is missing for model {target_model}")
+             
         return ChatGroq(
             api_key=GROQ_API_KEY, # type: ignore
             base_url=GROQ_BASE_URL,
             model=target_model,
             streaming=True,
             temperature=0.0,
-            reasoning_format="parsed" 
+            stop_sequences=None 
         )
 
-# Initialize Default LLM instance (Safety: won't crash if env vars missing, just fails at runtime)
-# llm = get_llm() 
+# --- MODEL FETCHING & CACHING UTILITIES ---
 
 async def fetch_groq_models() -> dict:
+    """Fetches available models from Groq API."""
     if not GROQ_API_KEY: return {"data": [], "provider": "groq"}
+    
     url = f"{GROQ_BASE_URL}/openai/v1/models"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url, headers=headers)
@@ -73,6 +92,7 @@ async def fetch_groq_models() -> dict:
                 data = resp.json().get("data", [])
                 models = []
                 for m in data:
+                    # Filter out whisper (audio) models
                     if "whisper" not in m.get("id", "").lower():
                         models.append({
                             "id": m.get("id"),
@@ -80,62 +100,71 @@ async def fetch_groq_models() -> dict:
                             "provider": "groq",
                             "context_length": m.get("context_window"),
                             "pricing": {
-                                "prompt": "0.00",
-                                "completion": "0.00",
+                                "prompt": "0.00", 
+                                "completion": "0.00", 
                                 "unit": "1M tokens (Approx/Free)"
-                            }
+                            },
+                            "supported_parameters": [] # Groq API doesn't usually list these details
                         })
                 return {"data": models, "count": len(models)}
-        except Exception: pass
+        except Exception as e:
+            print(f"Groq Fetch Error: {e}")
+            pass
     return {"data": [], "count": 0}
 
 async def fetch_openrouter_models() -> dict:
+    """Fetches available models from OpenRouter API."""
     url = "https://openrouter.ai/api/v1/models"
-    target_params = {"reasoning", "reasoning_effort", "include_reasoning"}
-
+    
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json().get("data", [])
+                results = []
                 
-                filtered_models = []
                 for m in data:
-                    supported = set(m.get("supported_parameters", []))
-                    matches = target_params.intersection(supported)
-                    
-                    if matches:
-                        pricing = m.get("pricing", {})
-                        try:
-                            prompt_price = float(pricing.get("prompt", "0")) * 1_000_000
-                            completion_price = float(pricing.get("completion", "0")) * 1_000_000
-                        except (ValueError, TypeError):
-                            prompt_price = 0.0
-                            completion_price = 0.0
+                    pricing = m.get("pricing", {})
+                    try:
+                        # Convert pricing to per 1M tokens for readability
+                        p_price = float(pricing.get("prompt", "0")) * 1_000_000
+                        c_price = float(pricing.get("completion", "0")) * 1_000_000
+                    except (ValueError, TypeError):
+                        p_price = 0.0
+                        c_price = 0.0
 
-                        filtered_models.append({
-                            "id": m["id"],
-                            "name": m.get("name", m["id"]),
-                            "provider": "openrouter",
-                            "context_length": m.get("context_length"),
-                            "pricing": {
-                                "prompt": f"{prompt_price:.2f}",
-                                "completion": f"{completion_price:.2f}",
-                                "unit": "1M tokens"
-                            },
-                            "supported_params": list(matches)
-                        })
+                    # Capture supported parameters (e.g., 'reasoning_effort')
+                    # This allows the frontend to conditionally show UI elements.
+                    supported = m.get("supported_parameters", [])
+
+                    results.append({
+                        "id": m["id"],
+                        "name": m.get("name", m["id"]),
+                        "provider": "openrouter",
+                        "context_length": m.get("context_length", 0),
+                        "pricing": {
+                            "prompt": f"{p_price:.2f}",
+                            "completion": f"{c_price:.2f}",
+                            "unit": "1M tokens"
+                        },
+                        "supported_parameters": supported
+                    })
                 
-                filtered_models.sort(key=lambda x: float(x["pricing"]["prompt"]))
-                return {"data": filtered_models, "count": len(filtered_models)}
+                # Sort by price (cheapest first)
+                results.sort(key=lambda x: float(x["pricing"]["prompt"]))
+                return {"data": results, "count": len(results)}
         except Exception as e:
             print(f"OpenRouter Fetch Error: {e}")
             pass
     return {"data": [], "count": 0}
 
 async def get_available_models() -> dict:
+    """Aggregates models from all providers."""
+    # Run fetches concurrently
     groq_task = asyncio.create_task(fetch_groq_models())
     or_task = asyncio.create_task(fetch_openrouter_models())
+    
     g_res, o_res = await asyncio.gather(groq_task, or_task)
+    
     combined = g_res.get("data", []) + o_res.get("data", [])
     return {"data": combined, "count": len(combined)}
