@@ -402,8 +402,8 @@ def test_keep_only_last_n_messages():
 
 ===== src/main_agent.py =====
 import json
-from contextlib import asynccontextmanager
 from typing import Optional
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -415,7 +415,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from src.common.logger import StdoutLogger
 from src.agent_service.prompts import SYSTEM_PROMPT
 from src.agent_service.config import REDIS_URL, PORT, MODEL_NAME
-from src.agent_service.schemas import AgentRequest, SessionConfig
+from src.agent_service.schemas import AgentRequest, GroqConfig, OpenRouterConfig
 from src.agent_service.utils import valid_session_id
 from src.agent_service.llm import llm, get_llm, get_available_models
 from src.agent_service.mcp import mcp_manager
@@ -451,25 +451,25 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for orchestrators."""
-    if not CHECKPOINTER:
-        raise HTTPException(status_code=503, detail="Redis Checkpointer not initialized")
     return {"status": "healthy", "service": "agent"}
+
+# --- Unified Model Listing (No Auth Required) ---
 
 @app.get("/agent/models")
 async def list_models():
-    """Returns a list of available LLM models from Groq."""
+    """
+    List available models from both Groq and OpenRouter.
+    """
     try:
         return await get_available_models()
     except Exception as e:
         log.error(f"Model Fetch Error: {e}")
         raise HTTPException(status_code=502, detail=str(e))
 
-# --- Session Management Endpoints ---
+# --- Session Config ---
 
 @app.get("/agent/sessions")
 async def list_active_sessions():
-    """List all session IDs that have custom configurations stored."""
     try:
         sessions = await config_manager.list_sessions()
         return {"count": len(sessions), "sessions": sessions}
@@ -479,66 +479,66 @@ async def list_active_sessions():
 
 @app.get("/agent/verify/{session_id}")
 async def verify_session(session_id: str):
-    """Check if a session configuration exists."""
     sid = valid_session_id(session_id)
     exists = await config_manager.session_exists(sid)
-    if not exists:
-        raise HTTPException(status_code=404, detail=f"Session {sid} not found in configuration store.")
+    if not exists: raise HTTPException(status_code=404, detail="Session not found")
     return {"session_id": sid, "exists": True}
-
-@app.post("/agent/config")
-async def update_session_config(config: SessionConfig):
-    """Set custom system prompt or model for a session."""
-    try:
-        sid = valid_session_id(config.session_id)
-        await config_manager.set_config(
-            sid, 
-            system_prompt=config.system_prompt,  # type: ignore
-            model_name=config.model_name # type: ignore
-        )
-        return {"status": "updated", "session_id": sid}
-    except Exception as e:
-        log.error(f"Config Update Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/agent/config/{session_id}")
 async def get_session_config(session_id: str):
-    """Get the current effective configuration for a session."""
-    try:
-        sid = valid_session_id(session_id)
-        stored_config = await config_manager.get_config(sid)
-        
-        # Merge stored config with system defaults
-        return {
-            "session_id": sid,
-            "system_prompt": stored_config.get("system_prompt") or SYSTEM_PROMPT.strip(),
-            "model_name": stored_config.get("model_name") or MODEL_NAME,
-            "is_customized": bool(stored_config)
-        }
-    except Exception as e:
-        log.error(f"Config Fetch Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    sid = valid_session_id(session_id)
+    stored = await config_manager.get_config(sid)
+    return {
+        "session_id": sid,
+        "system_prompt": stored.get("system_prompt") or SYSTEM_PROMPT.strip(),
+        "model_name": stored.get("model_name") or MODEL_NAME,
+        "reasoning_effort": stored.get("reasoning_effort"),
+        "has_custom_key": bool(stored.get("openrouter_api_key")),
+        "is_customized": bool(stored)
+    }
 
-# --- Agent Endpoints ---
+@app.post("/agent/config/groq")
+async def config_groq_session(config: GroqConfig):
+    sid = valid_session_id(config.session_id)
+    await config_manager.set_config(sid, system_prompt=config.system_prompt, model_name=config.model_name) # type: ignore
+    return {"status": "updated", "provider": "groq", "session_id": sid}
 
-async def _get_agent_context(sid: str, request: AgentRequest):
-    """Helper to resolve final config (Request > Redis > Default)."""
+@app.post("/agent/config/openrouter")
+async def config_openrouter_session(config: OpenRouterConfig):
+    sid = valid_session_id(config.session_id)
+    await config_manager.set_config(
+        sid, 
+        system_prompt=config.system_prompt, # type: ignore
+        model_name=config.model_name,
+        openrouter_api_key=config.openrouter_api_key, # type: ignore
+        reasoning_effort=config.reasoning_effort # type: ignore
+    )
+    return {"status": "updated", "provider": "openrouter", "session_id": sid}
+
+# --- Agent Execution ---
+
+async def _resolve_agent_resources(sid: str, request: AgentRequest):
     saved_config = await config_manager.get_config(sid)
     
+    # Priority: Request > Saved > Default
     model_name = request.model_name or saved_config.get("model_name")
     sys_prompt = request.system_prompt or saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
     
-    return model_name, sys_prompt
+    # Priority: Request Header/Body > Saved > Env
+    or_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
+    reasoning_effort = request.reasoning_effort or saved_config.get("reasoning_effort")
+    
+    model = get_llm(model_name, openrouter_api_key=or_key, reasoning_effort=reasoning_effort) # type: ignore
+    tools = mcp_manager.rebuild_tools_for_user(sid)
+    
+    return model, tools, sys_prompt
 
 @app.post("/agent/query")
 async def query_agent(request: AgentRequest):
     try:
         sid = valid_session_id(request.session_id)
-        tools = mcp_manager.rebuild_tools_for_user(sid)
+        model, tools, sys_prompt = await _resolve_agent_resources(sid, request)
         if not tools: raise HTTPException(status_code=500, detail="No tools loaded")
-        
-        model_name, sys_prompt = await _get_agent_context(sid, request)
-        model = get_llm(model_name) # type: ignore
         
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
         inputs = {"messages": [SystemMessage(sys_prompt), HumanMessage(request.question)]}
@@ -551,35 +551,35 @@ async def query_agent(request: AgentRequest):
 
 @app.post("/agent/stream")
 async def stream_agent(request: AgentRequest):
-    sid = valid_session_id(request.session_id)
-    tools = mcp_manager.rebuild_tools_for_user(sid)
-    
-    model_name, sys_prompt = await _get_agent_context(sid, request)
-    model = get_llm(model_name) # type: ignore
-    
-    agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
-    inputs = {"messages": [SystemMessage(sys_prompt), HumanMessage(request.question)]}
-    
-    async def event_generator():
-        try:
-            async for event in agent.astream_events(inputs, {"configurable": {"thread_id": sid}}, version="v2"):
-                kind = event["event"]
-                if kind == "on_chat_model_stream":
-                    chunk = event["data"]["chunk"] # type: ignore
-                    reasoning = chunk.additional_kwargs.get("reasoning_content")
-                    if reasoning: yield {"event": "reasoning_token", "data": reasoning}; continue
-                    if chunk.content: yield {"event": "token", "data": chunk.content}
-                elif kind == "on_tool_start":
-                    if event["name"] not in ["_Exception"]: 
-                        tool_info = {"tool": event["name"], "input": event["data"].get("input")}
-                        yield {"event": "tool_start", "data": json.dumps(tool_info)}
-                elif kind == "on_tool_end":
-                     yield {"event": "tool_end", "data": str(event["data"].get("output"))}
-            yield {"event": "done", "data": "[DONE]"}
-        except Exception as e:
-            yield {"event": "error", "data": str(e)}
+    try:
+        sid = valid_session_id(request.session_id)
+        model, tools, sys_prompt = await _resolve_agent_resources(sid, request)
+        agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
+        inputs = {"messages": [SystemMessage(sys_prompt), HumanMessage(request.question)]}
+        
+        async def event_generator():
+            try:
+                async for event in agent.astream_events(inputs, {"configurable": {"thread_id": sid}}, version="v2"):
+                    kind = event["event"]
+                    if kind == "on_chat_model_stream":
+                        chunk = event["data"]["chunk"] # type: ignore
+                        reasoning = chunk.additional_kwargs.get("reasoning_content")
+                        if reasoning: yield {"event": "reasoning_token", "data": reasoning}; continue
+                        if chunk.content: yield {"event": "token", "data": chunk.content}
+                    elif kind == "on_tool_start":
+                        if event["name"] not in ["_Exception"]: 
+                            tool_info = {"tool": event["name"], "input": event["data"].get("input")}
+                            yield {"event": "tool_start", "data": json.dumps(tool_info)}
+                    elif kind == "on_tool_end":
+                         yield {"event": "tool_end", "data": str(event["data"].get("output"))}
+                yield {"event": "done", "data": "[DONE]"}
+            except Exception as e:
+                yield {"event": "error", "data": str(e)}
 
-    return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    except Exception as e:
+        log.error(f"Stream Setup Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
@@ -601,10 +601,9 @@ from .config import REDIS_URL
 
 class ConfigManager:
     def __init__(self):
-        # Redis client for metadata/configuration
         self.redis = Redis.from_url(REDIS_URL, decode_responses=True)
 
-    async def set_config(self, session_id: str, system_prompt: str = None, model_name: str = None): # type: ignore
+    async def set_config(self, session_id: str, system_prompt: str = None, model_name: str = None, openrouter_api_key: str = None, reasoning_effort: str = None):  # type: ignore
         """Saves configuration to Redis hash."""
         key = f"agent:config:{session_id}"
         data = {}
@@ -612,42 +611,37 @@ class ConfigManager:
             data["system_prompt"] = system_prompt
         if model_name:
             data["model_name"] = model_name
+        if openrouter_api_key:
+            data["openrouter_api_key"] = openrouter_api_key
+        if reasoning_effort:
+            data["reasoning_effort"] = reasoning_effort
         
         if data:
             await self.redis.hset(key, mapping=data) # type: ignore
 
     async def get_config(self, session_id: str) -> dict:
-        """Retrieves configuration from Redis."""
         key = f"agent:config:{session_id}"
-        return await self.redis.hgetall(key) # type: ignore
+        return await self.redis.hgetall(key)  # type: ignore
 
     async def session_exists(self, session_id: str) -> bool:
-        """Checks if a custom configuration exists for this session."""
         key = f"agent:config:{session_id}"
         return await self.redis.exists(key) > 0
 
     async def list_sessions(self) -> list[str]:
-        """Lists all session IDs that have custom configurations."""
-        cursor = b"0"
         sessions = []
-        # Use SCAN to iterate safely over keys without blocking
-        while True:
-            cursor, keys = await self.redis.scan(cursor, match="agent:config:*", count=100) # type: ignore
-            for key in keys:
-                # Format is agent:config:{session_id}
-                # Split by ':' and take the last part
+        async for key in self.redis.scan_iter(match="agent:config:*"):
+            try:
                 parts = key.split(":")
                 if len(parts) >= 3:
-                    sessions.append(parts[-1])
-            
-            if cursor == 0 or cursor == b"0":
-                break
+                    sid = ":".join(parts[2:]) 
+                    sessions.append(sid)
+            except Exception:
+                continue
         return sessions
 
     async def close(self):
         await self.redis.close()
 
-# Singleton
 config_manager = ConfigManager()
 
 
@@ -667,33 +661,49 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 # External Services
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# SECURITY: Never default to real keys in code
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
-if not GROQ_API_KEY:
-    # Optional: Raise error in production
-    # raise ValueError("GROQ_API_KEY is not set")
-    print("WARNING: GROQ_API_KEY is not set. LLM calls will fail.")
-
+# Provider 1: Groq
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_BASE_URL = "https://api.groq.com"
+
+# Provider 2: OpenRouter
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# Default Model
 MODEL_NAME = os.getenv("MODEL", "openai/gpt-oss-120b")
+
+if not GROQ_API_KEY:
+    print("WARNING: GROQ_API_KEY is not set.")
+if not OPENROUTER_API_KEY:
+    print("WARNING: OPENROUTER_API_KEY is not set (OpenRouter models will be unavailable).")
 
 
 
 ===== src/agent_service/schemas.py =====
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel
 
 class AgentRequest(BaseModel):
     session_id: str
     question: str
-    # Optional overrides still allowed per-request
+    # Optional overrides
     system_prompt: Optional[str] = None
     model_name: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
+    # New: Reasoning Effort (low, medium, high) - mostly for OpenAI o1/o3
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
 
-class SessionConfig(BaseModel):
+class BaseSessionConfig(BaseModel):
     session_id: str
     system_prompt: Optional[str] = None
-    model_name: Optional[str] = None
+    reasoning_effort: Optional[str] = None  # Persist this preference
+
+class GroqConfig(BaseSessionConfig):
+    model_name: str 
+
+class OpenRouterConfig(BaseSessionConfig):
+    model_name: str 
+    openrouter_api_key: Optional[str] = None 
 
 
 
@@ -755,43 +765,153 @@ def keep_only_last_n_messages(state: dict, config: dict):
 
 ===== src/agent_service/llm.py =====
 import httpx
+import re
+import asyncio
+from typing import Optional
 from langchain_groq import ChatGroq
-from .config import GROQ_API_KEY, GROQ_BASE_URL, MODEL_NAME
+from langchain_openai import ChatOpenAI
+from .config import (
+    GROQ_API_KEY, GROQ_BASE_URL, 
+    OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
+    MODEL_NAME
+)
 
-def get_llm(model_name: str = None): # type: ignore
+def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_effort: str = None): # type: ignore
     """
     Returns an LLM instance.
-    If model_name is provided, it overrides the default configuration.
     """
     target_model = model_name or MODEL_NAME
     
-    return ChatGroq(
-        api_key=GROQ_API_KEY, # type: ignore
-        base_url=GROQ_BASE_URL,
-        model=target_model,
-        streaming=True,
-        temperature=0.0,
-        reasoning_format="parsed" 
-    )
+    # Heuristic: OpenRouter models contain '/' and are not from Groq
+    is_openrouter = "/" in target_model and "groq" not in target_model.lower()
+    
+    if is_openrouter:
+        effective_key = openrouter_api_key or OPENROUTER_API_KEY
+        if not effective_key:
+            raise ValueError(f"OpenRouter API Key required for model {target_model}")
 
-# Initialize Default LLM instance for backward compatibility
+        # Default extra_body for OpenRouter reasoning models
+        extra_body = {
+            "reasoning": {
+                "enabled": True
+            }
+        }
+
+        # Check for OpenAI O-series to support reasoning_effort
+        is_openai_reasoning = any(x in target_model.lower() for x in ["openai/o", "o1-", "o3-"])
+        
+        return ChatOpenAI(
+            api_key=effective_key, # type: ignore
+            base_url=OPENROUTER_BASE_URL,
+            model=target_model,
+            streaming=True,
+            temperature=0.0,
+            # Apply reasoning_effort only for O-series models
+            reasoning_effort=reasoning_effort if is_openai_reasoning else None,
+            model_kwargs={
+                "extra_body": extra_body
+            }
+        )
+    else:
+        return ChatGroq(
+            api_key=GROQ_API_KEY, # type: ignore
+            base_url=GROQ_BASE_URL,
+            model=target_model,
+            streaming=True,
+            temperature=0.0,
+            reasoning_format="parsed" 
+        )
+
+# Initialize Default LLM instance
 llm = get_llm()
 
-async def get_available_models() -> dict:
-    """Fetches the list of available models from Groq API."""
+async def fetch_groq_models() -> dict:
+    if not GROQ_API_KEY: return {"data": [], "provider": "groq"}
     url = f"{GROQ_BASE_URL}/openai/v1/models"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            return resp.json()
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                models = []
+                for m in data:
+                    if "whisper" not in m.get("id", "").lower():
+                        models.append({
+                            "id": m.get("id"),
+                            "name": m.get("id"),
+                            "provider": "groq",
+                            "context_length": m.get("context_window"),
+                            "pricing": {
+                                "prompt": "0.00",
+                                "completion": "0.00",
+                                "unit": "1M tokens (Approx/Free)"
+                            }
+                        })
+                return {"data": models, "count": len(models)}
+        except Exception: pass
+    return {"data": [], "count": 0}
+
+async def fetch_openrouter_models() -> dict:
+    """
+    Fetch OpenRouter models. No API Key required for this endpoint.
+    """
+    url = "https://openrouter.ai/api/v1/models"
+    
+    target_params = {"reasoning", "reasoning_effort", "include_reasoning"}
+
+    async with httpx.AsyncClient() as client:
+        try:
+            # Public endpoint, no headers needed
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                
+                filtered_models = []
+                for m in data:
+                    # Check parameters
+                    supported = set(m.get("supported_parameters", []))
+                    matches = target_params.intersection(supported)
+                    
+                    if matches:
+                        # Calculate pricing per 1M
+                        pricing = m.get("pricing", {})
+                        try:
+                            prompt_price = float(pricing.get("prompt", "0")) * 1_000_000
+                            completion_price = float(pricing.get("completion", "0")) * 1_000_000
+                        except (ValueError, TypeError):
+                            prompt_price = 0.0
+                            completion_price = 0.0
+
+                        filtered_models.append({
+                            "id": m["id"],
+                            "name": m.get("name", m["id"]),
+                            "provider": "openrouter",
+                            "context_length": m.get("context_length"),
+                            "pricing": {
+                                "prompt": f"{prompt_price:.2f}",
+                                "completion": f"{completion_price:.2f}",
+                                "unit": "1M tokens"
+                            },
+                            "supported_params": list(matches)
+                        })
+                
+                # Sort by input pricing (low to high)
+                filtered_models.sort(key=lambda x: float(x["pricing"]["prompt"]))
+                
+                return {"data": filtered_models, "count": len(filtered_models)}
         except Exception as e:
-            raise RuntimeError(f"Failed to fetch models from Groq: {e}")
+            print(f"OpenRouter Fetch Error: {e}")
+            pass
+    return {"data": [], "count": 0}
+
+async def get_available_models() -> dict:
+    groq_task = asyncio.create_task(fetch_groq_models())
+    or_task = asyncio.create_task(fetch_openrouter_models())
+    g_res, o_res = await asyncio.gather(groq_task, or_task)
+    combined = g_res.get("data", []) + o_res.get("data", [])
+    return {"data": combined, "count": len(combined)}
+
 
 
 ===== src/agent_service/mcp.py =====

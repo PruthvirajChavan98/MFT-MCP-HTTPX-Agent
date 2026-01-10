@@ -16,6 +16,7 @@ dependencies = [
     "langgraph-checkpoint-redis>=0.1.0",
     "mcp>=1.9.4",
     "redis>=6.2.0",
+    "strawberry-graphql>=0.288.2",
     "toon-format>=0.1.0",
 ]
 

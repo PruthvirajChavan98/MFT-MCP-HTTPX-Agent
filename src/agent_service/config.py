@@ -12,12 +12,18 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 # External Services
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# SECURITY: Never default to real keys in code
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
-if not GROQ_API_KEY:
-    # Optional: Raise error in production
-    # raise ValueError("GROQ_API_KEY is not set")
-    print("WARNING: GROQ_API_KEY is not set. LLM calls will fail.")
-
+# Provider 1: Groq
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_BASE_URL = "https://api.groq.com"
+
+# Provider 2: OpenRouter
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# Default Model
 MODEL_NAME = os.getenv("MODEL", "openai/gpt-oss-120b")
+
+if not GROQ_API_KEY:
+    print("WARNING: GROQ_API_KEY is not set.")
+if not OPENROUTER_API_KEY:
+    print("WARNING: OPENROUTER_API_KEY is not set (OpenRouter models will be unavailable).")

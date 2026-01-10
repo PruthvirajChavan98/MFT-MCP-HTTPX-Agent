@@ -83,10 +83,10 @@ def download_soa(session_id: str, start_date: str, end_date: str) -> str:
     _touch(session_id, "download_soa")
     return get_api(session_id).download_soa(start_date, end_date)
 
-@mcp.tool(name="initiate_transaction")
-def initiate_transaction(amount: str, otp: str, session_id: str, payment_mode: str = "UPI") -> str:
-    _touch(session_id, "initiate_transaction")
-    return get_api(session_id).initiate_transaction(amount, otp, payment_mode)
+# @mcp.tool(name="initiate_transaction")
+# def initiate_transaction(amount: str, otp: str, session_id: str, payment_mode: str = "UPI") -> str:
+#     _touch(session_id, "initiate_transaction")
+#     return get_api(session_id).initiate_transaction(amount, otp, payment_mode)
 
 @mcp.tool(name="profile_phone_generate_otp")
 def profile_phone_generate_otp(session_id: str, new_phone: str) -> str:
