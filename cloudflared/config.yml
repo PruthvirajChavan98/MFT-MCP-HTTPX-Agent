@@ -1,7 +1,8 @@
-# Ingress rules inside Docker network (service names resolve via docker DNS)
 ingress:
   - hostname: agent.pruthvirajchavan.codes
     service: http://agent:8000
   - hostname: mcp.pruthvirajchavan.codes
     service: http://mcp:8050
+  - hostname: redis.pruthvirajchavan.codes
+    service: tcp://redis:6379
   - service: http_status:404

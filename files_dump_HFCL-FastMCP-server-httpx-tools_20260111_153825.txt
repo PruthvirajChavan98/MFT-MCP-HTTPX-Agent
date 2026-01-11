@@ -8,8 +8,10 @@
 │   ├── agent_service
 │   │   ├── config_manager.py
 │   │   ├── config.py
+│   │   ├── graphql_schema.py
 │   │   ├── llm.py
 │   │   ├── mcp.py
+│   │   ├── model_service.py
 │   │   ├── prompts.py
 │   │   ├── schemas.py
 │   │   └── utils.py
@@ -19,9 +21,11 @@
 │   │   ├── auth_api.py
 │   │   ├── config.py
 │   │   ├── core_api.py
+│   │   ├── description_utils.py
 │   │   ├── image_store.py
 │   │   ├── server.py
 │   │   ├── session_store.py
+│   │   ├── tool_descriptions.json
 │   │   └── utils.py
 │   ├── main_agent.py
 │   └── main_mcp.py
@@ -36,36 +40,7 @@
 ├── README.md
 └── requirements.txt
 
-7 directories, 27 files
-
-================================================================================
-### PACKAGE / REPO METADATA
-================================================================================
-File: ./pyproject.toml
-  [project]
-  name = "mcp-tutorial"
-  version = "0.1.0"
-  description = "Add your description here"
-  readme = "README.md"
-  requires-python = ">=3.11"
-  dependencies = [
-      "fastapi>=0.115.13",
-      "fastmcp>=2.8.1",
-      "ipykernel>=7.1.0",
-      "langchain>=0.3.25",
-      "langchain-groq>=0.3.8",
-
-File: ./requirements.txt
-  langchain-mcp-adapters
-  fastmcp
-  langchain
-  langchain-openai
-  langchain-groq
-  langgraph
-  langgraph-checkpoint-redis
-  fastapi
-  redis
-  https://github.com/toon-format/toon-python.git
+7 directories, 31 files
 
 ================================================================================
 ### FILE CONTENTS
@@ -163,6 +138,7 @@ dependencies = [
     "fastmcp>=2.8.1",
     "ipykernel>=7.1.0",
     "langchain>=0.3.25",
+    "langchain-deepseek>=0.1.4",
     "langchain-groq>=0.3.8",
     "langchain-mcp-adapters>=0.1.7",
     "langchain-openai>=0.3.23",
@@ -170,6 +146,7 @@ dependencies = [
     "langgraph-checkpoint-redis>=0.1.0",
     "mcp>=1.9.4",
     "redis>=6.2.0",
+    "strawberry-graphql>=0.288.2",
     "toon-format>=0.1.0",
 ]
 
@@ -190,10 +167,12 @@ langchain-mcp-adapters
 fastmcp
 langchain
 langchain-openai
+langchain-deepseek
 langchain-groq
 langgraph
 langgraph-checkpoint-redis
 fastapi
+strawberry-graphql
 redis
 https://github.com/toon-format/toon-python.git
 
@@ -203,12 +182,13 @@ https://github.com/toon-format/toon-python.git
 
 
 ===== cloudflared/config.yml =====
-# Ingress rules inside Docker network (service names resolve via docker DNS)
 ingress:
   - hostname: agent.pruthvirajchavan.codes
     service: http://agent:8000
   - hostname: mcp.pruthvirajchavan.codes
     service: http://mcp:8050
+  - hostname: redis.pruthvirajchavan.codes
+    service: tcp://redis:6379
   - service: http_status:404
 
 
@@ -402,24 +382,33 @@ def test_keep_only_last_n_messages():
 
 ===== src/main_agent.py =====
 import json
-from typing import Optional
+import asyncio
+from typing import Optional, Annotated
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langchain_core.messages import SystemMessage, HumanMessage
+from strawberry.fastapi import GraphQLRouter
 
+# Logger & Config
 from src.common.logger import StdoutLogger
 from src.agent_service.prompts import SYSTEM_PROMPT
 from src.agent_service.config import REDIS_URL, PORT, MODEL_NAME
+
+# Schemas
 from src.agent_service.schemas import AgentRequest, GroqConfig, OpenRouterConfig
+
+# Services
 from src.agent_service.utils import valid_session_id
-from src.agent_service.llm import llm, get_llm, get_available_models
+from src.agent_service.llm import get_llm
 from src.agent_service.mcp import mcp_manager
 from src.agent_service.config_manager import config_manager
+from src.agent_service.model_service import model_service
+from src.agent_service.graphql_schema import schema
 
 log = StdoutLogger(name="langchain_server")
 CHECKPOINTER: Optional[BaseCheckpointSaver] = None
@@ -428,11 +417,20 @@ CHECKPOINTER: Optional[BaseCheckpointSaver] = None
 async def lifespan(app: FastAPI):
     global CHECKPOINTER
     log.info(f"STARTUP: Redis Checkpointer at {REDIS_URL}")
+    
+    # 1. Start Background Cache Job (Model Fetcher)
+    cache_task = asyncio.create_task(model_service.start_background_loop())
+    
     try:
+        # 2. Initialize Redis Checkpointer
         async with AsyncRedisSaver.from_conn_string(REDIS_URL) as checkpointer:
             CHECKPOINTER = checkpointer
+            # 3. Initialize MCP Tools
             await mcp_manager.initialize()
             yield
+            
+            # --- SHUTDOWN SEQUENCE ---
+            cache_task.cancel()
             await mcp_manager.shutdown()
             await config_manager.close()
             log.info("SHUTDOWN: Resources cleared")
@@ -449,19 +447,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- GraphQL Endpoint ---
+graphql_app = GraphQLRouter(schema)
+app.include_router(graphql_app, prefix="/graphql")
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "agent"}
 
-# --- Unified Model Listing (No Auth Required) ---
-
+# --- REST Model Listing (Legacy/Fallback) ---
 @app.get("/agent/models")
 async def list_models():
     """
-    List available models from both Groq and OpenRouter.
+    List available models using the Redis cache populated by the background service.
+    Returns the same data as GraphQL but in standard JSON format.
     """
     try:
-        return await get_available_models()
+        data = await model_service.get_cached_data()
+        total_models = sum(len(cat["models"]) for cat in data)
+        return {"count": total_models, "categories": data}
     except Exception as e:
         log.error(f"Model Fetch Error: {e}")
         raise HTTPException(status_code=502, detail=str(e))
@@ -520,11 +524,11 @@ async def config_openrouter_session(config: OpenRouterConfig):
 async def _resolve_agent_resources(sid: str, request: AgentRequest):
     saved_config = await config_manager.get_config(sid)
     
-    # Priority: Request > Saved > Default
+    # Resolve Model & Prompt
     model_name = request.model_name or saved_config.get("model_name")
     sys_prompt = request.system_prompt or saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
     
-    # Priority: Request Header/Body > Saved > Env
+    # Resolve OpenRouter Params
     or_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
     reasoning_effort = request.reasoning_effort or saved_config.get("reasoning_effort")
     
@@ -554,6 +558,7 @@ async def stream_agent(request: AgentRequest):
     try:
         sid = valid_session_id(request.session_id)
         model, tools, sys_prompt = await _resolve_agent_resources(sid, request)
+        
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
         inputs = {"messages": [SystemMessage(sys_prompt), HumanMessage(request.question)]}
         
@@ -561,11 +566,33 @@ async def stream_agent(request: AgentRequest):
             try:
                 async for event in agent.astream_events(inputs, {"configurable": {"thread_id": sid}}, version="v2"):
                     kind = event["event"]
+                    
                     if kind == "on_chat_model_stream":
                         chunk = event["data"]["chunk"] # type: ignore
+                        
+                        # --- 1. Primary Extraction (ChatDeepSeek / OpenAI Standard) ---
+                        # langchain-deepseek maps the 'reasoning' field from OpenRouter to 'reasoning_content'
                         reasoning = chunk.additional_kwargs.get("reasoning_content")
-                        if reasoning: yield {"event": "reasoning_token", "data": reasoning}; continue
-                        if chunk.content: yield {"event": "token", "data": chunk.content}
+                        
+                        # --- 2. Fallback Extraction (Raw OpenRouter / Gemini) ---
+                        # Some providers might still send it as 'reasoning' or nested in metadata
+                        if not reasoning:
+                            reasoning = chunk.additional_kwargs.get("reasoning")
+                        
+                        if not reasoning:
+                            reasoning = chunk.response_metadata.get("reasoning")
+
+                        # --- 3. Emit Reasoning ---
+                        if reasoning:
+                            # Handle both streaming tokens (DeepSeek) and bulk blocks (Gemini)
+                            # The frontend just needs to append whatever string it gets.
+                            yield {"event": "reasoning_token", "data": reasoning}
+                            continue
+                        
+                        # --- 4. Standard Content ---
+                        if chunk.content:
+                            yield {"event": "token", "data": chunk.content}
+
                     elif kind == "on_tool_start":
                         if event["name"] not in ["_Exception"]: 
                             tool_info = {"tool": event["name"], "input": event["data"].get("input")}
@@ -574,6 +601,7 @@ async def stream_agent(request: AgentRequest):
                          yield {"event": "tool_end", "data": str(event["data"].get("output"))}
                 yield {"event": "done", "data": "[DONE]"}
             except Exception as e:
+                log.error(f"Stream Error: {e}")
                 yield {"event": "error", "data": str(e)}
 
         return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -584,7 +612,6 @@ async def stream_agent(request: AgentRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
-
 
 
 ===== src/main_mcp.py =====
@@ -707,6 +734,810 @@ class OpenRouterConfig(BaseSessionConfig):
 
 
 
+===== src/agent_service/graphql_schema.py =====
+import strawberry
+from typing import Dict, List, Optional, Tuple
+
+from .model_service import model_service
+
+
+@strawberry.type
+class ParameterSpec:
+    name: str
+    type: str  # "enum", "boolean", "float", "int"
+    options: Optional[List[str]] = None
+    default: Optional[str] = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+
+
+@strawberry.type
+class ModelPricing:
+    prompt: float
+    completion: float
+    unit: str
+
+
+@strawberry.type
+class Model:
+    id: str
+    name: str
+    context_length: int
+    pricing: ModelPricing
+    supported_parameters: List[str]
+    parameter_specs: List[ParameterSpec]
+
+
+@strawberry.type
+class SubProviderCategory:
+    """
+    Nested provider buckets inside OpenRouter, derived from model id prefix.
+    Example:
+      id="openai", name="OpenAI"
+      id="anthropic", name="Anthropic"
+    """
+    id: str
+    name: str
+    models: List[Model]
+
+
+@strawberry.type
+class ProviderCategory:
+    name: str  # "groq" | "openrouter"
+    models: List[Model]
+    # Only populated for openrouter
+    providers: Optional[List[SubProviderCategory]] = None
+
+
+VALID_PROVIDERS = {"groq", "openrouter"}
+REASONING_KEYS = {"reasoning", "reasoning_effort", "include_reasoning"}
+
+
+def _to_float(x) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return 0.0
+
+
+def _vendor_from_id(model_id: str) -> str:
+    s = (model_id or "").strip()
+    if "/" in s:
+        return s.split("/", 1)[0].strip().lower() or "other"
+    return "other"
+
+
+_VENDOR_DISPLAY: Dict[str, str] = {
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "google": "Google",
+    "meta-llama": "Meta Llama",
+    "mistralai": "Mistral",
+    "deepseek": "DeepSeek",
+    "qwen": "Qwen",
+    "cohere": "Cohere",
+    "x-ai": "xAI",
+    "perplexity": "Perplexity",
+    "amazon": "Amazon",
+    "microsoft": "Microsoft",
+    "alibaba": "Alibaba",
+    "other": "Other",
+}
+
+
+def _humanize_slug(slug: str) -> str:
+    """
+    Makes `gpt-4o-mini` -> `GPT 4o mini` (good enough for sorting + UI).
+    We keep it intentionally simple and safe.
+    """
+    raw = (slug or "").strip().replace("_", "-")
+    parts = [p for p in raw.split("-") if p]
+
+    token_map = {
+        "gpt": "GPT",
+        "llama": "Llama",
+        "claude": "Claude",
+        "gemini": "Gemini",
+        "deepseek": "DeepSeek",
+        "qwen": "Qwen",
+        "mixtral": "Mixtral",
+        "r1": "R1",
+    }
+
+    out: List[str] = []
+    for p in parts:
+        pl = p.lower()
+
+        if pl in token_map:
+            out.append(token_map[pl])
+            continue
+
+        # 70b -> 70B
+        if pl.endswith("b") and pl[:-1].isdigit():
+            out.append(pl[:-1] + "B")
+            continue
+
+        # Keep o1/o3 as-is (OpenAI naming)
+        if pl in {"o1", "o3"}:
+            out.append(pl)
+            continue
+
+        # Default: keep original token
+        out.append(p)
+
+    return " ".join(out).strip() or (slug or "").strip()
+
+
+def derive_display_name(model_id: str, provider: str, api_name: Optional[str]) -> str:
+    """
+    If OpenRouter gives a good name, use it.
+    If it's missing or basically equals the id, derive a readable display name.
+    """
+    mid = (model_id or "").strip()
+    nm = (api_name or "").strip()
+
+    if nm and nm.casefold() != mid.casefold():
+        return nm
+
+    if "/" in mid:
+        vendor, slug = mid.split("/", 1)
+        vendor_key = vendor.strip().lower() or "other"
+        vendor_disp = _VENDOR_DISPLAY.get(vendor_key, vendor.replace("-", " ").title())
+        slug_disp = _humanize_slug(slug)
+        return f"{vendor_disp} {slug_disp}".strip()
+
+    # groq legacy ids sometimes have no slash
+    return nm or mid
+
+
+def _model_sort_key(m: Model) -> Tuple[str, str]:
+    return ((m.name or "").casefold(), (m.id or "").casefold())
+
+
+@strawberry.type
+class Query:
+    @strawberry.field
+    async def models(
+        self,
+        is_reasoning: Optional[bool] = None,
+        provider: Optional[str] = None,
+    ) -> List[ProviderCategory]:
+        """
+        Providers are ONLY:
+          - "groq"
+          - "openrouter"
+
+        Behavior:
+          - provider=None            -> returns both (if they exist in cache)
+          - provider="groq"          -> returns only groq bucket
+          - provider="openrouter"    -> returns only openrouter bucket
+
+        Notes:
+          - Output is sorted by derived display name.
+          - openrouter additionally includes nested `providers` buckets (openai, anthropic, etc).
+        """
+        if provider is not None:
+            provider = (provider or "").strip().lower()
+            if provider and provider not in VALID_PROVIDERS:
+                raise ValueError(f"Invalid provider: {provider}. Use 'groq' or 'openrouter'.")
+
+        all_data = await model_service.get_cached_data()
+        by_bucket = {c.get("name"): c for c in (all_data or []) if isinstance(c, dict)}
+
+        names = [provider] if provider else ["groq", "openrouter"]
+
+        categories: List[ProviderCategory] = []
+
+        for cat_name in names:
+            bucket = by_bucket.get(cat_name, {}) or {}
+            raw_models = bucket.get("models", [])
+            if not isinstance(raw_models, list):
+                raw_models = []
+
+            filtered_models: List[Model] = []
+
+            for m in raw_models:
+                if not isinstance(m, dict):
+                    continue
+
+                mid = str(m.get("id") or "").strip()
+                if not mid:
+                    continue
+
+                supported = set(m.get("supported_parameters", []) or [])
+                is_reasoning_model = bool(REASONING_KEYS.intersection(supported))
+
+                if is_reasoning is not None:
+                    if is_reasoning and not is_reasoning_model:
+                        continue
+                    if (not is_reasoning) and is_reasoning_model:
+                        continue
+
+                pricing_dict = m.get("pricing", {}) or {}
+                pricing = ModelPricing(
+                    prompt=_to_float(pricing_dict.get("prompt")),
+                    completion=_to_float(pricing_dict.get("completion")),
+                    unit=str(pricing_dict.get("unit") or "1M tokens"),
+                )
+
+                specs: List[ParameterSpec] = []
+                for s in (m.get("parameter_specs", []) or []):
+                    if not isinstance(s, dict):
+                        continue
+                    specs.append(
+                        ParameterSpec(
+                            name=str(s.get("name") or ""),
+                            type=str(s.get("type") or "string"),
+                            options=s.get("options"),
+                            default=str(s.get("default")) if s.get("default") is not None else None,
+                            min=s.get("min"),
+                            max=s.get("max"),
+                        )
+                    )
+
+                display_name = derive_display_name(
+                    model_id=mid,
+                    provider=cat_name,
+                    api_name=str(m.get("name") or "").strip(),
+                )
+
+                filtered_models.append(
+                    Model(
+                        id=mid,
+                        name=display_name,
+                        context_length=int(m.get("context_length") or 0),
+                        pricing=pricing,
+                        supported_parameters=list(m.get("supported_parameters", []) or []),
+                        parameter_specs=specs,
+                    )
+                )
+
+            # Sort flat list always (so your UI "sort by name" works immediately)
+            filtered_models.sort(key=_model_sort_key)
+
+            # Build nested providers only for openrouter
+            providers: Optional[List[SubProviderCategory]] = None
+            if cat_name == "openrouter":
+                grouped: Dict[str, List[Model]] = {}
+                for mdl in filtered_models:
+                    vid = _vendor_from_id(mdl.id)
+                    grouped.setdefault(vid, []).append(mdl)
+
+                provider_objs: List[SubProviderCategory] = []
+                for vid, models_list in grouped.items():
+                    models_list.sort(key=_model_sort_key)
+                    provider_objs.append(
+                        SubProviderCategory(
+                            id=vid,
+                            name=_VENDOR_DISPLAY.get(vid, vid.replace("-", " ").title()),
+                            models=models_list,
+                        )
+                    )
+
+                provider_objs.sort(key=lambda p: (p.name or "").casefold())
+                providers = provider_objs
+
+            # Bucket inclusion rules (same spirit as your old code)
+            if provider:
+                categories.append(ProviderCategory(name=cat_name, models=filtered_models, providers=providers))
+            else:
+                # skip empty buckets to keep payload small
+                if filtered_models:
+                    categories.append(ProviderCategory(name=cat_name, models=filtered_models, providers=providers))
+
+        return categories
+
+
+schema = strawberry.Schema(query=Query)
+
+
+
+===== src/agent_service/model_service.py =====
+import asyncio
+import json
+import logging
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
+import httpx
+from redis.asyncio import Redis
+
+from .config import (
+    GROQ_API_KEY,
+    GROQ_BASE_URL,
+    REDIS_URL,
+)
+
+log = logging.getLogger("model_service")
+
+
+class ModelService:
+    """
+    Caches model lists into Redis as EXACTLY TWO top-level provider buckets:
+
+      - groq
+      - openrouter
+
+    Redis value schema:
+      [
+        {"name": "groq", "models": [...]},
+        {
+          "name": "openrouter",
+          "models": [...],              # flat list (back-compat)
+          "providers": [                # nested by vendor/provider inside OpenRouter
+            {"name": "openai", "models": [...]},
+            {"name": "anthropic", "models": [...]},
+            ...
+          ]
+        }
+      ]
+    """
+
+    OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+
+    def __init__(self):
+        self.redis = Redis.from_url(REDIS_URL, decode_responses=True)
+        self.CACHE_KEY = "agent:models:cache_all"
+        self.REFRESH_INTERVAL = 1800  # 30 minutes
+
+    # -------------------------
+    # Display name derivation
+    # -------------------------
+
+    _TOKEN_FIXUPS = {
+        "gpt": "GPT",
+        "o1": "o1",
+        "o3": "o3",
+        "r1": "R1",
+        "llama": "Llama",
+        "claude": "Claude",
+        "gemini": "Gemini",
+        "qwen": "Qwen",
+        "mixtral": "Mixtral",
+        "mistral": "Mistral",
+        "sonnet": "Sonnet",
+        "opus": "Opus",
+        "haiku": "Haiku",
+        "flash": "Flash",
+        "pro": "Pro",
+        "mini": "Mini",
+        "lite": "Lite",
+        "turbo": "Turbo",
+        "instruct": "Instruct",
+    }
+
+    _VENDOR_FIXUPS = {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "google": "Google",
+        "deepseek": "DeepSeek",
+        "meta-llama": "Meta Llama",
+        "mistralai": "Mistral AI",
+        "x-ai": "xAI",
+        "xai": "xAI",
+        "qwen": "Qwen",
+        "cohere": "Cohere",
+        "perplexity": "Perplexity",
+        "microsoft": "Microsoft",
+        "amazon": "Amazon",
+        "ai21": "AI21",
+        "nvidia": "NVIDIA",
+    }
+
+    @staticmethod
+    def _clean(s: Optional[str]) -> str:
+        return (s or "").strip()
+
+    @staticmethod
+    def _casefold(s: str) -> str:
+        return (s or "").casefold()
+
+    @classmethod
+    def _vendor_from_id(cls, model_id: str) -> str:
+        mid = cls._clean(model_id)
+        if "/" in mid:
+            return mid.split("/", 1)[0].strip().lower() or "other"
+        return "other"
+
+    @classmethod
+    def _humanize_tail(cls, tail: str) -> str:
+        """
+        Turn "gpt-4o-mini" -> "GPT 4o Mini"
+        """
+        t = cls._clean(tail)
+        if not t:
+            return "Unknown"
+
+        # Replace separators with spaces
+        t = re.sub(r"[_\-]+", " ", t)
+        t = re.sub(r"\s+", " ", t).strip()
+
+        parts = t.split(" ")
+        out: List[str] = []
+        for p in parts:
+            low = p.lower()
+
+            # common patterns: 8b, 70b -> 8B, 70B
+            if re.fullmatch(r"\d+(b|m|k)", low):
+                out.append(low[:-1] + low[-1].upper())
+                continue
+
+            # common fixups
+            if low in cls._TOKEN_FIXUPS:
+                out.append(cls._TOKEN_FIXUPS[low])
+                continue
+
+            # keep alnum mixes like "4o", "3.5", "v2" as-is
+            if re.search(r"\d", p):
+                out.append(p)
+                continue
+
+            out.append(p.title())
+
+        return " ".join(out).strip() or "Unknown"
+
+    @classmethod
+    def derive_display_name(
+        cls,
+        model_id: str,
+        *,
+        provider: str,
+        api_name: Optional[str] = None,
+        canonical_slug: Optional[str] = None,
+    ) -> str:
+        """
+        Choose the best human-readable name.
+
+        Priority:
+          1) api_name if it exists AND isn't basically the id
+          2) derive from canonical_slug or model_id
+        """
+        mid = cls._clean(model_id)
+        an = cls._clean(api_name)
+        cs = cls._clean(canonical_slug)
+
+        # 1) Use upstream name if it's not empty and not just the id/slug again
+        if an and cls._casefold(an) not in {cls._casefold(mid), cls._casefold(cs)}:
+            return an
+
+        # 2) Derive from canonical_slug if available; else model_id
+        source = cs or mid
+        vendor = cls._vendor_from_id(source)
+        tail = source.split("/", 1)[1] if "/" in source else source
+
+        vendor_display = cls._VENDOR_FIXUPS.get(vendor, vendor.replace("-", " ").title())
+        tail_display = cls._humanize_tail(tail)
+
+        # For OpenRouter, vendor grouping exists anyway — but keeping vendor in the name
+        # makes the flat list readable too.
+        if provider == "openrouter":
+            return f"{vendor_display} {tail_display}".strip()
+
+        # Groq models may not be namespaced; still return something decent
+        return f"{tail_display}".strip()
+
+    @staticmethod
+    def _sort_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        def key(m: Dict[str, Any]):
+            return ((m.get("name") or "").casefold(), (m.get("id") or ""))
+        return sorted(models, key=key)
+
+    @classmethod
+    def _group_openrouter_by_vendor(
+        cls, models: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        buckets: Dict[str, List[Dict[str, Any]]] = {}
+        for m in models:
+            mid = cls._clean(str(m.get("id") or ""))
+            vendor = cls._vendor_from_id(mid)
+            buckets.setdefault(vendor, []).append(m)
+
+        provider_groups: List[Dict[str, Any]] = []
+        for vendor in sorted(buckets.keys(), key=lambda x: x.casefold()):
+            provider_groups.append(
+                {
+                    "name": vendor,
+                    "models": cls._sort_models(buckets[vendor]),
+                }
+            )
+        return provider_groups
+
+    # -------------------------
+    # Parameter Specs (UI)
+    # -------------------------
+
+    def _std_specs(self) -> List[Dict[str, Any]]:
+        return [
+            {"name": "temperature", "type": "float", "min": 0.0, "max": 2.0, "default": 0.7},
+            {"name": "max_tokens", "type": "int", "min": 1, "max": 32768},
+        ]
+
+    def _get_groq_specs(self, model_id: str) -> List[Dict[str, Any]]:
+        """
+        Defines the EXACT allowed values for Groq UI generation.
+        """
+        specs = [
+            {
+                "name": "temperature",
+                "type": "float",
+                "min": 0.0,
+                "max": 2.0,
+                "default": 0.6 if "gpt-oss" in (model_id or "") else 0.7,
+            },
+            {"name": "max_tokens", "type": "int", "min": 1, "max": 32768},
+        ]
+
+        mid = (model_id or "").lower()
+
+        # 1) GPT-OSS (low/medium/high)
+        if "gpt-oss" in mid:
+            specs.append(
+                {
+                    "name": "reasoning_effort",
+                    "type": "enum",
+                    "options": ["low", "medium", "high"],
+                    "default": "medium",
+                }
+            )
+
+        # 2) Qwen (default/none + format)
+        elif "qwen" in mid:
+            specs.append(
+                {
+                    "name": "reasoning_effort",
+                    "type": "enum",
+                    "options": ["default", "none"],
+                    "default": "default",
+                }
+            )
+            specs.append(
+                {
+                    "name": "reasoning_format",
+                    "type": "enum",
+                    "options": ["parsed", "raw", "hidden"],
+                    "default": "parsed",
+                }
+            )
+
+        # 3) DeepSeek (raw only)
+        elif "deepseek" in mid:
+            specs.append(
+                {
+                    "name": "reasoning_format",
+                    "type": "enum",
+                    "options": ["raw"],
+                    "default": "raw",
+                }
+            )
+
+        return specs
+
+    def _get_openrouter_specs(self, model_id: str, supported_parameters: List[str]) -> List[Dict[str, Any]]:
+        """
+        OpenRouter does not reliably provide enum constraints. We provide safe defaults for UI.
+        If model supports reasoning_effort (or is openai/o1|o3), we include that enum.
+        """
+        specs = self._std_specs()
+        sp = set((supported_parameters or []))
+
+        mid = (model_id or "").lower()
+        if "reasoning_effort" in sp or "openai/o1" in mid or "openai/o3" in mid:
+            specs.append(
+                {
+                    "name": "reasoning_effort",
+                    "type": "enum",
+                    "options": ["low", "medium", "high"],
+                    "default": "medium",
+                }
+            )
+
+        # Some OpenRouter models use `reasoning` / `include_reasoning` toggles.
+        if "reasoning" in sp or "include_reasoning" in sp:
+            specs.append(
+                {
+                    "name": "include_reasoning",
+                    "type": "boolean",
+                    "default": "true",
+                }
+            )
+
+        return specs
+
+    # -------------------------
+    # Fetchers
+    # -------------------------
+
+    async def fetch_groq_data(self) -> List[Dict[str, Any]]:
+        """
+        Groq OpenAI-compatible listing: GET {GROQ_BASE_URL}/openai/v1/models
+        """
+        if not GROQ_API_KEY:
+            return []
+
+        url = f"{GROQ_BASE_URL}/openai/v1/models"
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+
+        timeout = httpx.Timeout(20.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code != 200:
+                    log.error(f"Groq models fetch failed: HTTP {resp.status_code}")
+                    return []
+
+                data = resp.json().get("data", [])
+                results: List[Dict[str, Any]] = []
+
+                for m in data:
+                    mid = (m.get("id") or "").strip()
+                    if not mid:
+                        continue
+                    if "whisper" in mid.lower():
+                        continue
+
+                    specs = self._get_groq_specs(mid)
+                    supported_list = [s["name"] for s in specs]
+                    if "stream" not in supported_list:
+                        supported_list.append("stream")
+
+                    context_len = m.get("context_window") or m.get("context_length") or 8192
+                    try:
+                        context_len = int(context_len)
+                    except Exception:
+                        context_len = 8192
+
+                    # Groq doesn't reliably provide a nice display name -> derive it
+                    friendly = self.derive_display_name(mid, provider="groq", api_name=None, canonical_slug=None)
+
+                    results.append(
+                        {
+                            "id": mid,
+                            "name": friendly,  # IMPORTANT: name becomes display name
+                            "context_length": context_len,
+                            "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
+                            "supported_parameters": supported_list,
+                            "parameter_specs": specs,
+                        }
+                    )
+
+                return self._sort_models(results)
+            except Exception as e:
+                log.error(f"Groq Fetch Error: {e}")
+                return []
+
+    async def fetch_openrouter_data(self) -> Dict[str, Any]:
+        """
+        OpenRouter public listing: GET https://openrouter.ai/api/v1/models
+
+        Returns:
+          {
+            "models": [...],        # flat list
+            "providers": [...]      # grouped by vendor prefix (openai/google/anthropic/...)
+          }
+        """
+        timeout = httpx.Timeout(25.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                resp = await client.get(self.OPENROUTER_MODELS_URL)
+                if resp.status_code != 200:
+                    log.error(f"OpenRouter models fetch failed: HTTP {resp.status_code}")
+                    return {"models": [], "providers": []}
+
+                data = resp.json().get("data", [])
+                results: List[Dict[str, Any]] = []
+
+                for m in data:
+                    mid = (m.get("id") or "").strip()
+                    if not mid:
+                        continue
+
+                    api_name = (m.get("name") or "").strip()
+                    canonical = (m.get("canonical_slug") or "").strip() or None
+
+                    context_len = m.get("context_length") or 0
+                    try:
+                        context_len = int(context_len)
+                    except Exception:
+                        context_len = 0
+
+                    pricing = m.get("pricing", {}) or {}
+                    try:
+                        # OpenRouter pricing fields are commonly strings; values are per-token.
+                        p = float(pricing.get("prompt", "0")) * 1_000_000
+                        c = float(pricing.get("completion", "0")) * 1_000_000
+                    except Exception:
+                        p = 0.0
+                        c = 0.0
+
+                    supported = m.get("supported_parameters", []) or []
+                    if not isinstance(supported, list):
+                        supported = []
+
+                    # Ensure stream exists (your backend uses streaming everywhere)
+                    if "stream" not in supported:
+                        supported = list(supported) + ["stream"]
+
+                    specs = self._get_openrouter_specs(mid, supported)
+
+                    # Prefer OpenRouter's display name; fallback to derived
+                    friendly = self.derive_display_name(
+                        mid,
+                        provider="openrouter",
+                        api_name=api_name,
+                        canonical_slug=canonical,
+                    )
+
+                    results.append(
+                        {
+                            "id": mid,
+                            "name": friendly,  # IMPORTANT: name becomes display name
+                            "context_length": context_len,
+                            "pricing": {"prompt": float(p), "completion": float(c), "unit": "1M tokens"},
+                            "supported_parameters": supported,
+                            "parameter_specs": specs,
+                        }
+                    )
+
+                results = self._sort_models(results)
+                providers = self._group_openrouter_by_vendor(results)
+
+                return {"models": results, "providers": providers}
+            except Exception as e:
+                log.error(f"OpenRouter Fetch Error: {e}")
+                return {"models": [], "providers": []}
+
+    # -------------------------
+    # Cache lifecycle
+    # -------------------------
+
+    async def refresh_cache(self) -> None:
+        """
+        Writes exactly two top-level provider buckets into Redis.
+        """
+        log.info("Refreshing model cache (providers: groq, openrouter)...")
+
+        groq_task = asyncio.create_task(self.fetch_groq_data())
+        or_task = asyncio.create_task(self.fetch_openrouter_data())
+        groq_models, or_payload = await asyncio.gather(groq_task, or_task)
+
+        or_models = (or_payload or {}).get("models") or []
+        or_providers = (or_payload or {}).get("providers") or []
+
+        structured_data: List[Dict[str, Any]] = [
+            {"name": "groq", "models": groq_models or []},
+            {"name": "openrouter", "models": or_models, "providers": or_providers},
+        ]
+
+        await self.redis.set(self.CACHE_KEY, json.dumps(structured_data, ensure_ascii=False))
+
+    async def get_cached_data(self) -> List[Dict[str, Any]]:
+        raw = await self.redis.get(self.CACHE_KEY)
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                return data
+        except Exception:
+            pass
+        return []
+
+    async def start_background_loop(self) -> None:
+        while True:
+            try:
+                await self.refresh_cache()
+            except Exception as e:
+                log.error(f"Model cache refresh failed: {e}")
+            await asyncio.sleep(self.REFRESH_INTERVAL)
+
+    async def close(self) -> None:
+        await self.redis.close()
+
+
+model_service = ModelService()
+
+
+
 ===== src/agent_service/prompts.py =====
 SYSTEM_PROMPT = """
 == You are a helpful assistant
@@ -765,70 +1596,125 @@ def keep_only_last_n_messages(state: dict, config: dict):
 
 ===== src/agent_service/llm.py =====
 import httpx
-import re
 import asyncio
-from typing import Optional
+from typing import List, Dict, Any, Optional
+
 from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
+from langchain_deepseek import ChatDeepSeek
+
 from .config import (
     GROQ_API_KEY, GROQ_BASE_URL, 
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
     MODEL_NAME
 )
 
-def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_effort: str = None): # type: ignore
+def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_effort: str = None):
     """
-    Returns an LLM instance.
+    Factory function to return the appropriate LLM client (Groq or OpenRouter).
+    Passes reasoning parameters directly to the constructor.
     """
     target_model = model_name or MODEL_NAME
     
-    # Heuristic: OpenRouter models contain '/' and are not from Groq
-    is_openrouter = "/" in target_model and "groq" not in target_model.lower()
+    # --- PROVIDER SELECTION LOGIC ---
     
-    if is_openrouter:
+    # 1. Has the user provided an OpenRouter specific key?
+    #    (Either passed in args or saved in their session config)
+    user_provided_or_key = bool(openrouter_api_key)
+    
+    # 2. Is this definitely a Groq-only legacy ID? (e.g. "llama3-8b-8192")
+    is_legacy_groq = "/" not in target_model
+    
+    # 3. Decision Matrix:
+    #    - If legacy format (no slash) -> Groq
+    #    - If user DID NOT provide an OpenRouter key, but we have a Groq key -> Groq
+    #      (This handles "moonshotai/..." on Groq when no OR key is set)
+    #    - Otherwise -> OpenRouter
+    
+    use_groq = False
+    if is_legacy_groq:
+        use_groq = True
+    elif not user_provided_or_key and GROQ_API_KEY:
+        # Assuming if no specific OR key is given, we prefer Groq infrastructure
+        use_groq = True
+    
+    # --- CLIENT INITIALIZATION ---
+
+    if not use_groq:
+        # === OPENROUTER ===
         effective_key = openrouter_api_key or OPENROUTER_API_KEY
         if not effective_key:
             raise ValueError(f"OpenRouter API Key required for model {target_model}")
 
-        # Default extra_body for OpenRouter reasoning models
-        extra_body = {
-            "reasoning": {
-                "enabled": True
-            }
-        }
-
-        # Check for OpenAI O-series to support reasoning_effort
-        is_openai_reasoning = any(x in target_model.lower() for x in ["openai/o", "o1-", "o3-"])
+        # OpenRouter/DeepSeek Logic (ChatDeepSeek needs extra_body)
+        is_openai_native = any(x in target_model.lower() for x in ["openai/o1", "openai/o3"])
+        extra_body = {}
         
-        return ChatOpenAI(
-            api_key=effective_key, # type: ignore
-            base_url=OPENROUTER_BASE_URL,
+        if is_openai_native:
+            if reasoning_effort:
+                extra_body["reasoning_effort"] = reasoning_effort
+        else:
+            # For DeepSeek R1, Llama-3.1-Reasoning, etc. on OpenRouter
+            # We enable reasoning by default if it's supported
+            extra_body["reasoning"] = {"enabled": True}
+
+        return ChatDeepSeek(
             model=target_model,
-            streaming=True,
+            api_key=effective_key,
+            api_base=OPENROUTER_BASE_URL,
             temperature=0.0,
-            # Apply reasoning_effort only for O-series models
-            reasoning_effort=reasoning_effort if is_openai_reasoning else None,
-            model_kwargs={
-                "extra_body": extra_body
-            }
+            streaming=True,
+            model_kwargs={"extra_body": extra_body}
         )
     else:
+        # === GROQ ===
+        if not GROQ_API_KEY:
+             raise ValueError(f"Groq API Key is missing for model {target_model}")
+
+        # Default values
+        r_format = None
+        r_effort = None
+
+        # 1. GPT-OSS Logic
+        if "gpt-oss" in target_model:
+            r_format = "parsed"
+            r_effort = reasoning_effort if reasoning_effort else "high"
+
+        # 2. Qwen Logic
+        elif "qwen" in target_model:
+            r_format = "parsed"
+            r_effort = "default"
+        
+        # 3. DeepSeek on Groq
+        elif "deepseek" in target_model:
+             r_format = "raw"
+             r_effort = None
+
         return ChatGroq(
-            api_key=GROQ_API_KEY, # type: ignore
+            api_key=GROQ_API_KEY, 
             base_url=GROQ_BASE_URL,
             model=target_model,
             streaming=True,
-            temperature=0.0,
-            reasoning_format="parsed" 
+            temperature=0.6,
+            stop_sequences=None,
+            reasoning_format=r_format,
+            reasoning_effort=r_effort
         )
 
-# Initialize Default LLM instance
-llm = get_llm()
+# --- MODEL FETCHING & CACHING UTILITIES ---
+
+def _get_std_params() -> List[Dict[str, Any]]:
+    """Standard parameters for most models to populate GraphQL specs."""
+    return [
+        {"name": "temperature", "type": "float", "min": 0.0, "max": 2.0, "default": 0.7},
+        {"name": "max_tokens", "type": "int", "min": 1, "max": 32000, "default": 4096}
+    ]
 
 async def fetch_groq_models() -> dict:
     if not GROQ_API_KEY: return {"data": [], "provider": "groq"}
+    
     url = f"{GROQ_BASE_URL}/openai/v1/models"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url, headers=headers)
@@ -836,82 +1722,100 @@ async def fetch_groq_models() -> dict:
                 data = resp.json().get("data", [])
                 models = []
                 for m in data:
-                    if "whisper" not in m.get("id", "").lower():
+                    mid = m.get("id")
+                    if "whisper" not in mid.lower():
+                        # Calculate Parameter Specs for Frontend
+                        specs = _get_std_params()
+                        
+                        # 1. GPT-OSS
+                        if "gpt-oss" in mid:
+                            specs.append({
+                                "name": "reasoning_effort", 
+                                "type": "enum", 
+                                "options": ["low", "medium", "high"], 
+                                "default": "medium"
+                            })
+                        
+                        # 2. Qwen (Supports Format AND Effort)
+                        elif "qwen" in mid:
+                            specs.append({
+                                "name": "reasoning_effort", 
+                                "type": "enum", 
+                                "options": ["default", "none"], 
+                                "default": "default"
+                            })
+                            specs.append({
+                                "name": "reasoning_format", 
+                                "type": "enum", 
+                                "options": ["parsed", "raw", "hidden"], 
+                                "default": "parsed"
+                            })
+
+                        # 3. DeepSeek (Raw only)
+                        elif "deepseek" in mid:
+                             specs.append({
+                                "name": "reasoning_format", 
+                                "type": "enum", 
+                                "options": ["raw"], 
+                                "default": "raw"
+                            })
+
+                        # Legacy supported list
+                        supported = [s["name"] for s in specs]
+                        if "stream" not in supported: supported.append("stream")
+
                         models.append({
-                            "id": m.get("id"),
-                            "name": m.get("id"),
+                            "id": mid,
+                            "name": mid,
                             "provider": "groq",
                             "context_length": m.get("context_window"),
-                            "pricing": {
-                                "prompt": "0.00",
-                                "completion": "0.00",
-                                "unit": "1M tokens (Approx/Free)"
-                            }
+                            "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
+                            "supported_parameters": supported,
+                            "parameter_specs": specs
                         })
                 return {"data": models, "count": len(models)}
         except Exception: pass
     return {"data": [], "count": 0}
 
 async def fetch_openrouter_models() -> dict:
-    """
-    Fetch OpenRouter models. No API Key required for this endpoint.
-    """
     url = "https://openrouter.ai/api/v1/models"
-    
-    target_params = {"reasoning", "reasoning_effort", "include_reasoning"}
-
     async with httpx.AsyncClient() as client:
         try:
-            # Public endpoint, no headers needed
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json().get("data", [])
-                
-                filtered_models = []
+                results = []
                 for m in data:
-                    # Check parameters
-                    supported = set(m.get("supported_parameters", []))
-                    matches = target_params.intersection(supported)
+                    pricing = m.get("pricing", {})
+                    try:
+                        p = float(pricing.get("prompt", "0")) * 1_000_000
+                        c = float(pricing.get("completion", "0")) * 1_000_000
+                    except: p = c = 0.0
                     
-                    if matches:
-                        # Calculate pricing per 1M
-                        pricing = m.get("pricing", {})
-                        try:
-                            prompt_price = float(pricing.get("prompt", "0")) * 1_000_000
-                            completion_price = float(pricing.get("completion", "0")) * 1_000_000
-                        except (ValueError, TypeError):
-                            prompt_price = 0.0
-                            completion_price = 0.0
-
-                        filtered_models.append({
-                            "id": m["id"],
-                            "name": m.get("name", m["id"]),
-                            "provider": "openrouter",
-                            "context_length": m.get("context_length"),
-                            "pricing": {
-                                "prompt": f"{prompt_price:.2f}",
-                                "completion": f"{completion_price:.2f}",
-                                "unit": "1M tokens"
-                            },
-                            "supported_params": list(matches)
-                        })
-                
-                # Sort by input pricing (low to high)
-                filtered_models.sort(key=lambda x: float(x["pricing"]["prompt"]))
-                
-                return {"data": filtered_models, "count": len(filtered_models)}
-        except Exception as e:
-            print(f"OpenRouter Fetch Error: {e}")
-            pass
+                    # Populate default specs for OpenRouter so frontend doesn't show empty
+                    specs = _get_std_params()
+                    
+                    # Add reasoning check if OpenRouter tags it
+                    # (OpenRouter API doesn't give us granular enum options easily, so we stay basic)
+                    
+                    results.append({
+                        "id": m["id"],
+                        "name": m.get("name", m["id"]),
+                        "provider": "openrouter",
+                        "context_length": m.get("context_length", 0),
+                        "pricing": {"prompt": f"{p:.2f}", "completion": f"{c:.2f}", "unit": "1M tokens"},
+                        "supported_parameters": m.get("supported_parameters", []) + ["temperature", "max_tokens"],
+                        "parameter_specs": specs # Now populated!
+                    })
+                results.sort(key=lambda x: float(x["pricing"]["prompt"]))
+                return {"data": results, "count": len(results)}
+        except Exception: pass
     return {"data": [], "count": 0}
 
 async def get_available_models() -> dict:
-    groq_task = asyncio.create_task(fetch_groq_models())
-    or_task = asyncio.create_task(fetch_openrouter_models())
-    g_res, o_res = await asyncio.gather(groq_task, or_task)
+    g_res, o_res = await asyncio.gather(fetch_groq_models(), fetch_openrouter_models())
     combined = g_res.get("data", []) + o_res.get("data", [])
     return {"data": combined, "count": len(combined)}
-
 
 
 ===== src/agent_service/mcp.py =====
@@ -1055,6 +1959,25 @@ class StdoutLogger:
 
 
 
+===== src/mcp_service/tool_descriptions.json =====
+{
+  "tool_descriptions": {
+    "generate_otp": "generate_otp(user_input={user_input}) -> str\nPurpose: Generate and send an OTP using the user-provided identifier (10 digit indian phone number without contry code/app_id). nInput variables:\n  - user_input: Phone number or app_id used to send the OTP.\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n status,phone_number,app_id,message\nExample output:\n  status,phone_number,app_id,message\\r\\n  OTP Sent,9657052655,DIRECT,OTP generated Successfully\\r\\n",
+    "validate_otp": "validate_otp(otp={otp}) -> str\nPurpose: Validate the OTP for the current session and finalize authentication.\nInput variables:\n  - otp: The OTP entered by the user.\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - CSV string with columns: status,message,app_id,user_details.id,user_details.phone_number,user_details.firstname,user_details.lastname\nExample output:\n  status,message,app_id,user_details.id,user_details.phone_number,user_details.firstname,user_details.lastname\\r\\n  success,Logged in.,28070027,7995d0b5-e5f9-5de8-9ddd-62e7a6458de6,9000000001,Mock,User\\r\\n",
+    "is_logged_in": "is_logged_in() -> dict\nPurpose: Check if the current session is authenticated.\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Dict: {\"logged_in\": <bool>}\nExample output:\n  {\"logged_in\": true}\n",
+    "dashboard_home": "dashboard_home() -> str\nPurpose: Fetch the dashboard home summary for the authenticated user/session.\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) containing values like:\n    agency_flag: \"true\"\n    loans[...] with loan_id|app_id|loan_number|status|product_code\n    all_loans[...] with same fields\n",
+    "loan_details": "loan_details() -> str\nPurpose: Fetch detailed loan information for the current authenticated session.\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) including:\n    loan_summary (amounts, EMI stats, overdue, asset)\n    loan_details (status, number, ROI, tenure, disbursal/maturity dates)\n    payment_summary (paid/remaining, next EMI, ensure balance date)\n    overdue breakdown (EMI/LPP/BCC/others) and references\n",
+    "foreclosure_details": "foreclosure_details() -> str\nPurpose: Fetch foreclosure/closure eligibility and NOC-related status for the current loan.\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) including:\n    app_id, loan_status, is_noc_available, rejection_reason,\n    closure_date, noc_generated_date, email_sent_to, status_code\n",
+    "overdue_details": "overdue_details() -> str\nPurpose: Fetch overdue summary for the current loan (total overdue + breakup + last payment).\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) including:\n    total_overdue_amount, days_past_due, bucket,\n    breakup (emi_overdue_amount, lpp_charges, bounce_charges, other_charges),\n    last_payment_details (amount, date, status)\n",
+    "noc_details": "noc_details() -> str\nPurpose: Fetch NOC (No Objection Certificate) availability details for the current loan.\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) including:\n    app_id, loan_status, is_noc_available, rejection_reason,\n    closure_date, noc_generated_date, email_sent_to\n",
+    "repayment_schedule": "repayment_schedule() -> str\nPurpose: Fetch the full repayment schedule for the current loan.\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) including:\n    schedule_summary (loan_amount, ROI, tenure, EMI, totals)\n    installments list with fields:\n      installment_no, due_date, opening_principal, principal_component,\n      interest_component, installment_amount, closing_principal, status, payment_date\n    status_code\n",
+    "download_welcome_letter": "download_welcome_letter() -> str\nPurpose: Generate/fetch the Welcome Letter document download details for the authenticated user.\nInput variables:\n  - (none)\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) including:\n    document_type, download_url, password_protection, password_hint, status_code\nExample output:\n  document_type: Welcome Letter\n  download_url: \"{download_url}\"\n  password_protection: Enabled\n  password_hint: First 4 letters of your name + DDMM of your birth date (e.g. SUDH0101)\n  status_code: 200\n",
+    "download_soa": "download_soa(start_date={start_date}, end_date={end_date}) -> str\nPurpose: Generate/fetch a Statement of Account (SOA) document for a given date range.\nInput variables:\n  - start_date: Start of period (DD/MM/YYYY).\n  - end_date: End of period (DD/MM/YYYY).\nServer-side variables (not model-visible):\n  - session_id: Current session identifier (injected).\nReturns:\n  - Structured text payload (YAML-ish) including:\n    document_type, download_url, password_protection, password_hint,\n    period, generated_on, status_code\nExample output:\n  document_type: Statement of Account\n  download_url: \"{download_url}\"\n  password_protection: Enabled\n  password_hint: First 4 letters of your name + DDMM of your birth date (e.g. SUDH0101)\n  period: {start_date} to {end_date}\n  generated_on: {generated_on}\n  status_code: 200\n"
+  }
+}
+
+
+
 ===== src/mcp_service/config.py =====
 import os
 
@@ -1074,6 +1997,7 @@ from .session_store import RedisSessionStore
 from .auth_api import HeroFincorpAuthAPIs
 from .core_api import HeroFincorpAPIs
 from .config import MCP_SERVER_HOST, MCP_SERVER_PORT
+from .description_utils import _d
 
 log = StdoutLogger(name="mcp_server")
 
@@ -1091,80 +2015,80 @@ def get_auth(session_id: str):
 def get_api(session_id: str):
     return HeroFincorpAPIs(session_id, session_store=session_store)
 
-@mcp.tool(name="get_contact_hint")
-def get_contact_hint(app_id: str, session_id: str) -> str:
-    _touch(session_id, "get_contact_hint")
-    return get_auth(session_id).get_contact_hint(app_id)
+# @mcp.tool(name="get_contact_hint", description=<description>)
+# def get_contact_hint(app_id: str, session_id: str) -> str:
+#     _touch(session_id, "get_contact_hint")
+#     return get_auth(session_id).get_contact_hint(app_id)
 
-@mcp.tool(name="generate_otp")
+@mcp.tool(name="generate_otp", description=_d("generate_otp"))
 def generate_otp(user_input: str, session_id: str) -> str:
     _touch(session_id, "generate_otp")
     return get_auth(session_id).generate_otp(user_input)
 
-@mcp.tool(name="validate_otp")
+@mcp.tool(name="validate_otp", description=_d("validate_otp"))
 def validate_otp(otp: str, session_id: str) -> str:
     _touch(session_id, "validate_otp")
     return get_auth(session_id).validate_otp(otp)
 
-@mcp.tool(name="is_logged_in")
+@mcp.tool(name="is_logged_in", description=_d("is_logged_in"))
 def is_logged_in(session_id: str) -> dict:
     _touch(session_id, "is_logged_in")
     return {"logged_in": get_auth(session_id).is_logged_in()}
 
-@mcp.tool(name="dashboard_home")
+@mcp.tool(name="dashboard_home", description=_d("dashboard_home"))
 def dashboard_home(session_id: str) -> str:
     _touch(session_id, "dashboard_home")
     return get_api(session_id).get_dashboard_home()
 
-@mcp.tool(name="loan_details")
+@mcp.tool(name="loan_details", description=_d("loan_details"))
 def loan_details(session_id: str) -> str:
     _touch(session_id, "loan_details")
     return get_api(session_id).get_loan_details()
 
-@mcp.tool(name="foreclosure_details")
+@mcp.tool(name="foreclosure_details", description=_d("foreclosure_details"))
 def foreclosure_details(session_id: str) -> str:
     _touch(session_id, "foreclosure_details")
     return get_api(session_id).get_foreclosure_details()
 
-@mcp.tool(name="overdue_details")
+@mcp.tool(name="overdue_details", description=_d("overdue_details"))
 def overdue_details(session_id: str) -> str:
     _touch(session_id, "overdue_details")
     return get_api(session_id).get_overdue_details()
 
-@mcp.tool(name="noc_details")
+@mcp.tool(name="noc_details", description=_d("noc_details"))
 def noc_details(session_id: str) -> str:
     _touch(session_id, "noc_details")
     return get_api(session_id).get_noc_details()
 
-@mcp.tool(name="repayment_schedule")
+@mcp.tool(name="repayment_schedule", description=_d("repayment_schedule"))
 def repayment_schedule(session_id: str) -> str:
     _touch(session_id, "repayment_schedule")
     return get_api(session_id).get_repayment_schedule()
 
-@mcp.tool(name="download_welcome_letter")
+@mcp.tool(name="download_welcome_letter", description=_d("download_welcome_letter"))
 def download_welcome_letter(session_id: str) -> str:
     _touch(session_id, "download_welcome_letter")
     return get_api(session_id).download_welcome_letter()
 
-@mcp.tool(name="download_soa")
+@mcp.tool(name="download_soa", description=_d("download_soa"))
 def download_soa(session_id: str, start_date: str, end_date: str) -> str:
     _touch(session_id, "download_soa")
     return get_api(session_id).download_soa(start_date, end_date)
 
-@mcp.tool(name="initiate_transaction")
-def initiate_transaction(amount: str, otp: str, session_id: str, payment_mode: str = "UPI") -> str:
-    _touch(session_id, "initiate_transaction")
-    return get_api(session_id).initiate_transaction(amount, otp, payment_mode)
+# @mcp.tool(name="initiate_transaction")
+# def initiate_transaction(amount: str, otp: str, session_id: str, payment_mode: str = "UPI") -> str:
+#     _touch(session_id, "initiate_transaction")
+#     return get_api(session_id).initiate_transaction(amount, otp, payment_mode)
 
-@mcp.tool(name="profile_phone_generate_otp")
-def profile_phone_generate_otp(session_id: str, new_phone: str) -> str:
-    _touch(session_id, "profile_phone_generate_otp")
-    return get_api(session_id).profile_phone_generate_otp(new_phone)
+# @mcp.tool(name="profile_phone_generate_otp")
+# def profile_phone_generate_otp(session_id: str, new_phone: str) -> str:
+#     _touch(session_id, "profile_phone_generate_otp")
+#     return get_api(session_id).profile_phone_generate_otp(new_phone)
 
-@mcp.tool(name="profile_phone_validate_otp")
-def profile_phone_validate_otp(session_id: str, new_phone: str, otp: str) -> str:
-    _touch(session_id, "profile_phone_validate_otp")
-    return get_api(session_id).profile_phone_validate_otp(new_phone, otp)
+# @mcp.tool(name="profile_phone_validate_otp")
+# def profile_phone_validate_otp(session_id: str, new_phone: str, otp: str) -> str:
+#     _touch(session_id, "profile_phone_validate_otp")
+#     return get_api(session_id).profile_phone_validate_otp(new_phone, otp)
 
 def main():
     log.info(f"Starting MCP Server on {MCP_SERVER_HOST}:{MCP_SERVER_PORT}")
@@ -1173,6 +2097,51 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+
+===== src/mcp_service/description_utils.py =====
+import json
+from pathlib import Path
+
+from src.common.logger import StdoutLogger
+
+log = StdoutLogger(name="tool_descriptions")
+
+def _load_tool_descriptions() -> dict[str, str]:
+    """
+    Loads tool descriptions from a JSON file placed next to this python module.
+
+    Expected JSON format:
+      { "tool_descriptions": { "<tool_name>": "<description string>", ... } }
+    """
+    path = Path(__file__).with_name("tool_descriptions.json")
+    if not path.exists():
+        log.warning(f"tool_descriptions.json not found at {path}; tool descriptions will be empty.")
+        return {}
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        tool_desc = data.get("tool_descriptions", {})
+        if not isinstance(tool_desc, dict):
+            log.warning("tool_descriptions.json: 'tool_descriptions' is not a dict; ignoring.")
+            return {}
+        # ensure all values are strings
+        out: dict[str, str] = {}
+        for k, v in tool_desc.items():
+            if isinstance(k, str) and isinstance(v, str):
+                out[k] = v
+        return out
+    except Exception as e:
+        log.warning(f"Failed to load tool_descriptions.json: {e}")
+        return {}
+
+
+TOOL_DESCRIPTIONS: dict[str, str] = _load_tool_descriptions()
+
+
+def _d(tool_name: str) -> str:
+    """Get description for a tool name (safe fallback)."""
+    return TOOL_DESCRIPTIONS.get(tool_name, "")
 
 
 ===== src/mcp_service/utils.py =====

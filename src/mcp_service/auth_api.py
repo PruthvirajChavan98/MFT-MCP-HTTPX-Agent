@@ -86,11 +86,16 @@ class HeroFincorpAuthAPIs:
                     app_id = user_input
                     s = self.session_store.get(self.session_id) or {}
                     phone_number = s.get("phone_number")
-                    if not phone_number:
-                         return self._to_vsc({"error": "Phone number unknown. Please provide phone number explicitly."})
+                    # Intentionally removed the blocking check for phone_number here
 
-                payload: Dict[str, Any] = {"phone_number": phone_number}
-                if app_id: payload["app_id"] = app_id
+                payload: Dict[str, Any] = {}
+                if phone_number:
+                    payload["phone_number"] = phone_number
+                if app_id:
+                    payload["app_id"] = app_id
+
+                if not payload:
+                     return self._to_vsc({"error": "Phone number unknown. Please provide phone number explicitly."})
 
                 resp = client.post(self._url("/herofin-service/otp/generate_new/"), json=payload)
                 self.logger.info(f"POST otp/generate_new - {resp.status_code}")
@@ -99,9 +104,20 @@ class HeroFincorpAuthAPIs:
                 except: resp_json = {}
                 
                 if isinstance(resp_json, dict):
+                    updates: Dict[str, Any] = {}
+                    
+                    # 1. Capture App ID if returned
                     if resp_json.get("app_id"):
-                        self.session_store.update(self.session_id, {"app_id": resp_json.get("app_id")})
+                        updates["app_id"] = resp_json.get("app_id")
                         app_id = app_id or resp_json.get("app_id")
+                    
+                    # 2. CRITICAL FIX: Capture Phone Number if returned
+                    if resp_json.get("phone_number"):
+                        updates["phone_number"] = resp_json.get("phone_number")
+                        phone_number = phone_number or resp_json.get("phone_number")
+
+                    if updates:
+                        self.session_store.update(self.session_id, updates)
 
                 if resp.status_code in (200, 201):
                     return self._to_vsc({
