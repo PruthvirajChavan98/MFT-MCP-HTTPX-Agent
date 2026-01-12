@@ -8,8 +8,10 @@ class AgentRequest(BaseModel):
     system_prompt: Optional[str] = None
     model_name: Optional[str] = None
     openrouter_api_key: Optional[str] = None
-    # New: Reasoning Effort (low, medium, high) - mostly for OpenAI o1/o3
-    reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
+    
+    # FIX: Changed from Literal["low", "medium", "high"] to str
+    # This allows values like "default", "none" (for Qwen) or "low"/"high" (for o1/DeepSeek)
+    reasoning_effort: Optional[str] = None
 
 class BaseSessionConfig(BaseModel):
     session_id: str

@@ -3,6 +3,8 @@ from contextlib import AsyncExitStack
 from typing import List, Dict, Any, Optional
 from pydantic import create_model
 from langchain_core.tools import StructuredTool
+# FIX: Use absolute import path
+from src.agent_service.graph_tool import create_graph_tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
 
@@ -83,32 +85,47 @@ class MCPManager:
 
     def rebuild_tools_for_user(self, session_id: str) -> List[StructuredTool]:
         sid = valid_session_id(session_id)
-        if not self.tool_blueprints: return []
-
+        
+        # 1. Start with the list for MCP Tools
         tools: List[StructuredTool] = []
-        for bp in self.tool_blueprints:
-            tool_name = bp["name"]
-            description = bp["description"] or f"Tool: {tool_name}"
-            safe_schema = bp["safe_schema"]
-            raw_tool = bp["raw_tool"]
 
-            async def tool_wrapper(_tool=raw_tool, _sid=sid, **kwargs):
-                full_args = dict(kwargs)
-                full_args["session_id"] = _sid
-                async with self.call_lock:
-                    res = await _tool.ainvoke(full_args)
-                if isinstance(res, str): return {"text": res}
-                return normalize_result(res)
+        # --- PROCESS REMOTE MCP TOOLS ---
+        if self.tool_blueprints:
+            for bp in self.tool_blueprints:
+                tool_name = bp["name"]
+                description = bp["description"] or f"Tool: {tool_name}"
+                safe_schema = bp["safe_schema"]
+                raw_tool = bp["raw_tool"]
 
-            try:
-                tool_instance = StructuredTool.from_function(
-                    func=None, coroutine=tool_wrapper, name=tool_name,
-                    description=description[:1000], args_schema=safe_schema,
-                )
-                tools.append(tool_instance)
-            except Exception as e:
-                log.error(f"Failed to create tool '{tool_name}': {e}")
-                continue
+                # Wrapper to inject session_id into remote calls
+                async def tool_wrapper(_tool=raw_tool, _sid=sid, **kwargs):
+                    full_args = dict(kwargs)
+                    full_args["session_id"] = _sid
+                    async with self.call_lock:
+                        res = await _tool.ainvoke(full_args)
+                    if isinstance(res, str): return {"text": res}
+                    return normalize_result(res)
+
+                try:
+                    tool_instance = StructuredTool.from_function(
+                        func=None, coroutine=tool_wrapper, name=tool_name,
+                        description=description[:1000], args_schema=safe_schema,
+                    )
+                    tools.append(tool_instance)
+                except Exception as e:
+                    log.error(f"Failed to create MCP tool '{tool_name}': {e}")
+                    continue
+
+        # --- PROCESS LOCAL GRAPH TOOL ---
+        # 2. Instantiate and Add the Hero Fincorp Graph Tool
+        try:
+            # This returns a StructuredTool, so no type errors!
+            graph_tool = create_graph_tool()
+            tools.append(graph_tool)
+            log.info("Attached HeroFincorpGraphTool to user session.")
+        except Exception as e:
+            log.error(f"Failed to attach Graph Tool: {e}")
+
         return tools
-
+    
 mcp_manager = MCPManager()

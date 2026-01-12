@@ -121,7 +121,14 @@ async def get_session_config(session_id: str):
 @app.post("/agent/config/groq")
 async def config_groq_session(config: GroqConfig):
     sid = valid_session_id(config.session_id)
-    await config_manager.set_config(sid, system_prompt=config.system_prompt, model_name=config.model_name) # type: ignore
+    
+    # FIX: Added reasoning_effort=config.reasoning_effort
+    await config_manager.set_config(
+        sid, 
+        system_prompt=config.system_prompt,  # type: ignore
+        model_name=config.model_name,  # type: ignore
+        reasoning_effort=config.reasoning_effort  # type: ignore
+    ) 
     return {"status": "updated", "provider": "groq", "session_id": sid}
 
 @app.post("/agent/config/openrouter")
@@ -224,6 +231,24 @@ async def stream_agent(request: AgentRequest):
         return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
     except Exception as e:
         log.error(f"Stream Setup Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.delete("/agent/logout/{session_id}")
+async def logout_session(session_id: str):
+    try:
+        sid = valid_session_id(session_id)
+        
+        # Check if it exists first (optional, but good for 404s)
+        exists = await config_manager.session_exists(sid)
+        # Note: We also check the auth session, but session_exists only checks config
+        # We will proceed with deletion regardless to ensure a clean slate.
+        
+        await config_manager.delete_session(sid)
+        
+        log.info(f"LOGOUT: Session {sid} cleared")
+        return {"status": "logged_out", "session_id": sid, "message": "Session configuration and authentication data cleared."}
+    except Exception as e:
+        log.error(f"Logout Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -84,6 +84,12 @@ def download_soa(session_id: str, start_date: str, end_date: str) -> str:
     _touch(session_id, "download_soa")
     return get_api(session_id).download_soa(start_date, end_date)
 
+@mcp.tool(name="logout", description="logout() -> str\nPurpose: Clear the current session authentication and access tokens.\nInput variables: (none)")
+def logout(session_id: str) -> str:
+    _touch(session_id, "logout")
+    session_store.delete(session_id)
+    return "Logged out successfully. Please reload the page or generate a new OTP to log in again."
+
 # @mcp.tool(name="initiate_transaction")
 # def initiate_transaction(amount: str, otp: str, session_id: str, payment_mode: str = "UPI") -> str:
 #     _touch(session_id, "initiate_transaction")

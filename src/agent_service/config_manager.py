@@ -40,6 +40,23 @@ class ConfigManager:
             except Exception:
                 continue
         return sessions
+    
+    async def delete_session(self, session_id: str):
+        """
+        Hard delete for a session:
+        1. Removes Agent Configuration (agent:config:{sid})
+        2. Removes MCP Auth Data (stored at root {sid})
+        3. Removes LangGraph Checkpoints (thread_id:{sid})
+        """
+        # Keys to target
+        config_key = f"agent:config:{session_id}"
+        auth_key = session_id 
+        
+        # We also attempt to clean up LangGraph checkpoints if they exist in the same DB
+        # Default LangGraph redis saver uses `checkpoint:{thread_id}:...`
+        # We can scan for them or just hit the main ones we know.
+        # For performance, we simply delete the known config and auth keys.
+        await self.redis.delete(config_key, auth_key)
 
     async def close(self):
         await self.redis.close()

@@ -1,0 +1,206 @@
+[
+    {
+        "question": "I want a new Loan? Choose from the below listed products to apply for the loan of your choice.",
+        "answer": "For a Two-Wheeler Loan, scan the QR to apply and follow the step-by-step process at https://www.herofincorp.com/twowheeler-loan. For other products except Two-Wheeler Loan: Hero Instant Personal Loan (HIPL) - https://www.herofincorp.com/instantpersonal-loan/login, Unsecured Business Loan (UBL) - https://www.herofincorp.com/applynow/unsecured-business- loans, Loan Against Property (LAP) - https://www.herofincorp.com/applynow/loan-against-property, Used Car Loan (UCL) - https://www.herofincorp.com/applynow/used-car-loan, Home Loan - https://www.herohousingfinance.com/."
+    },
+    {
+        "question": "How can I check my loan eligibility? Choose from the below listed products to check the loan eligibility.",
+        "answer": "For a Two-Wheeler Loan, scan the QR to apply and follow the step-by-step process at https://www.herofincorp.com/twowheeler-loan. For other products except Two-Wheeler Loan: Hero Instant Personal Loan (HIPL) - https://www.herofincorp.com/instantpersonal-loan/login, Unsecured Business Loan (UBL) - https://www.herofincorp.com/applynow/unsecured-business- loans, Loan Against Property (LAP) - https://www.herofincorp.com/applynow/loan-against-property, Used Car Loan (UCL) - https://www.herofincorp.com/applynow/used-car-loan, Home Loan - https://www.herohousingfinance.com/."
+    },
+    {
+        "question": "I need help with my existing loan.",
+        "answer": "Please login to proceed with the request using your Mobile No/Loan Application Id and OTP. If loan details are not found, an error message will prompt: \"Please enter the correct Loan Application No and try again.\""
+    },
+    {
+        "question": "What is the process for Life insurance claim settlement. (M)",
+        "answer": "Contact your insurance company for the theft insurance claim settlement process. Share the following documents at customer.care@herofincorp.com for the issuance of a Non-Repossession Letter to process the claim: FIR Copy, Insurance Copy, RC Details, Invoice Copy, and Letter from Insurance company. Note that your EMI will continue to debit from your account till your loan is closed."
+    },
+    {
+        "question": "What are the documents required for Insurance claim settlement",
+        "answer": "The required documents include FIR Copy, Insurance Copy, RC Details, Invoice Copy, and Letter from Insurance company. Share these at customer.care@herofincorp.com for the issuance of a Non-Repossession Letter to process your claim. EMIs will continue to be debited until your loan is closed."
+    },
+    {
+        "question": "In case of vehicle lost/stolen, how can I apply for non-repossession letter.",
+        "answer": "Contact your insurance company for the theft insurance claim settlement process. For a Non-Repossession Letter, share FIR Copy, Insurance Copy, RC Details, Invoice Copy, and Letter from Insurance company at customer.care@herofincorp.com. Your EMI will continue to debit until your loan is closed."
+    },
+    {
+        "question": "What are the documents required to get the non-repossession letter.",
+        "answer": "Required documents for a Non-Repossession Letter include FIR Copy, Insurance Copy, RC Details, Invoice Copy, and Letter from Insurance company. Share these at customer.care@herofincorp.com. EMIs will continue to be debited until your loan is closed."
+    },
+    {
+        "question": "What is the process of getting the loan closed in case my vehicle is stolen?",
+        "answer": "Contact your insurance company for the theft insurance claim settlement process. Once the insurance company issues the claim settlement amount in favor of Hero Fincorp, the loan can be closed if the payment details are intimated. If the settlement amount is less than the foreclosure value, the shortfall must be paid by you. Excess amounts will be refunded to your registered bank details."
+    },
+    {
+        "question": "My vehicle is stolen, please stop my EMI presentation.",
+        "answer": "Please note that the EMI presentation cannot be stopped. Your EMI will continue to be presented in your loan account until the loan is closed by your own funds or the insurance claim settlement. You are requested to continue paying your EMIs to maintain a healthy credit record."
+    },
+    {
+        "question": "What is the process to stop my EMI if my vehicle is stolen/lost?",
+        "answer": "The EMI presentation cannot be stopped even if your vehicle is stolen or lost. Your EMI will continue to be presented in your loan account until the loan is closed by your own funds or through the insurance claim settlement. It's important to continue paying your EMIs to maintain a healthy credit record."
+    },
+    {
+        "question": "I do not want collections to call/stop collection efforts as my vehicle is stolen.",
+        "answer": "We request you to clear your outstanding amount or get the loan closed by your own funds or through the insurance claim settlement to stop collection efforts."
+    },
+    {
+        "question": "My Loan has been disbursed but the amount is not received in my bank account.",
+        "answer": "Please contact our customer care team by writing to us at customer.care@herofincorp.com or call us on our toll-free number 1800 102 4145."
+    },
+    {
+        "question": "Application for change in address.",
+        "answer": "You can update your address in the address section of our mobile app. Upload your current address proof and submit the query. Click Here to Download the App [http://bit.ly/HeroRCSAApp](http://bit.ly/HeroRCSAApp) [http://bit.ly/HeroIOS](http://bit.ly/HeroIOS). You need to login with the registered mobile number to raise a request to update the address."
+    },
+    {
+        "question": "I want to change my address details.",
+        "answer": "You can update your address in the address section of our mobile app by uploading your current address proof and submitting the query. Download the App [http://bit.ly/HeroRCSAApp](http://bit.ly/HeroRCSAApp) [http://bit.ly/HeroIOS](http://bit.ly/HeroIOS) and login with your registered mobile number to update your address."
+    },
+    {
+        "question": "What is the process to change my address in loan account.",
+        "answer": "To change your address in your loan account, update your address in the address section of our mobile app. Upload your current address proof and submit the query. You can Download the App here: [http://bit.ly/HeroRCSAApp](http://bit.ly/HeroRCSAApp) [http://bit.ly/HeroIOS](http://bit.ly/HeroIOS). Log in with your registered mobile number to request the address update."
+    },
+    {
+        "question": "How will I receive confirmation that my address has been updated.",
+        "answer": "You can check the status by login into our mobile app against the request raised."
+    },
+    {
+        "question": "Some details in my address are incorrect, kindly update the same.",
+        "answer": "You can update your address in the address section of our mobile app and upload your current address proof and submit the query or Click Here to Download the App <http://bit.ly/HeroRCSAApp> <http://bit.ly/HeroIOS> You would be required to login with the registered mobile number in order to raise request to update the address."
+    },
+    {
+        "question": "I want my NOC to be delivered on a new address instead of registered address.",
+        "answer": "You can update your address in the address section of our mobile app and upload your current address proof and submit the query or Click Here to Download the App <http://bit.ly/HeroRCSAApp> <http://bit.ly/HeroIOS> You would be required to login with the registered mobile number in order to raise request to update the address. Once your address is updated, you are required to raise the request for NOC."
+    },
+    {
+        "question": "I want to update my registered/mailing address details.",
+        "answer": "You can update your address in the address section of our mobile app and upload your current address proof and submit the query or Click Here to Download the App <http://bit.ly/HeroRCSAApp> <http://bit.ly/HeroIOS> You would be required to login with the registered mobile number in order to raise request to update the address."
+    },
+    {
+        "question": "Where can I update my E-mail ID?",
+        "answer": "You may update your e-mail id instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS You would be required to login with the registered mobile number in order to raise request to update your email id."
+    },
+    {
+        "question": "My email address is incorrect.",
+        "answer": "You may update your e-mail id instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS You would be required to login with the registered mobile number in order to raise request to update your email id."
+    },
+    {
+        "question": "I want to update email id.",
+        "answer": "You may update your e-mail id instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS You would be required to login with the registered mobile number in order to raise request to update your email id."
+    },
+    {
+        "question": "Where can I get my contact number updated?",
+        "answer": "You may update your phone number instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS You would be required to login with the registered mobile number in order to raise request to update your phone number."
+    },
+    {
+        "question": "I have lost my loan registered number. Can I get my number updated?",
+        "answer": "You may update your phone number instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS You would be required to login with the registered mobile number in order to raise request to update your phone number."
+    },
+    {
+        "question": "Change my registered mobile number to new number.",
+        "answer": "You may update your phone number instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS You would be required to login with the registered mobile number in order to raise request to update your phone number."
+    },
+    {
+        "question": "How many days will it take to update the contact details.",
+        "answer": "You may update your phone number instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS You would be required to login with the registered mobile number in order to raise request to update your phone number."
+    },
+    {
+        "question": "What is the process to update contact details?",
+        "answer": "You may update your phone number instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS. You would be required to log in with the registered mobile number in order to raise a request to update your phone number."
+    },
+    {
+        "question": "My phone number is incorrect.",
+        "answer": "You may update your phone number instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS. You would be required to log in with the registered mobile number in order to raise a request to update your phone number."
+    },
+    {
+        "question": "I want to update my contact details to a new number.",
+        "answer": "You may update your phone number instantly by going to the profile section on our mobile application or Click Here to Download the App <http://bit.ly/HeroRCSAApp> http://bit.ly/HeroIOS. You would be required to log in with the registered mobile number in order to raise a request to update your phone number."
+    },
+    {
+        "question": "I have not taken any loan from Hero Fincorp but it's reflecting in my CIBIL report.",
+        "answer": "We would request you to share the following documents on customer.care@herofincorp.com with us for further investigation: 1. PAN Card for Identity Proof. 2. Valid address proof (Voter ID/Driving License/Aadhar number/Passport Copy). Note- A masked copy of the Aadhar card should be shared. 3. Complete CIR (CIBIL Information Report) report directly downloaded from CIBIL with the controller number."
+    },
+    {
+        "question": "My loan has been settled, how can I get my charges to be written off from CIBIL?",
+        "answer": "Please note to get the write-off removed, you are requested to pay the settlement waiver amount. To know the settlement waiver amount to be paid, you may write to customer.care@herofincorp.com."
+    },
+    {
+        "question": "My loan has been settled, but my CIBIL score is low.",
+        "answer": "CIBIL has been updated as per the repayment made by you. Please Note- CIBIL score cannot be updated by us. Hero Fincorp can only update the loan status subject to receiving of the complete funds."
+    },
+    {
+        "question": "I have closed the loan but the status is still active on CIBIL.",
+        "answer": "The CIBIL credit score is updated once every month. The frequency of creditor reporting and the credit bureau's processing time are two factors that affect how long it takes for your CIBIL score to update. A credit score update typically takes between 30 and 45 days, provided that all necessary data has been received and processed."
+    },
+    {
+        "question": "How long does it take for the status to get auto updated on CIBIL?",
+        "answer": "The CIBIL credit score is updated once every month. The frequency of creditor reporting and the credit bureau's processing time are two factors that affect how long it takes for your CIBIL score to update. A credit score update typically takes between 30 and 45 days, provided that all necessary data has been received and processed."
+    },
+    {
+        "question": "How can I get my CIBIL updated?",
+        "answer": "The CIBIL credit score is updated once every month. The frequency of creditor reporting and the credit bureau's processing time are two factors that affect how long it takes for your CIBIL score to update. A credit score update typically takes between 30 and 45 days, provided that all necessary data has been received and processed."
+    },
+    {
+        "question": "What is my foreclosure amount?",
+        "answer": "For an active loan, the bifurcation will be displayed. If your loan status is closed, your loan is already closed. Please login to proceed with the request using your Mobile No/Loan Application Id and OTP."
+    },
+    {
+        "question": "Can I foreclose my loan?",
+        "answer": "Yes, you can foreclose your loan anytime during your loan tenure subject to the terms and conditions of your loan agreement. For loans not matured, foreclosure can be requested. If your loan is already closed, this is not applicable. From the 1-8th of every month, your EMI presentation for the current month is in process; it's recommended to raise a new query for foreclosure of your loan post 8th of the month."
+    },
+    {
+        "question": "How is the loan foreclosure amount calculated?",
+        "answer": "To know your foreclosure amount, please refer to the sanction letter provided to you at the beginning of your loan tenure."
+    },
+    {
+        "question": "Why bounce charges have been levied in my bank account?",
+        "answer": "Bounce charges are levied by your bank in case the EMI is returned unpaid. For additional details, please get in touch with your bank."
+    },
+    {
+        "question": "How can I change my registered bank account?",
+        "answer": "In case you want to change your bank account, write to us at customer.care@herofincorp.com."
+    },
+    {
+        "question": "How can I hold the presentation for next month?",
+        "answer": "We can only hold the EMI in case there is an excess amount equivalent to the EMI available in your loan account on or before the 30th of the month."
+    },
+    {
+        "question": "Why have I not received my loan amount?",
+        "answer": "In case you have not received the loan amount within 2-3 working days from the disbursement date, please contact our customer care team along with a complete bank statement with the front page and write to us at customer.care@herofincorp.com."
+    },
+    {
+        "question": "Why is DPD reported in my CIBIL?",
+        "answer": "The DPD (Days Past Due) in CIBIL (Credit Information Bureau India Limited) is a critical determinant of an individual's financial standing. It assesses borrowers' credit history and repayment behavior."
+    },
+    {
+        "question": "I have paid my EMI prior to the due date and still charges have been levied in my account?",
+        "answer": "Please share your bank statement validating/reflecting the deduction of charges at customer.care@herofincorp.com."
+    },
+    {
+        "question": "Why is my EMI not getting deducted from my bank account?",
+        "answer": "You can get more accurate information for this query by reaching out to us at customer.care@herofincorp.com."
+    },
+    {
+        "question": "How can I avail refund of excess EMI deducted from my bank?",
+        "answer": "In order to process the refund request, please provide the complete bank statement validating the debit of excess funds along with the front page reflecting (IFSC Code, Account Holder, Account Number, Bank Name) at customer.care@herofincorp.com. Please Note- Hero Fincorp shall process the refund post due diligence and investigation of the provided documents/details."
+    },
+    {
+        "question": "How can I pay my EMI?",
+        "answer": "You can continue to pay your EMIs through your registered bank account as per the presentation date."
+    },
+    {
+        "question": "What is the address of Hero Fincorp office?",
+        "answer": "Address of Hero Fincorp’s operation center is, A-44, Mohan Co-Operative Industrial Estate, Near Mohan Estate Metro Station, Mathura Road, New Delhi, 110044 – India."
+    },
+    {
+        "question": "Callback Requests OR Give me a callback OR Please call me.",
+        "answer": "I apologies! As a bot I don’t have the capability of calling customers, In case you have any queries related to your loan you can reach out to us through following channels: 1. Download our servicing app; For Android- http://bit.ly/HeroRCSAApp For IOS- http://bit.ly/HeroIOS 2. Send “Hi” on WhatsApp number 9289386204 3. Call on Tollfree Number- 1800-102-4145 4. Write to us at Customer.Care@HeroFinCorp.com"
+    },
+    {
+        "question": "What is Hero Fincorp Toll Free Number?",
+        "answer": "Hero Fincorp tollfree number is 1800-102-4145."
+    },
+    {
+        "question": "How can I raise query on WhatsApp/ What is HFCL’s WhatsApp Number?",
+        "answer": "To raise query on WhatsApp, send “Hi” on 9289386204."
+    }
+]
