@@ -8,6 +8,7 @@ class AgentRequest(BaseModel):
     system_prompt: Optional[str] = None
     model_name: Optional[str] = None
     openrouter_api_key: Optional[str] = None
+    nvidia_api_key: Optional[str] = None  # <--- NEW
     
     # FIX: Changed from Literal["low", "medium", "high"] to str
     # This allows values like "default", "none" (for Qwen) or "low"/"high" (for o1/DeepSeek)
@@ -24,6 +25,11 @@ class GroqConfig(BaseSessionConfig):
 class OpenRouterConfig(BaseSessionConfig):
     model_name: str 
     openrouter_api_key: Optional[str] = None
+
+# --- NEW CONFIG ---
+class NvidiaConfig(BaseSessionConfig):
+    model_name: str
+    nvidia_api_key: Optional[str] = None  # <--- NEW: Stores the user's BYOK
     
 class FAQItem(BaseModel):
     question: str

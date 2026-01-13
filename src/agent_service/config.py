@@ -34,9 +34,16 @@ else:
 # --- OPENROUTER CONFIGURATION ---
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-
 if not OPENROUTER_API_KEY:
     print("WARNING: OPENROUTER_API_KEY is not set (OpenRouter models will be unavailable).")
+
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+
+if not NVIDIA_API_KEY:
+    print("WARNING: NVIDIA_API_KEY is not set.")
+
+
 
 # Default Model
 MODEL_NAME = os.getenv("MODEL", "openai/gpt-oss-120b")

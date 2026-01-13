@@ -17,7 +17,7 @@ from src.agent_service.prompts import SYSTEM_PROMPT
 from src.agent_service.config import REDIS_URL, PORT, MODEL_NAME
 
 # Schemas
-from src.agent_service.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest # Added FAQBatchRequest
+from src.agent_service.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest, NvidiaConfig # Added FAQBatchRequest
 
 # Services
 from src.agent_service.utils import valid_session_id
@@ -27,6 +27,7 @@ from src.agent_service.config_manager import config_manager
 from src.agent_service.model_service import model_service
 from src.agent_service.graphql_schema import schema
 from src.agent_service.knowledge_base import kb_service # [NEW]
+from src.utils import _extract_tool_output
 
 log = StdoutLogger(name="langchain_server")
 CHECKPOINTER: Optional[BaseCheckpointSaver] = None
@@ -110,12 +111,19 @@ async def verify_session(session_id: str):
 async def get_session_config(session_id: str):
     sid = valid_session_id(session_id)
     stored = await config_manager.get_config(sid)
+    
+    # Check if keys exist (return boolean flags for security)
+    has_or_key = bool(stored.get("openrouter_api_key"))
+    has_nv_key = bool(stored.get("nvidia_api_key")) # <--- NEW
+    
     return {
         "session_id": sid,
         "system_prompt": stored.get("system_prompt") or SYSTEM_PROMPT.strip(),
         "model_name": stored.get("model_name") or MODEL_NAME,
         "reasoning_effort": stored.get("reasoning_effort"),
-        "has_custom_key": bool(stored.get("openrouter_api_key")),
+        "has_custom_key": has_or_key, # Legacy flag for frontend compat
+        "has_openrouter_key": has_or_key,
+        "has_nvidia_key": has_nv_key, # <--- NEW Flag
         "is_customized": bool(stored)
     }
 
@@ -144,22 +152,41 @@ async def config_openrouter_session(config: OpenRouterConfig):
     )
     return {"status": "updated", "provider": "openrouter", "session_id": sid}
 
+# --- NEW ENDPOINT ---
+@app.post("/agent/config/nvidia")
+async def config_nvidia_session(config: NvidiaConfig):
+    sid = valid_session_id(config.session_id)
+    await config_manager.set_config(
+        sid, 
+        system_prompt=config.system_prompt, # type: ignore
+        model_name=config.model_name,
+        nvidia_api_key=config.nvidia_api_key, # <--- Save it
+        reasoning_effort=config.reasoning_effort # type: ignore
+    )
+    return {"status": "updated", "provider": "nvidia", "session_id": sid}
+
 # --- Agent Execution ---
 
+# --- UPDATE RESOURCE RESOLVER ---
 async def _resolve_agent_resources(sid: str, request: AgentRequest):
     saved_config = await config_manager.get_config(sid)
     
-    # Resolve Model & Prompt
     model_name = request.model_name or saved_config.get("model_name")
     sys_prompt = request.system_prompt or saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
-    
-    # Resolve OpenRouter Params
-    or_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
     reasoning_effort = request.reasoning_effort or saved_config.get("reasoning_effort")
     
-    model = get_llm(model_name, openrouter_api_key=or_key, reasoning_effort=reasoning_effort) # type: ignore
-    tools = mcp_manager.rebuild_tools_for_user(sid)
+    # Resolve Keys (Request Override > Session Storage > Server Env [Handled in LLM])
+    or_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
+    nv_key = request.nvidia_api_key or saved_config.get("nvidia_api_key") # <--- Resolve
     
+    model = get_llm(
+        model_name, # type: ignore
+        openrouter_api_key=or_key, # type: ignore
+        nvidia_api_key=nv_key, # <--- Pass it # type: ignore
+        reasoning_effort=reasoning_effort # type: ignore
+    )
+    
+    tools = mcp_manager.rebuild_tools_for_user(sid)
     return model, tools, sys_prompt
 
 @app.post("/agent/query")
@@ -183,53 +210,89 @@ async def stream_agent(request: AgentRequest):
     try:
         sid = valid_session_id(request.session_id)
         model, tools, sys_prompt = await _resolve_agent_resources(sid, request)
-        
+
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
         inputs = {"messages": [SystemMessage(sys_prompt), HumanMessage(request.question)]}
-        
+
         async def event_generator():
             try:
-                async for event in agent.astream_events(inputs, {"configurable": {"thread_id": sid}}, version="v2"):
+                async for event in agent.astream_events(
+                    inputs,
+                    {"configurable": {"thread_id": sid}},
+                    version="v2",
+                ):
                     kind = event["event"]
-                    
+
+                    # --- 1. Chat Stream (Content & Reasoning) ---
                     if kind == "on_chat_model_stream":
-                        chunk = event["data"]["chunk"] # type: ignore
-                        
-                        # --- 1. Primary Extraction (ChatDeepSeek / OpenAI Standard) ---
-                        # langchain-deepseek maps the 'reasoning' field from OpenRouter to 'reasoning_content'
+                        chunk = event["data"]["chunk"]  # type: ignore
+
+                        # Reasoning Extraction
                         reasoning = chunk.additional_kwargs.get("reasoning_content")
-                        
-                        # --- 2. Fallback Extraction (Raw OpenRouter / Gemini) ---
-                        # Some providers might still send it as 'reasoning' or nested in metadata
                         if not reasoning:
                             reasoning = chunk.additional_kwargs.get("reasoning")
-                        
                         if not reasoning:
                             reasoning = chunk.response_metadata.get("reasoning")
 
-                        # --- 3. Emit Reasoning ---
                         if reasoning:
-                            # Handle both streaming tokens (DeepSeek) and bulk blocks (Gemini)
-                            # The frontend just needs to append whatever string it gets.
                             yield {"event": "reasoning_token", "data": reasoning}
-                            continue
-                        
-                        # --- 4. Standard Content ---
+                            # DeepSeek R1 on NVIDIA sends reasoning tokens separately from content
+                            # so we often continue here, but some providers mix them.
+                            # The check below ensures we don't duplicate if content is empty.
+
                         if chunk.content:
                             yield {"event": "token", "data": chunk.content}
 
+                    # --- 2. Token Usage Metrics (NEW) ---
+                    # Captures usage from the final message generation event
+                    # elif kind == "on_chat_model_end":
+                    #     output = event["data"].get("output")
+                    #     if output:
+                    #         # Standard LangChain Usage Metadata (V3 standard)
+                    #         usage = getattr(output, "usage_metadata", None)
+
+                    #         # Fallback: Check response_metadata (NVIDIA/OpenAI legacy)
+                    #         if not usage:
+                    #             usage = output.response_metadata.get("token_usage")
+
+                    #         if usage:
+                    #             # Format: {"input_tokens": 15, "output_tokens": 1024, "total_tokens": 1039}
+                    #             yield {"event": "usage", "data": json.dumps(usage)}
+
+                    # --- 3. Tool Start ---
                     elif kind == "on_tool_start":
-                        if event["name"] not in ["_Exception"]: 
-                            tool_info = {"tool": event["name"], "input": event["data"].get("input")}
-                            yield {"event": "tool_start", "data": json.dumps(tool_info)}
+                        if event["name"] not in ["_Exception"]:
+                            tool_info = {
+                                "tool": event["name"],
+                                "input": event["data"].get("input"),
+                            }
+                            yield {"event": "tool_start", "data": json.dumps(tool_info, ensure_ascii=False)}
+
+                    # --- 4. Tool End ---
                     elif kind == "on_tool_end":
-                         yield {"event": "tool_end", "data": str(event["data"].get("output"))}
+                        if event.get("name") not in ["_Exception"]:
+                            raw_output = event["data"].get("output")
+                            # Assuming _extract_tool_output is defined in your utils or scope
+                            clean_output = _extract_tool_output(raw_output)
+
+                            payload = {
+                                "tool": event.get("name") or "unknown",
+                                "tool_call_id": event.get("run_id") or event["data"].get("tool_call_id"),
+                                "output": clean_output,
+                            }
+                            yield {"event": "tool_end", "data": json.dumps(payload, ensure_ascii=False)}
+
                 yield {"event": "done", "data": "[DONE]"}
+
             except Exception as e:
                 log.error(f"Stream Error: {e}")
                 yield {"event": "error", "data": str(e)}
 
-        return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        return EventSourceResponse(
+            event_generator(),
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     except Exception as e:
         log.error(f"Stream Setup Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

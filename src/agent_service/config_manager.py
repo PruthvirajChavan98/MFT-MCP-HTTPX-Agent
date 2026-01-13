@@ -1,11 +1,20 @@
 from redis.asyncio import Redis
+from typing import Optional
 from .config import REDIS_URL
 
 class ConfigManager:
     def __init__(self):
         self.redis = Redis.from_url(REDIS_URL, decode_responses=True)
 
-    async def set_config(self, session_id: str, system_prompt: str = None, model_name: str = None, openrouter_api_key: str = None, reasoning_effort: str = None):  # type: ignore
+    async def set_config(
+        self, 
+        session_id: str, 
+        system_prompt: str = None, # type: ignore
+        model_name: str = None, # type: ignore
+        openrouter_api_key: str = None, # type: ignore
+        nvidia_api_key: Optional[str] = None,  # <--- NEW ARG # type: ignore
+        reasoning_effort: str = None # type: ignore
+        ):  # type: ignore
         """Saves configuration to Redis hash."""
         key = f"agent:config:{session_id}"
         data = {}
@@ -15,6 +24,8 @@ class ConfigManager:
             data["model_name"] = model_name
         if openrouter_api_key:
             data["openrouter_api_key"] = openrouter_api_key
+        if nvidia_api_key is not None:         # <--- NEW BLOCK
+            data["nvidia_api_key"] = nvidia_api_key
         if reasoning_effort:
             data["reasoning_effort"] = reasoning_effort
         

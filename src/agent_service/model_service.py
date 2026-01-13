@@ -10,6 +10,9 @@ from redis.asyncio import Redis
 from .config import (
     GROQ_API_KEYS,
     GROQ_BASE_URL,
+    OPENROUTER_API_KEY,
+    NVIDIA_API_KEY,      # <--- NEW
+    NVIDIA_BASE_URL,     # <--- NEW
     REDIS_URL,
 )
 
@@ -72,7 +75,6 @@ def _titleish(s: str) -> str:
 
         # llama family
         if tl.startswith("llama"):
-            # llama3 / llama-3.1 handled elsewhere; keep fallback
             out.append("Llama" + t[5:])
             continue
 
@@ -101,15 +103,11 @@ def derive_display_name(
 ) -> str:
     """
     Goal: return a stable, human-friendly display name.
-    - Keep `id` raw.
-    - Put friendly name into `name`.
     """
     mid = (model_id or "").strip()
     if not mid:
         return ""
 
-    # If OpenRouter already gives a decent name, prefer it.
-    # Many entries are already "GPT-4o mini", "Claude 3.5 Sonnet", etc.
     if api_name:
         nm = api_name.strip()
         if nm and nm.lower() != mid.lower():
@@ -117,22 +115,21 @@ def derive_display_name(
 
     base = (canonical_slug or mid).strip()
 
-    # OpenRouter IDs are typically "provider/model"
+    # Handle slashed IDs (common in OpenRouter and NVIDIA)
     if "/" in base:
         prov, rest = base.split("/", 1)
         prov_key = prov.strip().lower()
         prov_disp = _PROVIDER_DISPLAY.get(prov_key, _titleish(prov.strip()))
         model_disp = _humanize_slug(rest)
-        # If model_disp already starts with provider name, avoid duplication
+        
         if model_disp.lower().startswith(prov_disp.lower()):
             return model_disp
         return f"{prov_disp} {model_disp}".strip()
 
-    # Groq legacy IDs / non-slashed IDs
+    # Groq legacy IDs
     if provider == "groq":
         return _humanize_slug(base)
 
-    # fallback
     return _humanize_slug(base)
 
 
@@ -147,16 +144,10 @@ def _sort_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 class ModelService:
     """
-    Caches model lists into Redis as EXACTLY TWO provider buckets:
-
+    Caches model lists into Redis as THREE provider buckets:
       - groq
+      - nvidia
       - openrouter
-
-    Redis value schema:
-      [
-        {"name": "groq", "models": [...]},
-        {"name": "openrouter", "models": [...]}
-      ]
     """
 
     OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
@@ -190,7 +181,7 @@ class ModelService:
 
         mid = (model_id or "").lower()
 
-        # 1) GPT-OSS (low/medium/high)
+        # 1) GPT-OSS
         if "gpt-oss" in mid:
             specs.append(
                 {
@@ -200,8 +191,7 @@ class ModelService:
                     "default": "medium",
                 }
             )
-
-        # 2) Qwen (default/none + format)
+        # 2) Qwen
         elif "qwen" in mid:
             specs.append(
                 {
@@ -219,8 +209,7 @@ class ModelService:
                     "default": "parsed",
                 }
             )
-
-        # 3) DeepSeek (raw only)
+        # 3) DeepSeek
         elif "deepseek" in mid:
             specs.append(
                 {
@@ -230,14 +219,13 @@ class ModelService:
                     "default": "raw",
                 }
             )
-
         return specs
 
     def _get_openrouter_specs(self, model_id: str, supported_parameters: List[str]) -> List[Dict[str, Any]]:
         specs = self._std_specs()
         sp = set((supported_parameters or []))
-
         mid = (model_id or "").lower()
+        
         if "reasoning_effort" in sp or "openai/o1" in mid or "openai/o3" in mid:
             specs.append(
                 {
@@ -256,7 +244,24 @@ class ModelService:
                     "default": "true",
                 }
             )
+        return specs
 
+    def _get_nvidia_specs(self, model_id: str) -> List[Dict[str, Any]]:
+        """
+        Dynamically assign parameters for NVIDIA hosted models.
+        """
+        specs = self._std_specs()
+        mid = model_id.lower()
+        
+        # Apply 'reasoning_effort' ONLY to DeepSeek R1 variants
+        if "deepseek" in mid and "r1" in mid:
+             specs.append({
+                "name": "reasoning_effort", 
+                "type": "enum", 
+                "options": ["low", "medium", "high"], 
+                "default": "high"
+            })
+            
         return specs
 
     # -------------------------
@@ -264,14 +269,11 @@ class ModelService:
     # -------------------------
 
     async def fetch_groq_data(self) -> List[Dict[str, Any]]:
-        # Check if the list of keys is empty
         if not GROQ_API_KEYS:
             return []
-
-        # For metadata fetching (fetching the list of models), strictly use the first key.
-        # This reserves the rotation capacity for actual inference calls.
+        
+        # Metadata fetching uses the first key to preserve rotation
         api_key = GROQ_API_KEYS[0]
-
         url = f"{GROQ_BASE_URL}/openai/v1/models"
         headers = {"Authorization": f"Bearer {api_key}"}
 
@@ -288,38 +290,71 @@ class ModelService:
 
                 for m in data:
                     mid = (m.get("id") or "").strip()
-                    if not mid:
-                        continue
-                    if "whisper" in mid.lower():
+                    if not mid or "whisper" in mid.lower():
                         continue
 
                     specs = self._get_groq_specs(mid)
-                    supported_list = [s["name"] for s in specs]
-                    if "stream" not in supported_list:
-                        supported_list.append("stream")
+                    supported_list = [s["name"] for s in specs] + ["stream"]
+                    context_len = m.get("context_window") or 8192
 
-                    context_len = m.get("context_window") or m.get("context_length") or 8192
-                    try:
-                        context_len = int(context_len)
-                    except Exception:
-                        context_len = 8192
-
-                    friendly = derive_display_name(mid, provider="groq", api_name=None, canonical_slug=None)
+                    friendly = derive_display_name(mid, provider="groq")
 
                     results.append(
                         {
                             "id": mid,
-                            "name": friendly,  # IMPORTANT: display name lives here
+                            "name": friendly,
                             "context_length": context_len,
                             "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
                             "supported_parameters": supported_list,
                             "parameter_specs": specs,
                         }
                     )
-
                 return _sort_models(results)
             except Exception as e:
                 log.error(f"Groq Fetch Error: {e}")
+                return []
+
+    async def fetch_nvidia_data(self) -> List[Dict[str, Any]]:
+        if not NVIDIA_API_KEY:
+            return []
+            
+        url = f"{NVIDIA_BASE_URL}/models"
+        headers = {
+            "Authorization": f"Bearer {NVIDIA_API_KEY}",
+            "Accept": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                # 10s timeout to prevent blocking startup
+                resp = await client.get(url, headers=headers, timeout=10.0)
+                if resp.status_code != 200:
+                    log.error(f"NVIDIA models fetch failed: HTTP {resp.status_code}")
+                    return []
+
+                data = resp.json().get("data", [])
+                results = []
+
+                for m in data:
+                    mid = m.get("id")
+                    if not mid: continue
+                    
+                    friendly = derive_display_name(mid, provider="nvidia")
+                    specs = self._get_nvidia_specs(mid)
+                    supported = [s["name"] for s in specs] + ["stream"]
+
+                    results.append({
+                        "id": mid,
+                        "name": friendly,
+                        "provider": "nvidia",
+                        "context_length": m.get("context_window", 32768),
+                        "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
+                        "supported_parameters": supported,
+                        "parameter_specs": specs
+                    })
+                return _sort_models(results)
+            except Exception as e:
+                log.error(f"NVIDIA Fetch Error: {e}")
                 return []
 
     async def fetch_openrouter_data(self) -> List[Dict[str, Any]]:
@@ -336,54 +371,29 @@ class ModelService:
 
                 for m in data:
                     mid = (m.get("id") or "").strip()
-                    if not mid:
-                        continue
+                    if not mid: continue
 
                     api_name = (m.get("name") or "").strip()
-                    canonical = (m.get("canonical_slug") or "").strip() or None
-
                     context_len = m.get("context_length") or 0
-                    try:
-                        context_len = int(context_len)
-                    except Exception:
-                        context_len = 0
-
+                    
                     pricing = m.get("pricing", {}) or {}
-                    try:
-                        # OpenRouter pricing fields are commonly strings; values are per-token.
-                        p = float(pricing.get("prompt", "0")) * 1_000_000
-                        c = float(pricing.get("completion", "0")) * 1_000_000
-                    except Exception:
-                        p = 0.0
-                        c = 0.0
+                    p = float(pricing.get("prompt", "0")) * 1_000_000
+                    c = float(pricing.get("completion", "0")) * 1_000_000
 
-                    supported = m.get("supported_parameters", []) or []
-                    if not isinstance(supported, list):
-                        supported = []
-
-                    if "stream" not in supported:
-                        supported = list(supported) + ["stream"]
-
+                    supported = list(m.get("supported_parameters", []) or []) + ["stream"]
                     specs = self._get_openrouter_specs(mid, supported)
-
-                    friendly = derive_display_name(
-                        mid,
-                        provider="openrouter",
-                        api_name=api_name,
-                        canonical_slug=canonical,
-                    )
+                    friendly = derive_display_name(mid, provider="openrouter", api_name=api_name)
 
                     results.append(
                         {
                             "id": mid,
-                            "name": friendly,  # IMPORTANT: display name lives here
+                            "name": friendly,
                             "context_length": context_len,
                             "pricing": {"prompt": float(p), "completion": float(c), "unit": "1M tokens"},
                             "supported_parameters": supported,
                             "parameter_specs": specs,
                         }
                     )
-
                 return _sort_models(results)
             except Exception as e:
                 log.error(f"OpenRouter Fetch Error: {e}")
@@ -394,14 +404,17 @@ class ModelService:
     # -------------------------
 
     async def refresh_cache(self) -> None:
-        log.info("Refreshing model cache (providers: groq, openrouter)...")
+        log.info("Refreshing model cache (providers: groq, nvidia, openrouter)...")
 
-        groq_task = asyncio.create_task(self.fetch_groq_data())
-        or_task = asyncio.create_task(self.fetch_openrouter_data())
-        groq_models, or_models = await asyncio.gather(groq_task, or_task)
+        t1 = asyncio.create_task(self.fetch_groq_data())
+        t2 = asyncio.create_task(self.fetch_openrouter_data())
+        t3 = asyncio.create_task(self.fetch_nvidia_data())
+
+        groq_models, or_models, nvidia_models = await asyncio.gather(t1, t2, t3)
 
         structured_data = [
             {"name": "groq", "models": groq_models or []},
+            {"name": "nvidia", "models": nvidia_models or []},
             {"name": "openrouter", "models": or_models or []},
         ]
 

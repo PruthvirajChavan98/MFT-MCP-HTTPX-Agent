@@ -46,13 +46,13 @@ class SubProviderCategory:
 
 @strawberry.type
 class ProviderCategory:
-    name: str  # "groq" | "openrouter"
+    name: str  # "groq" | "nvidia" | "openrouter"
     models: List[Model]
     # Only populated for openrouter
     providers: Optional[List[SubProviderCategory]] = None
 
 
-VALID_PROVIDERS = {"groq", "openrouter"}
+VALID_PROVIDERS = {"groq", "nvidia", "openrouter"}
 REASONING_KEYS = {"reasoning", "reasoning_effort", "include_reasoning"}
 
 
@@ -77,6 +77,7 @@ _VENDOR_DISPLAY: Dict[str, str] = {
     "meta-llama": "Meta Llama",
     "mistralai": "Mistral",
     "deepseek": "DeepSeek",
+    "deepseek-ai": "DeepSeek",
     "qwen": "Qwen",
     "cohere": "Cohere",
     "x-ai": "xAI",
@@ -84,6 +85,8 @@ _VENDOR_DISPLAY: Dict[str, str] = {
     "amazon": "Amazon",
     "microsoft": "Microsoft",
     "alibaba": "Alibaba",
+    "nvidia": "NVIDIA",
+    "01-ai": "01.AI",
     "other": "Other",
 }
 
@@ -133,7 +136,7 @@ def _humanize_slug(slug: str) -> str:
 
 def derive_display_name(model_id: str, provider: str, api_name: Optional[str]) -> str:
     """
-    If OpenRouter gives a good name, use it.
+    If the service gives a good name, use it.
     If it's missing or basically equals the id, derive a readable display name.
     """
     mid = (model_id or "").strip()
@@ -166,13 +169,15 @@ class Query:
         provider: Optional[str] = None,
     ) -> List[ProviderCategory]:
         """
-        Providers are ONLY:
+        Providers are:
           - "groq"
+          - "nvidia"
           - "openrouter"
 
         Behavior:
-          - provider=None            -> returns both (if they exist in cache)
+          - provider=None            -> returns all (if they exist in cache)
           - provider="groq"          -> returns only groq bucket
+          - provider="nvidia"        -> returns only nvidia bucket
           - provider="openrouter"    -> returns only openrouter bucket
 
         Notes:
@@ -182,12 +187,13 @@ class Query:
         if provider is not None:
             provider = (provider or "").strip().lower()
             if provider and provider not in VALID_PROVIDERS:
-                raise ValueError(f"Invalid provider: {provider}. Use 'groq' or 'openrouter'.")
+                raise ValueError(f"Invalid provider: {provider}. Use 'groq', 'nvidia', or 'openrouter'.")
 
         all_data = await model_service.get_cached_data()
         by_bucket = {c.get("name"): c for c in (all_data or []) if isinstance(c, dict)}
 
-        names = [provider] if provider else ["groq", "openrouter"]
+        # Order of appearance in UI if no provider filter
+        names = [provider] if provider else ["groq", "nvidia", "openrouter"]
 
         categories: List[ProviderCategory] = []
 
@@ -255,10 +261,10 @@ class Query:
                     )
                 )
 
-            # Sort flat list always (so your UI "sort by name" works immediately)
+            # Sort flat list always
             filtered_models.sort(key=_model_sort_key)
 
-            # Build nested providers only for openrouter
+            # Build nested providers only for openrouter (NVIDIA & Groq are mostly flat/hosted)
             providers: Optional[List[SubProviderCategory]] = None
             if cat_name == "openrouter":
                 grouped: Dict[str, List[Model]] = {}
@@ -280,11 +286,11 @@ class Query:
                 provider_objs.sort(key=lambda p: (p.name or "").casefold())
                 providers = provider_objs
 
-            # Bucket inclusion rules (same spirit as your old code)
+            # Always add bucket if requested, even if empty (UI handles empty states)
+            # But skipping completely empty buckets for "all" query is often cleaner.
             if provider:
                 categories.append(ProviderCategory(name=cat_name, models=filtered_models, providers=providers))
             else:
-                # skip empty buckets to keep payload small
                 if filtered_models:
                     categories.append(ProviderCategory(name=cat_name, models=filtered_models, providers=providers))
 
