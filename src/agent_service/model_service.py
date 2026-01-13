@@ -8,7 +8,7 @@ import httpx
 from redis.asyncio import Redis
 
 from .config import (
-    GROQ_API_KEY,
+    GROQ_API_KEYS,
     GROQ_BASE_URL,
     REDIS_URL,
 )
@@ -264,11 +264,16 @@ class ModelService:
     # -------------------------
 
     async def fetch_groq_data(self) -> List[Dict[str, Any]]:
-        if not GROQ_API_KEY:
+        # Check if the list of keys is empty
+        if not GROQ_API_KEYS:
             return []
 
+        # For metadata fetching (fetching the list of models), strictly use the first key.
+        # This reserves the rotation capacity for actual inference calls.
+        api_key = GROQ_API_KEYS[0]
+
         url = f"{GROQ_BASE_URL}/openai/v1/models"
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+        headers = {"Authorization": f"Bearer {api_key}"}
 
         timeout = httpx.Timeout(20.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:

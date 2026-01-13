@@ -1,4 +1,5 @@
 import os
+import itertools
 
 # Server Settings
 SERVER_NAME = "hero_fincorp"
@@ -12,18 +13,30 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 # External Services
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# Provider 1: Groq
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# --- GROQ LOAD BALANCING CONFIGURATION ---
 GROQ_BASE_URL = "https://api.groq.com"
 
-# Provider 2: OpenRouter
+# 1. Get raw string from env (support both plural and singular env vars)
+_GROQ_ENV_VAL = os.getenv("GROQ_API_KEYS", os.getenv("GROQ_API_KEY", ""))
+
+# 2. Parse into a list
+GROQ_API_KEYS = [k.strip() for k in _GROQ_ENV_VAL.split(",") if k.strip()]
+
+# 3. Create a thread-safe infinite iterator (Round Robin)
+#    This will yield key1, key2, key3, key1, key2... forever.
+GROQ_KEY_CYCLE = itertools.cycle(GROQ_API_KEYS) if GROQ_API_KEYS else None
+
+if not GROQ_API_KEYS:
+    print("WARNING: No GROQ_API_KEYS found. Groq models will fail.")
+else:
+    print(f"INFO: Loaded {len(GROQ_API_KEYS)} Groq API keys for internal load balancing.")
+
+# --- OPENROUTER CONFIGURATION ---
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Default Model
-MODEL_NAME = os.getenv("MODEL", "openai/gpt-oss-120b")
-
-if not GROQ_API_KEY:
-    print("WARNING: GROQ_API_KEY is not set.")
 if not OPENROUTER_API_KEY:
     print("WARNING: OPENROUTER_API_KEY is not set (OpenRouter models will be unavailable).")
+
+# Default Model
+MODEL_NAME = os.getenv("MODEL", "openai/gpt-oss-120b")

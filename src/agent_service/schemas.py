@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 from pydantic import BaseModel
 
 class AgentRequest(BaseModel):
@@ -23,4 +23,11 @@ class GroqConfig(BaseSessionConfig):
 
 class OpenRouterConfig(BaseSessionConfig):
     model_name: str 
-    openrouter_api_key: Optional[str] = None 
+    openrouter_api_key: Optional[str] = None
+    
+class FAQItem(BaseModel):
+    question: str
+    answer: str
+
+class FAQBatchRequest(BaseModel):
+    items: List[FAQItem]

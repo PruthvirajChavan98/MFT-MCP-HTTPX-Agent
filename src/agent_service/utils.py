@@ -1,7 +1,8 @@
 import json
+import redis
 from typing import Any
 from langchain_core.messages import RemoveMessage
-from .config import KEEP_LAST
+from .config import KEEP_LAST, REDIS_URL
 
 def valid_session_id(session_id: object) -> str:
     """Ensures session_id is a valid non-empty string."""
@@ -39,3 +40,23 @@ def keep_only_last_n_messages(state: dict, config: dict):
     if len(msgs) <= KEEP_LAST:
         return {}
     return {"messages": [RemoveMessage(id=msgs[i].id) for i in range(len(msgs) - KEEP_LAST)]}
+
+def is_user_authenticated(session_id: str) -> bool:
+    """
+    Directly checks Redis to see if the user has an active access_token.
+    This avoids passing sensitive tool definitions to unauthenticated users.
+    """
+    try:
+        # Use a localized client to ensure thread safety in async contexts if needed,
+        # or rely on the fact that we are just reading a key.
+        client = redis.from_url(REDIS_URL, decode_responses=True)
+        # MCP Session Store saves data directly against the session_id key
+        data_str = client.get(session_id)
+        if not data_str:
+            return False
+        
+        data = json.loads(str(data_str))
+        # Check for the presence of the token set by auth_api.py
+        return bool(data.get("access_token"))
+    except Exception:
+        return False

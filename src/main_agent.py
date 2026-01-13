@@ -17,7 +17,7 @@ from src.agent_service.prompts import SYSTEM_PROMPT
 from src.agent_service.config import REDIS_URL, PORT, MODEL_NAME
 
 # Schemas
-from src.agent_service.schemas import AgentRequest, GroqConfig, OpenRouterConfig
+from src.agent_service.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest # Added FAQBatchRequest
 
 # Services
 from src.agent_service.utils import valid_session_id
@@ -26,6 +26,7 @@ from src.agent_service.mcp import mcp_manager
 from src.agent_service.config_manager import config_manager
 from src.agent_service.model_service import model_service
 from src.agent_service.graphql_schema import schema
+from src.agent_service.knowledge_base import kb_service # [NEW]
 
 log = StdoutLogger(name="langchain_server")
 CHECKPOINTER: Optional[BaseCheckpointSaver] = None
@@ -250,6 +251,35 @@ async def logout_session(session_id: str):
     except Exception as e:
         log.error(f"Logout Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/admin/faqs")
+async def update_faqs(
+    request: FAQBatchRequest, 
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"),
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+):
+    """
+    Update or Add FAQs.
+    - Uses server-side keys (Round-Robin) by default.
+    - Accepts 'X-Groq-Key' and 'X-OpenRouter-Key' headers to override.
+    """
+    if not request.items:
+        return {"status": "ignored", "message": "No items provided"}
+
+    data = [item.model_dump() for item in request.items]
+    
+    # Pass the headers to the service
+    result = await kb_service.ingest_faq_batch(
+        data, 
+        groq_key=x_groq_key,  # type: ignore
+        openrouter_key=x_openrouter_key # type: ignore
+    )
+    
+    return {
+        "status": "completed", 
+        "details": result
+    }
 
 if __name__ == "__main__":
     import uvicorn

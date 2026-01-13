@@ -125,7 +125,7 @@ def query_hero_fincorp(query: str) -> str:
         # 1. Initialize Embeddings
         embeddings = OpenAIEmbeddings(
             model="openai/text-embedding-3-small",
-            api_key="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", # type: ignore
+            api_key="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", # type: ignore
             base_url="https://openrouter.ai/api/v1",
             check_embedding_ctx_length=False
         )
@@ -143,7 +143,7 @@ def query_hero_fincorp(query: str) -> str:
         )
 
         # 3. Perform Similarity Search
-        results = vector_store.similarity_search(query, k=3)
+        results = vector_store.similarity_search(query, k=2)
         
         if not results:
             return "No relevant information found in the knowledge base."
@@ -178,6 +178,6 @@ def create_graph_tool() -> StructuredTool:
     return StructuredTool.from_function(
         func=query_hero_fincorp,
         name="hero_fincorp_knowledge_base",
-        description="Search the Hero Fincorp policy database using vector semantic search. Use this for questions about processes, documents, contacts, or loan products.",
+        description="Search the Hero Fincorp FAQs database using vector semantic search. Use this for questions about processes, documents, contacts, loan products and miscellaneous questions.",
         args_schema=GraphQueryInput
     )

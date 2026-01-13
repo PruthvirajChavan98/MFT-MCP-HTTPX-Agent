@@ -6,8 +6,11 @@ from langchain_groq import ChatGroq
 from langchain_deepseek import ChatDeepSeek
 
 from .config import (
-    GROQ_API_KEY, GROQ_BASE_URL, 
-    OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
+    GROQ_KEY_CYCLE,  # The Round-Robin Iterator
+    GROQ_API_KEYS,   # The raw list (for fetching models)
+    GROQ_BASE_URL, 
+    OPENROUTER_API_KEY, 
+    OPENROUTER_BASE_URL,
     MODEL_NAME
 )
 
@@ -15,6 +18,7 @@ def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_ef
     """
     Factory function to return the appropriate LLM client (Groq or OpenRouter).
     Passes reasoning parameters directly to the constructor.
+    Implements Internal Sequential Load Balancing for Groq.
     """
     target_model = model_name or MODEL_NAME
     
@@ -27,16 +31,14 @@ def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_ef
     # 2. Is this definitely a Groq-only legacy ID? (e.g. "llama3-8b-8192")
     is_legacy_groq = "/" not in target_model
     
-    # 3. Decision Matrix:
-    #    - If legacy format (no slash) -> Groq
-    #    - If user DID NOT provide an OpenRouter key, but we have a Groq key -> Groq
-    #      (This handles "moonshotai/..." on Groq when no OR key is set)
-    #    - Otherwise -> OpenRouter
+    # 3. Check if Groq keys are actually available in config
+    has_groq_keys = GROQ_KEY_CYCLE is not None
     
+    # 4. Decision Matrix
     use_groq = False
     if is_legacy_groq:
         use_groq = True
-    elif not user_provided_or_key and GROQ_API_KEY:
+    elif not user_provided_or_key and has_groq_keys:
         # Assuming if no specific OR key is given, we prefer Groq infrastructure
         use_groq = True
     
@@ -66,12 +68,15 @@ def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_ef
             api_base=OPENROUTER_BASE_URL,
             temperature=0.0,
             streaming=True,
-            model_kwargs={"extra_body": extra_body}
+            extra_body=extra_body
         )
     else:
-        # === GROQ ===
-        if not GROQ_API_KEY:
-             raise ValueError(f"Groq API Key is missing for model {target_model}")
+        # === GROQ (LOAD BALANCED) ===
+        if not has_groq_keys:
+             raise ValueError(f"No Groq API Keys configured for model {target_model}")
+
+        # [CRITICAL] Load Balancing: Get the next key from the cycle
+        current_api_key = next(GROQ_KEY_CYCLE) # type: ignore
 
         # Default values
         r_format = None
@@ -93,11 +98,11 @@ def get_llm(model_name: str = None, openrouter_api_key: str = None, reasoning_ef
              r_effort = None
 
         return ChatGroq(
-            api_key=GROQ_API_KEY, # type: ignore
+            api_key=current_api_key, # Use the rotated key # type: ignore
             base_url=GROQ_BASE_URL,
             model=target_model,
             streaming=True,
-            temperature=0.6,
+            temperature=0.0,
             stop_sequences=None,
             reasoning_format=r_format,
             reasoning_effort=r_effort
@@ -113,10 +118,16 @@ def _get_std_params() -> List[Dict[str, Any]]:
     ]
 
 async def fetch_groq_models() -> dict:
-    if not GROQ_API_KEY: return {"data": [], "provider": "groq"}
+    # Use the LIST, not the CYCLE, for metadata checking to avoid burning logic
+    if not GROQ_API_KEYS: 
+        return {"data": [], "provider": "groq"}
     
+    # Always use the first key for system maintenance tasks (fetching models)
+    # This leaves the rotation pool intact for user queries.
+    maintenance_key = GROQ_API_KEYS[0]
+
     url = f"{GROQ_BASE_URL}/openai/v1/models"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    headers = {"Authorization": f"Bearer {maintenance_key}"}
     
     async with httpx.AsyncClient() as client:
         try:

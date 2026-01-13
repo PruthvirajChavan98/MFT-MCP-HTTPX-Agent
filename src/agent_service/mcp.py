@@ -3,17 +3,24 @@ from contextlib import AsyncExitStack
 from typing import List, Dict, Any, Optional
 from pydantic import create_model
 from langchain_core.tools import StructuredTool
-# FIX: Use absolute import path
-from src.agent_service.graph_tool import create_graph_tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
 
-# Updated Absolute Import
+# Local Imports
+from src.agent_service.graph_tool import create_graph_tool
 from src.common.logger import StdoutLogger
 from .config import SERVER_NAME, SERVER_URL
-from .utils import valid_session_id, normalize_result
+from .utils import valid_session_id, normalize_result, is_user_authenticated
 
 log = StdoutLogger(name="agent_mcp")
+
+# [CONFIG] Tools allowed for users who HAVE NOT logged in yet
+PUBLIC_TOOLS = {
+    "generate_otp",
+    "validate_otp",
+    "is_logged_in",
+    "hero_fincorp_knowledge_base" # The FAQ RAG tool
+}
 
 class MCPManager:
     def __init__(self):
@@ -84,15 +91,27 @@ class MCPManager:
         return create_model(f"{tool_name}Input", **fields)
 
     def rebuild_tools_for_user(self, session_id: str) -> List[StructuredTool]:
+        """
+        Dynamically constructs the list of tools for a specific user session.
+        If the user is NOT authenticated, complex tools (loan details, SOA, etc.) are hidden.
+        """
         sid = valid_session_id(session_id)
         
-        # 1. Start with the list for MCP Tools
+        # 1. Fast Auth Check (Redis)
+        is_auth = is_user_authenticated(sid)
+        
         tools: List[StructuredTool] = []
 
-        # --- PROCESS REMOTE MCP TOOLS ---
+        # 2. Iterate Blueprints (Remote MCP Tools)
         if self.tool_blueprints:
             for bp in self.tool_blueprints:
                 tool_name = bp["name"]
+                
+                # --- FILTERING LOGIC ---
+                # If unauthenticated, SKIP tools that are not in the public list.
+                if not is_auth and tool_name not in PUBLIC_TOOLS:
+                    continue
+
                 description = bp["description"] or f"Tool: {tool_name}"
                 safe_schema = bp["safe_schema"]
                 raw_tool = bp["raw_tool"]
@@ -116,15 +135,14 @@ class MCPManager:
                     log.error(f"Failed to create MCP tool '{tool_name}': {e}")
                     continue
 
-        # --- PROCESS LOCAL GRAPH TOOL ---
-        # 2. Instantiate and Add the Hero Fincorp Graph Tool
-        try:
-            # This returns a StructuredTool, so no type errors!
-            graph_tool = create_graph_tool()
-            tools.append(graph_tool)
-            log.info("Attached HeroFincorpGraphTool to user session.")
-        except Exception as e:
-            log.error(f"Failed to attach Graph Tool: {e}")
+        # 3. Add Local Graph Tool (FAQ)
+        # This is generally considered "Public"
+        if is_auth or "hero_fincorp_knowledge_base" in PUBLIC_TOOLS:
+            try:
+                graph_tool = create_graph_tool()
+                tools.append(graph_tool)
+            except Exception as e:
+                log.error(f"Failed to attach Graph Tool: {e}")
 
         return tools
     
