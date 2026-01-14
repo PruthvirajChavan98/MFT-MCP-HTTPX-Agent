@@ -1,10 +1,11 @@
+import logging
 import json
 from typing import Optional, cast
 import redis
-from src.common.logger import StdoutLogger
+
 from .config import REDIS_URL
 
-log = StdoutLogger(name="redis_session_store")
+log = logging.getLogger(name="redis_session_store")
 
 def _redact_uri(uri: str) -> str:
     try:
@@ -39,13 +40,13 @@ class RedisSessionStore:
     def set(self, session_id: str, data: dict):
         sid = self._valid_session_id(session_id)
         if not sid: return
-        self.client.set(sid, json.dumps(data, ensure_ascii=False))
+        self.client.set(sid, json.dumps(data, ensure_ascii=False)) # type: ignore
         log.info(f"[Redis] SET {sid} | Keys: {list(data.keys())}")
 
     def get(self, session_id: str) -> Optional[dict]:
         sid = self._valid_session_id(session_id)
         if not sid: return None
-        data = cast(Optional[str], self.client.get(sid))
+        data = cast(Optional[str], self.client.get(sid)) # type: ignore
         if not data:
             log.warning(f"[Redis] MISS {sid}")
             return None
@@ -62,5 +63,5 @@ class RedisSessionStore:
     def delete(self, session_id: str):
         sid = self._valid_session_id(session_id)
         if not sid: return
-        self.client.delete(sid)
+        self.client.delete(sid) # type: ignore
         log.info(f"[Redis] DEL {sid}")

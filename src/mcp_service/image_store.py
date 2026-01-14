@@ -1,9 +1,10 @@
+import logging
 import redis
 from typing import Optional, cast
-from .session_store import RedisSessionStore
-from src.common.logger import StdoutLogger
 
-log = StdoutLogger(name="redis_image_store")
+from .session_store import RedisSessionStore
+
+log = logging.getLogger(name="redis_image_store")
 
 class RedisImageStore:
     def __init__(self, session_store: Optional[RedisSessionStore] = None):

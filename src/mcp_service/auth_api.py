@@ -1,14 +1,15 @@
+import logging
 import os
-import json
 import httpx
 from typing import Optional, Any, Dict
-from src.common.logger import StdoutLogger
+
+
 from .session_store import RedisSessionStore
 from .utils import JsonConverter
 from .config import CRM_BASE_URL
 
 conv = JsonConverter(sep=".")
-log = StdoutLogger(name="hfcl_auth")
+log = logging.getLogger(name="hfcl_auth")
 
 def _valid_session_id(session_id: object) -> str:
     sid = str(session_id).strip() if session_id is not None else ""

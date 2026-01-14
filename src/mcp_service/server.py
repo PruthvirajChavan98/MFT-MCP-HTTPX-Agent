@@ -1,14 +1,15 @@
 import time
+import logging
 from typing import Any, Optional
 from fastmcp import FastMCP
-from src.common.logger import StdoutLogger
+
 from .session_store import RedisSessionStore
 from .auth_api import HeroFincorpAuthAPIs
 from .core_api import HeroFincorpAPIs
 from .config import MCP_SERVER_HOST, MCP_SERVER_PORT
 from .description_utils import _d
 
-log = StdoutLogger(name="mcp_server")
+log = logging.getLogger(name="mcp_server")
 
 mcp = FastMCP(name="HFCL MCP Server")
 session_store = RedisSessionStore()

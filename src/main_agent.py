@@ -1,4 +1,5 @@
 # ===== src/main_agent.py =====
+import sys
 import json
 import asyncio
 import logging
@@ -14,23 +15,34 @@ from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from strawberry.fastapi import GraphQLRouter
 
 # Logger & Config
-from src.common.logger import StdoutLogger
-from src.agent_service.prompts import SYSTEM_PROMPT
-from src.agent_service.config import REDIS_URL, PORT, MODEL_NAME
+# from src.common.logger import StdoutLogger
+from src.agent_service.core.prompts import SYSTEM_PROMPT
+from src.agent_service.core.config import REDIS_URL, PORT, MODEL_NAME
 
 # Schemas
-from src.agent_service.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest, NvidiaConfig # Added FAQBatchRequest
+from src.agent_service.core.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest, NvidiaConfig
 
 # Services
-from src.agent_service.utils import valid_session_id
-from src.agent_service.llm import get_llm
-from src.agent_service.mcp import mcp_manager
-from src.agent_service.config_manager import config_manager
-from src.agent_service.model_service import model_service
-from src.agent_service.graphql_schema import schema
-from src.agent_service.knowledge_base import kb_service # [NEW]
-from src.utils import _extract_tool_output
-from src.agent_service.follow_up_generator import follow_up_service
+from src.agent_service.core.utils import valid_session_id
+from src.agent_service.llm.client import get_llm
+from src.agent_service.tools.mcp_manager import mcp_manager
+from src.agent_service.data.config_manager import config_manager
+from src.agent_service.llm.catalog import model_service
+from src.agent_service.api.graphql import schema
+from src.agent_service.tools.knowledge import kb_service
+from src.agent_service.features.follow_up import follow_up_service
+
+# Utils (External to agent_service package, assumed unchanged)
+from src.agent_service.core.utils import _extract_tool_output
+
+logging.basicConfig(
+    format="%(levelname)s [%(name)s] %(message)s",
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+logging.getLogger("httpx").setLevel(logging.INFO)
+logging.getLogger("httpcore").setLevel(logging.INFO) # Optional: lower level details
 
 log = logging.getLogger("agent_main")
 CHECKPOINTER: Optional[BaseCheckpointSaver] = None
