@@ -354,6 +354,77 @@ async def generate_follow_up(request: AgentRequest):
     except Exception as e:
         log.error(f"Follow-up Generation Error: {e}")
         return {"questions": []}
+    
+@app.post("/agent/follow-up-stream")
+async def generate_follow_up_stream(request: AgentRequest):
+    """
+    Streams follow-up generation via SSE.
+
+    Events emitted by follow_up_service:
+      - status: plain text status updates
+      - reasoning: optional provider-exposed reasoning tokens
+      - candidate: {"id": <int>, "question": "<str>"}
+      - candidate_why_token: {"id": <int>, "token": "<str>"}   (token-by-token)
+      - candidate_why_done:  {"id": <int>, "why": "<str>"}     (final why string)
+      - result: ["Q1?","Q2?","Q3?"]  (FINAL judged list only)
+      - done: [DONE]
+    """
+    try:
+        sid = valid_session_id(request.session_id)
+
+        # Resolve model/tools and load persisted conversation state
+        model, tools, _ = await _resolve_agent_resources(sid, request)
+        agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
+
+        config = {"configurable": {"thread_id": sid}}
+        state_snapshot = await agent.aget_state(config)  # type: ignore
+
+        if not state_snapshot or not state_snapshot.values or "messages" not in state_snapshot.values:
+            log.warning(f"No message history found for session {sid}")
+
+            async def empty_stream():
+                yield {"event": "error", "data": "No conversation history found"}
+                yield {"event": "done", "data": "[DONE]"}
+
+            return EventSourceResponse(
+                empty_stream(),
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
+        messages: List[BaseMessage] = state_snapshot.values["messages"]
+
+        async def event_generator():
+            try:
+                async for event in follow_up_service.generate_questions_stream(
+                    messages=messages,
+                    llm=model,
+                    tools=tools,
+                    openrouter_key=request.openrouter_api_key,
+                    nvidia_key=request.nvidia_api_key,
+                ):
+                    # Pass-through as-is: {"event": "...", "data": "..."}
+                    yield event
+            except Exception as stream_err:
+                log.error(f"Follow-up streaming error: {stream_err}")
+                yield {"event": "error", "data": str(stream_err)}
+                yield {"event": "done", "data": "[DONE]"}
+
+        return EventSourceResponse(
+            event_generator(),
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    except Exception as e:
+        log.error(f"Follow-up Endpoint Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/agent/all-follow-ups")
 async def get_stored_followups():
