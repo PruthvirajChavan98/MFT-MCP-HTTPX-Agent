@@ -1,4 +1,4 @@
-# ===== llm.py =====
+# ===== src/agent_service/llm.py =====
 from __future__ import annotations
 
 import asyncio
@@ -22,7 +22,7 @@ from .config import (
 )
 
 # -----------------------------
-# LLM factory (unchanged)
+# LLM factory
 # -----------------------------
 
 def get_llm(
@@ -32,49 +32,66 @@ def get_llm(
     reasoning_effort: str = None,  # type: ignore
 ):
     target_model = model_name or MODEL_NAME
+    mid = target_model.lower()
 
+    # Resolve Keys
     effective_nvidia_key = nvidia_api_key or NVIDIA_API_KEY
     effective_openrouter_key = openrouter_api_key or OPENROUTER_API_KEY
 
-    has_user_nvidia_key = bool(nvidia_api_key)
-    has_user_or_key = bool(openrouter_api_key)
-
+    # Flags
+    has_nv_key = bool(effective_nvidia_key)
+    
+    # --- DECISION LOGIC ---
     use_nvidia = False
     use_groq = False
 
-    if effective_nvidia_key and not has_user_or_key:
-        mid = target_model.lower()
-        if has_user_nvidia_key:
+    # 1. Check NVIDIA Priority
+    # We check this first if a key is available, regardless of OpenRouter key presence.
+    if has_nv_key:
+        # Heuristic: If it starts with "nvidia/" OR user explicitly passed an NV key (BYOK)
+        # OR it's a known NVIDIA-hosted model pattern
+        if mid.startswith("nvidia/"):
             use_nvidia = True
-        elif mid.startswith("nvidia/") or "gpt-oss" in mid:
-            use_nvidia = True
-        elif "deepseek" in mid and "r1" in mid:
-            use_nvidia = True
-        elif "openai" in mid and ("o1" in mid or "o3" in mid):
-            use_nvidia = True
+        elif "moonshot" in mid: # Support for Moonshot/Kimi on NVIDIA
+             use_nvidia = True
+        elif "gpt-oss" in mid:
+             use_nvidia = True
+        elif "deepseek" in mid and "r1" in mid: # DeepSeek R1 often hosted on NVIDIA
+             use_nvidia = True
+        elif "llama" in mid and "nvidia" in mid: # Explicit NVIDIA llama naming
+             use_nvidia = True
+        elif nvidia_api_key: # Strong signal: User provided a specific BYOK for this session
+             use_nvidia = True
 
+    # 2. Check Groq (Only if not routed to NVIDIA)
     if not use_nvidia:
-        is_legacy_groq = "/" not in target_model
-        if is_legacy_groq:
+        # Legacy check or explicit provider prefix
+        if "/" not in target_model: 
             use_groq = True
-        elif not has_user_or_key and GROQ_KEY_CYCLE and target_model.lower().startswith("groq/"):
+        elif target_model.startswith("groq/"):
             use_groq = True
+        elif not effective_openrouter_key and GROQ_KEY_CYCLE:
+            # Fallback to Groq if no OpenRouter key is available and it looks generic
+            use_groq = True
+
+    # --- INSTANTIATION ---
 
     if use_nvidia:
         if not effective_nvidia_key:
             raise ValueError("NVIDIA API Key required (BYOK or Server)")
 
         model_kwargs: Dict[str, Any] = {}
-        mid = target_model.lower()
-        is_reasoning = any(x in mid for x in ["r1", "o1", "o3", "gpt-oss"])
-        if reasoning_effort and is_reasoning:
-            model_kwargs["reasoning_effort"] = reasoning_effort
+        
+        # Mapping reasoning_effort to NVIDIA specific params if needed
+        # NVIDIA typically accepts 'reasoning_effort' for supported models (like o1/r1 equivalents)
+        if reasoning_effort and reasoning_effort not in ["default", "none"]:
+             model_kwargs["reasoning_effort"] = reasoning_effort
 
         return ChatNVIDIA(
             model=target_model,
             api_key=effective_nvidia_key,
             base_url=NVIDIA_BASE_URL,
-            temperature=0.6,
+            temperature=0.0,
             max_tokens=4096,
             streaming=True,
             model_kwargs=model_kwargs,
@@ -85,16 +102,17 @@ def get_llm(
             raise ValueError("No Groq API Keys configured")
 
         current_api_key = next(GROQ_KEY_CYCLE)
-
+        
+        # Groq Specifics
         r_format = None
         r_effort = None
-        if "gpt-oss" in target_model:
+        if "gpt-oss" in mid:
             r_format = "parsed"
             r_effort = reasoning_effort or "medium"
-        elif "qwen" in target_model:
+        elif "qwen" in mid:
             r_format = "parsed"
             r_effort = reasoning_effort or "default"
-        elif "deepseek" in target_model:
+        elif "deepseek" in mid:
             r_format = "raw"
 
         return ChatGroq(
@@ -102,28 +120,30 @@ def get_llm(
             base_url=GROQ_BASE_URL,
             model=target_model,
             streaming=True,
-            temperature=0.6,
+            temperature=0.0,
             reasoning_format=r_format,
             reasoning_effort=r_effort,
         )
 
+    # 3. Fallback to OpenRouter
     if not effective_openrouter_key:
-        raise ValueError("OpenRouter API Key required")
+        raise ValueError("OpenRouter API Key required (Fallthrough)")
 
-    is_native = any(x in target_model.lower() for x in ["openai/o1", "openai/o3"])
     extra_body: Dict[str, Any] = {}
-
-    if is_native:
+    is_native_reasoning = any(x in mid for x in ["openai/o1", "openai/o3"])
+    
+    if is_native_reasoning:
         if reasoning_effort:
             extra_body["reasoning_effort"] = reasoning_effort
     else:
+        # For non-native reasoning models on OR, sometimes this flag helps
         extra_body["reasoning"] = {"enabled": True}
 
     return ChatDeepSeek(
         model=target_model,
         api_key=effective_openrouter_key,  # type: ignore
         api_base=OPENROUTER_BASE_URL,
-        temperature=0.6,
+        temperature=0.0,
         streaming=True,
         extra_body=extra_body,
     )

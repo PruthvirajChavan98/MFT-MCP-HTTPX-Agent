@@ -1,6 +1,8 @@
+# ===== src/main_agent.py =====
 import json
 import asyncio
-from typing import Optional, Annotated
+import logging
+from typing import Optional, Annotated, List
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from strawberry.fastapi import GraphQLRouter
 
 # Logger & Config
@@ -28,8 +30,9 @@ from src.agent_service.model_service import model_service
 from src.agent_service.graphql_schema import schema
 from src.agent_service.knowledge_base import kb_service # [NEW]
 from src.utils import _extract_tool_output
+from src.agent_service.follow_up_generator import follow_up_service
 
-log = StdoutLogger(name="langchain_server")
+log = logging.getLogger("agent_main")
 CHECKPOINTER: Optional[BaseCheckpointSaver] = None
 
 @asynccontextmanager
@@ -114,29 +117,28 @@ async def get_session_config(session_id: str):
     
     # Check if keys exist (return boolean flags for security)
     has_or_key = bool(stored.get("openrouter_api_key"))
-    has_nv_key = bool(stored.get("nvidia_api_key")) # <--- NEW
+    has_nv_key = bool(stored.get("nvidia_api_key"))
     
     return {
         "session_id": sid,
         "system_prompt": stored.get("system_prompt") or SYSTEM_PROMPT.strip(),
         "model_name": stored.get("model_name") or MODEL_NAME,
         "reasoning_effort": stored.get("reasoning_effort"),
-        "has_custom_key": has_or_key, # Legacy flag for frontend compat
+        "has_custom_key": has_or_key,
         "has_openrouter_key": has_or_key,
-        "has_nvidia_key": has_nv_key, # <--- NEW Flag
+        "has_nvidia_key": has_nv_key,
         "is_customized": bool(stored)
     }
 
 @app.post("/agent/config/groq")
 async def config_groq_session(config: GroqConfig):
     sid = valid_session_id(config.session_id)
-    
-    # FIX: Added reasoning_effort=config.reasoning_effort
     await config_manager.set_config(
         sid, 
-        system_prompt=config.system_prompt,  # type: ignore
-        model_name=config.model_name,  # type: ignore
-        reasoning_effort=config.reasoning_effort  # type: ignore
+        system_prompt=config.system_prompt, # type: ignore
+        model_name=config.model_name,
+        reasoning_effort=config.reasoning_effort # type: ignore
+        # REMOVED: openrouter_api_key, nvidia_api_key
     ) 
     return {"status": "updated", "provider": "groq", "session_id": sid}
 
@@ -147,8 +149,8 @@ async def config_openrouter_session(config: OpenRouterConfig):
         sid, 
         system_prompt=config.system_prompt, # type: ignore
         model_name=config.model_name,
-        openrouter_api_key=config.openrouter_api_key, # type: ignore
         reasoning_effort=config.reasoning_effort # type: ignore
+        # REMOVED keys
     )
     return {"status": "updated", "provider": "openrouter", "session_id": sid}
 
@@ -160,8 +162,8 @@ async def config_nvidia_session(config: NvidiaConfig):
         sid, 
         system_prompt=config.system_prompt, # type: ignore
         model_name=config.model_name,
-        nvidia_api_key=config.nvidia_api_key, # <--- Save it
         reasoning_effort=config.reasoning_effort # type: ignore
+        # REMOVED keys
     )
     return {"status": "updated", "provider": "nvidia", "session_id": sid}
 
@@ -186,7 +188,10 @@ async def _resolve_agent_resources(sid: str, request: AgentRequest):
         reasoning_effort=reasoning_effort # type: ignore
     )
     
-    tools = mcp_manager.rebuild_tools_for_user(sid)
+    # --- CHANGED: Pass openrouter_api_key to tool builder ---
+    tools = mcp_manager.rebuild_tools_for_user(sid, openrouter_api_key=or_key) # type: ignore
+    # -------------------------------------------------------
+    
     return model, tools, sys_prompt
 
 @app.post("/agent/query")
@@ -283,6 +288,15 @@ async def stream_agent(request: AgentRequest):
                             yield {"event": "tool_end", "data": json.dumps(payload, ensure_ascii=False)}
 
                 yield {"event": "done", "data": "[DONE]"}
+                
+                # generated_questions = await follow_up_service.generate_questions(
+                #      messages=inputs["messages"], 
+                #      llm=model, 
+                #      tools=tools
+                # )
+                
+                # if generated_questions:
+                #     yield {"event": "follow_up", "data": json.dumps(generated_questions)}
 
             except Exception as e:
                 log.error(f"Stream Error: {e}")
@@ -297,6 +311,62 @@ async def stream_agent(request: AgentRequest):
         log.error(f"Stream Setup Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
+
+@app.post("/agent/follow-up")
+async def generate_follow_up(request: AgentRequest):
+    """
+    Generates follow-up questions based on the current session state.
+    This should be called AFTER the stream is complete.
+    """
+    try:
+        sid = valid_session_id(request.session_id)
+        
+        # 1. Re-resolve Resources
+        # We need to recreate the agent object to access the state correctly
+        model, tools, _ = await _resolve_agent_resources(sid, request)
+        agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
+
+        # 2. Fetch Latest State via AGENT API (Not raw checkpointer)
+        config = {"configurable": {"thread_id": sid}}
+        
+        # --- FIX: Use agent.aget_state() ---
+        # This returns a StateSnapshot object where .values is a dictionary property.
+        state_snapshot = await agent.aget_state(config) # type: ignore
+
+        if not state_snapshot or not state_snapshot.values or "messages" not in state_snapshot.values:
+            log.warning(f"No message history found for session {sid}")
+            return {"questions": []}
+
+        # 3. Get Message History
+        messages: List[BaseMessage] = state_snapshot.values["messages"]
+
+        # 4. Generate Questions
+        questions = await follow_up_service.generate_questions(
+            messages=messages,
+            llm=model,
+            tools=tools,
+            openrouter_key=request.openrouter_api_key,
+            nvidia_key=request.nvidia_api_key
+        )
+        
+        return {"questions": questions}
+
+    except Exception as e:
+        log.error(f"Follow-up Generation Error: {e}")
+        return {"questions": []}
+
+@app.get("/agent/all-follow-ups")
+async def get_stored_followups():
+    """
+    Admin endpoint to view all cached follow-up questions stored in Neo4j.
+    """
+    try:
+        results = await follow_up_service.get_all_cached_questions()
+        return {"count": len(results), "data": results}
+    except Exception as e:
+        log.error(f"Admin Fetch Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/agent/logout/{session_id}")
 async def logout_session(session_id: str):
     try:

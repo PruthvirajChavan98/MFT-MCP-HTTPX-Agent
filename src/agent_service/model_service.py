@@ -1,13 +1,16 @@
+# ===== src/agent_service/model_service.py =====
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
 import re
+from functools import partial
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from redis.asyncio import Redis
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from .config import (
     GROQ_API_KEYS,
@@ -16,8 +19,6 @@ from .config import (
     NVIDIA_BASE_URL,
     REDIS_URL,
 )
-
-from .nvidia_modelcard_registry import NvidiaModelcardRegistry
 
 log = logging.getLogger("model_service")
 
@@ -135,14 +136,6 @@ class ModelService:
         self.CACHE_KEY = "agent:models:cache_all"
         self.REFRESH_INTERVAL = 1800  # 30 minutes
 
-        # NVIDIA modelcard registry (Playwright based)
-        self.nvidia_cards = NvidiaModelcardRegistry(
-            self.redis,
-            validate_interval_seconds=7 * 24 * 3600,
-            max_scrapes_per_run=6,
-            concurrency=3,
-        )
-
     # -------------------------
     # Parameter Specs (UI)
     # -------------------------
@@ -190,41 +183,56 @@ class ModelService:
 
         return self._ensure_tool_specs(specs, provider="groq")
 
-    def _get_nvidia_specs_base(self, model_id: str) -> List[Dict[str, Any]]:
-        specs = self._std_specs()
-        low = (model_id or "").lower()
-
-        is_r1 = ("deepseek" in low and "r1" in low)
-        is_o = ("openai" in low and ("o1" in low or "o3" in low))
-        is_oss = ("gpt-oss" in low)
-
-        if is_r1 or is_o or is_oss:
-            specs.append({
-                "name": "reasoning_effort",
-                "type": "enum",
-                "options": ["low", "medium", "high"],
-                "default": "high" if is_r1 else "medium",
-            })
-
-        return specs
-
-    def _classify_nvidia(self, model_id: str, specs: List[Dict[str, Any]]) -> Tuple[str, str]:
+    def _classify_nvidia_model(self, model_id: str) -> dict:
         """
-        Returns (modality, type) for GraphQL/UI.
-        Keep it simple but stable.
+        Heuristics to determine model capabilities from the live ID 
+        since the raw API response doesn't always provide metadata.
         """
-        low = (model_id or "").lower()
-        names = {str(s.get("name") or "") for s in (specs or []) if isinstance(s, dict)}
+        mid = model_id.lower()
+        
+        # Defaults
+        info = {
+            "type": "chat", 
+            "modality": "text", 
+            "supports_tools": False, 
+            "supports_thinking": False
+        }
 
-        if "embed" in low:
-            return "embedding", "embedding"
-        if "vision" in low or "-vl" in low or "vl-" in low:
-            return "vision", "vision"
+        # 1. Detect Reasoning / Thinking Models
+        # Covers: deepseek-r1, qwen-qwq, kimi-thinking, gpt-oss (supports reasoning_effort)
+        if any(x in mid for x in ["r1", "thinking", "reasoning", "qwq", "gpt-oss"]):
+            info["type"] = "reasoning"
+            info["supports_thinking"] = True
+            
+            # FACT-BASED TOOL SUPPORT:
+            # - "distill": Llama/Qwen distillations retain tool capabilities.
+            # - "0528": Specific DeepSeek-R1 checkpoint upgraded for function calling.
+            # - "terminus": DeepSeek V3.1 Terminus is explicitly tool-capable.
+            # - "kimi": Moonshot Kimi K2 Thinking is designed for tools.
+            # - "gpt-oss": OpenAI GPT-OSS supports tools.
+            if any(x in mid for x in ["distill", "0528", "terminus", "kimi", "gpt-oss"]):
+                info["supports_tools"] = True
+        
+        # 2. Detect Vision Models (VLM)
+        elif any(x in mid for x in ["vision", "vlm", "ocr", "paligemma", "fuyu", "neva", "vila"]):
+            info["type"] = "vision"
+            info["modality"] = "vision"
+            # Vision models usually support tools if they are Llama 3.2+, Phi, or Nemotron-VL
+            if "llama-3.2" in mid or "phi" in mid or "nemotron" in mid:
+                info["supports_tools"] = True
 
-        if "reasoning_effort" in names or ("r1" in low) or ("gpt-oss" in low) or ("openai/o1" in low) or ("openai/o3" in low):
-            return "text", "reasoning"
-
-        return "text", "chat"
+        # 3. Detect Standard Chat Models with Tool Support
+        else:
+            # Broad check for known tool-capable families
+            if any(x in mid for x in [
+                "llama-3.1", "llama-3.2", "llama-3.3", 
+                "mistral-nemo", "mistral-large", "mistral-small",
+                "qwen2.5", "nemotron", "command-r", 
+                "deepseek-v3", "gpt-oss", "kimi", "moonshot"
+            ]):
+                info["supports_tools"] = True
+        
+        return info
 
     # -------------------------
     # Fetchers
@@ -282,90 +290,67 @@ class ModelService:
         url = f"{NVIDIA_BASE_URL}/models"
         headers = {"Authorization": f"Bearer {NVIDIA_API_KEY}", "Accept": "application/json"}
 
-        async with httpx.AsyncClient() as client:
+        # Use a short timeout; the API is fast.
+        timeout = httpx.Timeout(10.0, connect=5.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
             try:
-                resp = await client.get(url, headers=headers, timeout=10.0)
+                resp = await client.get(url, headers=headers)
                 if resp.status_code != 200:
-                    log.error("[nvidia] models fetch failed: HTTP %s", resp.status_code)
+                    log.error("[nvidia] fetch failed: HTTP %s", resp.status_code)
                     return []
 
-                raw = (resp.json() or {}).get("data", []) or []
-
-                # ✅ Dedup NVIDIA API output by id (preserve order)
-                seen_ids = set()
-                data: List[Dict[str, Any]] = []
-                dup = 0
-                for m in raw:
-                    mid = str(m.get("id") or "").strip()
-                    if not mid:
-                        continue
-                    key = mid.lower()
-                    if key in seen_ids:
-                        dup += 1
-                        continue
-                    seen_ids.add(key)
-                    data.append(m)
-
-                if dup:
-                    log.warning("[nvidia] duplicates detected: %d (deduped to %d unique)", dup, len(data))
-                else:
-                    log.info("[nvidia] fetched %d models", len(data))
-
-                model_ids = [str(m.get("id") or "").strip() for m in data]
-
-                # Registry tool map
-                tool_map: Dict[str, Optional[bool]] = {}
-                if getattr(self, "nvidia_cards", None) and model_ids:
-                    try:
-                        await self.nvidia_cards.update_from_model_list(model_ids)
-                        tool_map = await self.nvidia_cards.get_tool_support_map(model_ids)
-                    except Exception as e:
-                        log.warning("[nvidia] tool-registry update failed: %s", e)
-
-                t_true = sum(1 for v in tool_map.values() if v is True)
-                t_false = sum(1 for v in tool_map.values() if v is False)
-                t_none = sum(1 for v in tool_map.values() if v is None)
-                log.info("[nvidia] tool_map: true=%d false=%d none=%d", t_true, t_false, t_none)
-
+                # API returns wrapper: { "data": [ { "id": "..." }, ... ] }
+                raw_data = resp.json().get("data", []) or []
                 results: List[Dict[str, Any]] = []
 
-                for m in data:
+                for m in raw_data:
                     mid = str(m.get("id") or "").strip()
-                    if not mid:
-                        continue
+                    if not mid: continue
 
-                    mid_l = mid.lower()
-                    friendly = derive_display_name(mid, provider="nvidia")
-                    context_len = int(m.get("context_window", 32768) or 0)
+                    # Classify based on ID string
+                    meta = self._classify_nvidia_model(mid)
+                    
+                    # Build Specs dynamically
+                    specs = self._std_specs() # basic temp/max_tokens
 
-                    specs = self._get_nvidia_specs_base(mid)
-
-                    tool_supported = tool_map.get(mid_l, None)
-                    if tool_supported is True:
+                    if meta["supports_thinking"]:
+                        specs.append({
+                            "name": "reasoning_effort", 
+                            "type": "enum", 
+                            "options": ["low", "medium", "high"], 
+                            "default": "medium"
+                        })
+                    
+                    if meta["supports_tools"]:
                         specs = self._ensure_tool_specs(specs, provider="nvidia")
 
                     supported = _uniq([s["name"] for s in specs if isinstance(s, dict) and s.get("name")] + ["stream"])
 
-                    # Optional: populate modality/type so GraphQL returns it
-                    m_type = "reasoning" if "reasoning_effort" in supported else "chat"
+                    # Context Length:
+                    # Raw API often lacks this. We infer defaults or check if specific substring exists.
+                    context_len = 32768
+                    if "128k" in mid: context_len = 131072
+                    elif "8k" in mid: context_len = 8192
+                    elif "4k" in mid: context_len = 4096
 
                     results.append({
                         "id": mid,
-                        "name": friendly,
+                        "name": derive_display_name(mid, provider="nvidia"),
                         "provider": "nvidia",
-                        "modality": "text",
-                        "type": m_type,
+                        "modality": meta["modality"],
+                        "type": meta["type"],
                         "context_length": context_len,
                         "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
                         "supported_parameters": supported,
                         "parameter_specs": specs,
                     })
 
-                log.info("[nvidia] returning %d models", len(results))
+                log.info(f"[nvidia] Successfully fetched {len(results)} live models via API.")
                 return _sort_models(results)
 
             except Exception as e:
-                log.error("[nvidia] fetch error: %s", e)
+                log.error("[nvidia] API Error: %s", e)
                 return []
 
     async def fetch_openrouter_data(self) -> List[Dict[str, Any]]:

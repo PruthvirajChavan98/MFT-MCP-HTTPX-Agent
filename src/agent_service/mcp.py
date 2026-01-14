@@ -1,3 +1,4 @@
+# ===== src/agent_service/mcp.py =====
 import asyncio
 from contextlib import AsyncExitStack
 from typing import List, Dict, Any, Optional
@@ -90,7 +91,7 @@ class MCPManager:
                 fields[fname] = (getattr(finfo, "annotation", Any), finfo)
         return create_model(f"{tool_name}Input", **fields)
 
-    def rebuild_tools_for_user(self, session_id: str) -> List[StructuredTool]:
+    def rebuild_tools_for_user(self, session_id: str, openrouter_api_key: Optional[str] = None) -> List[StructuredTool]:
         """
         Dynamically constructs the list of tools for a specific user session.
         If the user is NOT authenticated, complex tools (loan details, SOA, etc.) are hidden.
@@ -139,7 +140,8 @@ class MCPManager:
         # This is generally considered "Public"
         if is_auth or "hero_fincorp_knowledge_base" in PUBLIC_TOOLS:
             try:
-                graph_tool = create_graph_tool()
+                # Pass the key here (it might be None, which is fine if env var is set)
+                graph_tool = create_graph_tool(openrouter_api_key=openrouter_api_key) # type: ignore
                 tools.append(graph_tool)
             except Exception as e:
                 log.error(f"Failed to attach Graph Tool: {e}")
