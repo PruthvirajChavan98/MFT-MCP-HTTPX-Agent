@@ -15,7 +15,6 @@ from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from strawberry.fastapi import GraphQLRouter
 
 # Logger & Config
-# from src.common.logger import StdoutLogger
 from src.agent_service.core.prompts import SYSTEM_PROMPT
 from src.agent_service.core.config import REDIS_URL, PORT, MODEL_NAME
 
@@ -29,10 +28,14 @@ from src.agent_service.tools.mcp_manager import mcp_manager
 from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.catalog import model_service
 from src.agent_service.api.graphql import schema
+from src.agent_service.api.eval_ingest import router as eval_router
+from src.agent_service.api.eval_read import router as eval_read_router
 from src.agent_service.tools.knowledge import kb_service
 from src.agent_service.features.follow_up import follow_up_service
+from src.agent_service.features.kb_first import kb_first_payload
+from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_shadow_eval_commit
 
-# Utils (External to agent_service package, assumed unchanged)
+# Utils
 from src.agent_service.core.utils import _extract_tool_output
 
 logging.basicConfig(
@@ -42,28 +45,41 @@ logging.basicConfig(
 )
 
 logging.getLogger("httpx").setLevel(logging.INFO)
-logging.getLogger("httpcore").setLevel(logging.INFO) # Optional: lower level details
+logging.getLogger("httpcore").setLevel(logging.INFO)
 
 log = logging.getLogger("agent_main")
 CHECKPOINTER: Optional[BaseCheckpointSaver] = None
+
+# --- Helper to fetch App ID from Auth Store ---
+async def _get_app_id_for_session(session_id: str) -> Optional[str]:
+    """Retrieves the app_id (case_id) associated with an authenticated session."""
+    try:
+        from redis.asyncio import Redis
+        # Create a ephemeral client to avoid concurrency issues with the global checkpointer
+        client = Redis.from_url(REDIS_URL, decode_responses=True)
+        data_str = await client.get(session_id)
+        await client.close()
+        
+        if data_str:
+            data = json.loads(str(data_str))
+            return data.get("app_id")
+    except Exception:
+        pass
+    return None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global CHECKPOINTER
     log.info(f"STARTUP: Redis Checkpointer at {REDIS_URL}")
     
-    # 1. Start Background Cache Job (Model Fetcher)
     cache_task = asyncio.create_task(model_service.start_background_loop())
     
     try:
-        # 2. Initialize Redis Checkpointer
         async with AsyncRedisSaver.from_conn_string(REDIS_URL) as checkpointer:
             CHECKPOINTER = checkpointer
-            # 3. Initialize MCP Tools
             await mcp_manager.initialize()
             yield
             
-            # --- SHUTDOWN SEQUENCE ---
             cache_task.cancel()
             await mcp_manager.shutdown()
             await config_manager.close()
@@ -81,21 +97,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- GraphQL Endpoint ---
 graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
+
+app.include_router(eval_router, prefix="/eval")
+app.include_router(eval_read_router, prefix="/eval")
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "agent"}
 
-# --- REST Model Listing (Legacy/Fallback) ---
 @app.get("/agent/models")
 async def list_models():
-    """
-    List available models using the Redis cache populated by the background service.
-    Returns the same data as GraphQL but in standard JSON format.
-    """
     try:
         data = await model_service.get_cached_data()
         total_models = sum(len(cat["models"]) for cat in data)
@@ -103,8 +116,6 @@ async def list_models():
     except Exception as e:
         log.error(f"Model Fetch Error: {e}")
         raise HTTPException(status_code=502, detail=str(e))
-
-# --- Session Config ---
 
 @app.get("/agent/sessions")
 async def list_active_sessions():
@@ -127,7 +138,6 @@ async def get_session_config(session_id: str):
     sid = valid_session_id(session_id)
     stored = await config_manager.get_config(sid)
     
-    # Check if keys exist (return boolean flags for security)
     has_or_key = bool(stored.get("openrouter_api_key"))
     has_nv_key = bool(stored.get("nvidia_api_key"))
     
@@ -150,7 +160,6 @@ async def config_groq_session(config: GroqConfig):
         system_prompt=config.system_prompt, # type: ignore
         model_name=config.model_name,
         reasoning_effort=config.reasoning_effort # type: ignore
-        # REMOVED: openrouter_api_key, nvidia_api_key
     ) 
     return {"status": "updated", "provider": "groq", "session_id": sid}
 
@@ -162,11 +171,9 @@ async def config_openrouter_session(config: OpenRouterConfig):
         system_prompt=config.system_prompt, # type: ignore
         model_name=config.model_name,
         reasoning_effort=config.reasoning_effort # type: ignore
-        # REMOVED keys
     )
     return {"status": "updated", "provider": "openrouter", "session_id": sid}
 
-# --- NEW ENDPOINT ---
 @app.post("/agent/config/nvidia")
 async def config_nvidia_session(config: NvidiaConfig):
     sid = valid_session_id(config.session_id)
@@ -175,42 +182,44 @@ async def config_nvidia_session(config: NvidiaConfig):
         system_prompt=config.system_prompt, # type: ignore
         model_name=config.model_name,
         reasoning_effort=config.reasoning_effort # type: ignore
-        # REMOVED keys
     )
     return {"status": "updated", "provider": "nvidia", "session_id": sid}
 
-# --- Agent Execution ---
-
-# --- UPDATE RESOURCE RESOLVER ---
 async def _resolve_agent_resources(sid: str, request: AgentRequest):
     saved_config = await config_manager.get_config(sid)
-    
-    model_name = request.model_name or saved_config.get("model_name")
+
+    model_name = request.model_name or saved_config.get("model_name") or MODEL_NAME
     sys_prompt = request.system_prompt or saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
     reasoning_effort = request.reasoning_effort or saved_config.get("reasoning_effort")
-    
-    # Resolve Keys (Request Override > Session Storage > Server Env [Handled in LLM])
+
     or_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
-    nv_key = request.nvidia_api_key or saved_config.get("nvidia_api_key") # <--- Resolve
-    
+    nv_key = request.nvidia_api_key or saved_config.get("nvidia_api_key")
+
     model = get_llm(
-        model_name, # type: ignore
-        openrouter_api_key=or_key, # type: ignore
-        nvidia_api_key=nv_key, # <--- Pass it # type: ignore
-        reasoning_effort=reasoning_effort # type: ignore
+        model_name, 
+        openrouter_api_key=or_key,  # type: ignore
+        nvidia_api_key=nv_key,      # type: ignore
+        reasoning_effort=reasoning_effort  # type: ignore
     )
-    
-    # --- CHANGED: Pass openrouter_api_key to tool builder ---
-    tools = mcp_manager.rebuild_tools_for_user(sid, openrouter_api_key=or_key) # type: ignore
-    # -------------------------------------------------------
-    
+
+    tools = mcp_manager.rebuild_tools_for_user(sid, openrouter_api_key=or_key)  # type: ignore
     return model, tools, sys_prompt
+
+def _infer_provider_from_model_name(model_name: str) -> str:
+    mn = (model_name or "").strip().lower()
+    if mn.startswith("nvidia/"): return "nvidia"
+    if mn.startswith("groq/"): return "groq"
+    if "/" in mn: return "openrouter"
+    return "groq"
 
 @app.post("/agent/query")
 async def query_agent(request: AgentRequest):
     try:
         sid = valid_session_id(request.session_id)
         model, tools, sys_prompt = await _resolve_agent_resources(sid, request)
+        kb_payload = await kb_first_payload(request.question, tools)
+        if kb_payload:
+            return {"response": kb_payload["output"], "kb_first": True}
         if not tools: raise HTTPException(status_code=500, detail="No tools loaded")
         
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
@@ -226,213 +235,183 @@ async def query_agent(request: AgentRequest):
 async def stream_agent(request: AgentRequest):
     try:
         sid = valid_session_id(request.session_id)
+
+        saved_config = await config_manager.get_config(sid)
+        model_name = (
+            (request.model_name or "").strip()
+            or str(saved_config.get("model_name") or "").strip()
+            or (MODEL_NAME or "").strip()
+        )
+        provider = _infer_provider_from_model_name(model_name)
+
         model, tools, sys_prompt = await _resolve_agent_resources(sid, request)
+
+        # --- CONTEXT CAPTURE FOR JUDGE ---
+        
+        # 1. Fetch Chat History
+        temp_agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
+        state_snapshot = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
+        chat_history = state_snapshot.values.get("messages", []) if state_snapshot else []
+
+        # 2. Fetch App ID (Case ID) from Auth Store
+        app_id = await _get_app_id_for_session(sid)
+
+        # 3. Serialize Tools
+        tool_defs = "\n".join([f"- {t.name}: {t.description}" for t in tools])
+
+        # 4. Initialize Collector
+        collector = ShadowEvalCollector(
+            session_id=sid,
+            question=request.question,
+            provider=provider,
+            model=(model_name or None),
+            endpoint="/agent/stream",
+            system_prompt=sys_prompt,
+            chat_history=chat_history,
+            tool_definitions=tool_defs
+        )
+        
+        # ✅ Inject Case ID
+        collector.case_id = app_id # type: ignore
+
+        # KB-first guardrail
+        kb_payload = await kb_first_payload(request.question, tools)
+        if kb_payload:
+            log.info(f"[kb-first] sid={sid} tool={kb_payload.get('tool')}")
+            async def kb_event_generator():
+                try:
+                    tool_name = kb_payload.get("tool", "hero_fincorp_knowledge_base")
+                    tool_input = kb_payload.get("input", {"query": request.question})
+                    output = str(kb_payload.get("output", "") or "").replace("\r", "")
+
+                    collector.on_tool_start(tool_name, tool_input)
+                    collector.on_tool_end(tool_name, output, tool_call_id="kb_first")
+
+                    yield {"event": "tool_start", "data": json.dumps({"tool": tool_name, "input": tool_input}, ensure_ascii=False)}
+                    yield {"event": "tool_end", "data": json.dumps({"tool": tool_name, "tool_call_id": "kb_first", "output": output}, ensure_ascii=False)}
+
+                    for i in range(0, len(output), 160):
+                        chunk = output[i : i + 160]
+                        collector.on_token(chunk)
+                        yield {"event": "token", "data": chunk}
+
+                    collector.on_done(final_output=output, error=None)
+                    yield {"event": "done", "data": "[DONE]"}
+                except Exception as e:
+                    collector.on_done(final_output="", error=str(e))
+                    yield {"event": "error", "data": str(e)}
+                finally:
+                    asyncio.create_task(maybe_shadow_eval_commit(collector))
+
+            return EventSourceResponse(kb_event_generator(), headers={"Cache-Control": "no-cache"})
+
+        # Normal streaming
+        if not tools: raise HTTPException(status_code=500, detail="No tools loaded")
 
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
         inputs = {"messages": [SystemMessage(sys_prompt), HumanMessage(request.question)]}
 
         async def event_generator():
+            final_parts: List[str] = []
             try:
-                async for event in agent.astream_events(
-                    inputs,
-                    {"configurable": {"thread_id": sid}},
-                    version="v2",
-                ):
+                async for event in agent.astream_events(inputs, {"configurable": {"thread_id": sid}}, version="v2"):
                     kind = event["event"]
-
-                    # --- 1. Chat Stream (Content & Reasoning) ---
                     if kind == "on_chat_model_stream":
-                        chunk = event["data"]["chunk"]  # type: ignore
-
-                        # Reasoning Extraction
-                        reasoning = chunk.additional_kwargs.get("reasoning_content")
-                        if not reasoning:
-                            reasoning = chunk.additional_kwargs.get("reasoning")
-                        if not reasoning:
-                            reasoning = chunk.response_metadata.get("reasoning")
-
+                        chunk = event["data"]["chunk"] # type: ignore
+                        reasoning = (chunk.additional_kwargs.get("reasoning_content") or chunk.additional_kwargs.get("reasoning") or chunk.response_metadata.get("reasoning"))
                         if reasoning:
+                            collector.on_reasoning(str(reasoning))
                             yield {"event": "reasoning_token", "data": reasoning}
-                            # DeepSeek R1 on NVIDIA sends reasoning tokens separately from content
-                            # so we often continue here, but some providers mix them.
-                            # The check below ensures we don't duplicate if content is empty.
-
                         if chunk.content:
-                            yield {"event": "token", "data": chunk.content}
-
-                    # --- 2. Token Usage Metrics (NEW) ---
-                    # Captures usage from the final message generation event
-                    # elif kind == "on_chat_model_end":
-                    #     output = event["data"].get("output")
-                    #     if output:
-                    #         # Standard LangChain Usage Metadata (V3 standard)
-                    #         usage = getattr(output, "usage_metadata", None)
-
-                    #         # Fallback: Check response_metadata (NVIDIA/OpenAI legacy)
-                    #         if not usage:
-                    #             usage = output.response_metadata.get("token_usage")
-
-                    #         if usage:
-                    #             # Format: {"input_tokens": 15, "output_tokens": 1024, "total_tokens": 1039}
-                    #             yield {"event": "usage", "data": json.dumps(usage)}
-
-                    # --- 3. Tool Start ---
+                            txt = str(chunk.content)
+                            final_parts.append(txt)
+                            collector.on_token(txt)
+                            yield {"event": "token", "data": txt}
                     elif kind == "on_tool_start":
-                        if event["name"] not in ["_Exception"]:
-                            tool_info = {
-                                "tool": event["name"],
-                                "input": event["data"].get("input"),
-                            }
-                            yield {"event": "tool_start", "data": json.dumps(tool_info, ensure_ascii=False)}
-
-                    # --- 4. Tool End ---
+                        if event.get("name") not in ["_Exception"]:
+                            tool_name = event.get("name") or "unknown"
+                            tool_input = event["data"].get("input")
+                            collector.on_tool_start(tool_name, tool_input)
+                            yield {"event": "tool_start", "data": json.dumps({"tool": tool_name, "input": tool_input}, ensure_ascii=False)}
                     elif kind == "on_tool_end":
                         if event.get("name") not in ["_Exception"]:
+                            tool_name = event.get("name") or "unknown"
                             raw_output = event["data"].get("output")
-                            # Assuming _extract_tool_output is defined in your utils or scope
                             clean_output = _extract_tool_output(raw_output)
+                            tool_call_id = event.get("run_id") or event["data"].get("tool_call_id")
+                            collector.on_tool_end(tool_name, clean_output, tool_call_id=tool_call_id)
+                            yield {"event": "tool_end", "data": json.dumps({"tool": tool_name, "tool_call_id": tool_call_id, "output": clean_output}, ensure_ascii=False)}
 
-                            payload = {
-                                "tool": event.get("name") or "unknown",
-                                "tool_call_id": event.get("run_id") or event["data"].get("tool_call_id"),
-                                "output": clean_output,
-                            }
-                            yield {"event": "tool_end", "data": json.dumps(payload, ensure_ascii=False)}
-
+                final_output = "".join(final_parts) if final_parts else ""
+                collector.on_done(final_output=final_output, error=None)
                 yield {"event": "done", "data": "[DONE]"}
-                
-                # generated_questions = await follow_up_service.generate_questions(
-                #      messages=inputs["messages"], 
-                #      llm=model, 
-                #      tools=tools
-                # )
-                
-                # if generated_questions:
-                #     yield {"event": "follow_up", "data": json.dumps(generated_questions)}
 
             except Exception as e:
-                log.error(f"Stream Error: {e}")
-                yield {"event": "error", "data": str(e)}
+                err = str(e)
+                log.error(f"Stream Error: {err}")
+                collector.on_done(final_output="".join(final_parts), error=err)
+                yield {"event": "error", "data": err}
+            finally:
+                asyncio.create_task(maybe_shadow_eval_commit(collector))
 
-        return EventSourceResponse(
-            event_generator(),
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
+        return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})
 
     except Exception as e:
         log.error(f"Stream Setup Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
 
 @app.post("/agent/follow-up")
 async def generate_follow_up(request: AgentRequest):
-    """
-    Generates follow-up questions based on the current session state.
-    This should be called AFTER the stream is complete.
-    """
     try:
         sid = valid_session_id(request.session_id)
-        
-        # 1. Re-resolve Resources
-        # We need to recreate the agent object to access the state correctly
         model, tools, _ = await _resolve_agent_resources(sid, request)
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
-
-        # 2. Fetch Latest State via AGENT API (Not raw checkpointer)
         config = {"configurable": {"thread_id": sid}}
-        
-        # --- FIX: Use agent.aget_state() ---
-        # This returns a StateSnapshot object where .values is a dictionary property.
         state_snapshot = await agent.aget_state(config) # type: ignore
 
         if not state_snapshot or not state_snapshot.values or "messages" not in state_snapshot.values:
-            log.warning(f"No message history found for session {sid}")
             return {"questions": []}
 
-        # 3. Get Message History
         messages: List[BaseMessage] = state_snapshot.values["messages"]
-
-        # 4. Generate Questions
         questions = await follow_up_service.generate_questions(
-            messages=messages,
-            llm=model,
-            tools=tools,
-            openrouter_key=request.openrouter_api_key,
-            nvidia_key=request.nvidia_api_key
+            messages=messages, llm=model, tools=tools,
+            openrouter_key=request.openrouter_api_key, nvidia_key=request.nvidia_api_key
         )
-        
         return {"questions": questions}
-
     except Exception as e:
         log.error(f"Follow-up Generation Error: {e}")
         return {"questions": []}
     
 @app.post("/agent/follow-up-stream")
 async def generate_follow_up_stream(request: AgentRequest):
-    """
-    Streams follow-up generation via SSE.
-
-    Events emitted by follow_up_service:
-      - status: plain text status updates
-      - reasoning: optional provider-exposed reasoning tokens
-      - candidate: {"id": <int>, "question": "<str>"}
-      - candidate_why_token: {"id": <int>, "token": "<str>"}   (token-by-token)
-      - candidate_why_done:  {"id": <int>, "why": "<str>"}     (final why string)
-      - result: ["Q1?","Q2?","Q3?"]  (FINAL judged list only)
-      - done: [DONE]
-    """
     try:
         sid = valid_session_id(request.session_id)
-
-        # Resolve model/tools and load persisted conversation state
         model, tools, _ = await _resolve_agent_resources(sid, request)
         agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
-
         config = {"configurable": {"thread_id": sid}}
         state_snapshot = await agent.aget_state(config)  # type: ignore
 
         if not state_snapshot or not state_snapshot.values or "messages" not in state_snapshot.values:
-            log.warning(f"No message history found for session {sid}")
-
             async def empty_stream():
                 yield {"event": "error", "data": "No conversation history found"}
                 yield {"event": "done", "data": "[DONE]"}
-
-            return EventSourceResponse(
-                empty_stream(),
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
+            return EventSourceResponse(empty_stream())
 
         messages: List[BaseMessage] = state_snapshot.values["messages"]
 
         async def event_generator():
             try:
                 async for event in follow_up_service.generate_questions_stream(
-                    messages=messages,
-                    llm=model,
-                    tools=tools,
-                    openrouter_key=request.openrouter_api_key,
-                    nvidia_key=request.nvidia_api_key,
+                    messages=messages, llm=model, tools=tools,
+                    openrouter_key=request.openrouter_api_key, nvidia_key=request.nvidia_api_key,
                 ):
-                    # Pass-through as-is: {"event": "...", "data": "..."}
                     yield event
             except Exception as stream_err:
                 log.error(f"Follow-up streaming error: {stream_err}")
                 yield {"event": "error", "data": str(stream_err)}
                 yield {"event": "done", "data": "[DONE]"}
 
-        return EventSourceResponse(
-            event_generator(),
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
+        return EventSourceResponse(event_generator())
 
     except Exception as e:
         log.error(f"Follow-up Endpoint Error: {e}")
@@ -440,9 +419,6 @@ async def generate_follow_up_stream(request: AgentRequest):
 
 @app.get("/agent/all-follow-ups")
 async def get_stored_followups():
-    """
-    Admin endpoint to view all cached follow-up questions stored in Neo4j.
-    """
     try:
         results = await follow_up_service.get_all_cached_questions()
         return {"count": len(results), "data": results}
@@ -454,48 +430,20 @@ async def get_stored_followups():
 async def logout_session(session_id: str):
     try:
         sid = valid_session_id(session_id)
-        
-        # Check if it exists first (optional, but good for 404s)
         exists = await config_manager.session_exists(sid)
-        # Note: We also check the auth session, but session_exists only checks config
-        # We will proceed with deletion regardless to ensure a clean slate.
-        
         await config_manager.delete_session(sid)
-        
         log.info(f"LOGOUT: Session {sid} cleared")
-        return {"status": "logged_out", "session_id": sid, "message": "Session configuration and authentication data cleared."}
+        return {"status": "logged_out", "session_id": sid, "message": "Session cleared."}
     except Exception as e:
         log.error(f"Logout Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/admin/faqs")
-async def update_faqs(
-    request: FAQBatchRequest, 
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
-    x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"),
-    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
-):
-    """
-    Update or Add FAQs.
-    - Uses server-side keys (Round-Robin) by default.
-    - Accepts 'X-Groq-Key' and 'X-OpenRouter-Key' headers to override.
-    """
-    if not request.items:
-        return {"status": "ignored", "message": "No items provided"}
-
+async def update_faqs(request: FAQBatchRequest, x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"), x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"), x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")):
+    if not request.items: return {"status": "ignored", "message": "No items provided"}
     data = [item.model_dump() for item in request.items]
-    
-    # Pass the headers to the service
-    result = await kb_service.ingest_faq_batch(
-        data, 
-        groq_key=x_groq_key,  # type: ignore
-        openrouter_key=x_openrouter_key # type: ignore
-    )
-    
-    return {
-        "status": "completed", 
-        "details": result
-    }
+    result = await kb_service.ingest_faq_batch(data, groq_key=x_groq_key, openrouter_key=x_openrouter_key) # type: ignore
+    return {"status": "completed", "details": result}
 
 if __name__ == "__main__":
     import uvicorn

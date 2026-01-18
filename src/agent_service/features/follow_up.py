@@ -73,11 +73,11 @@ Candidates: {candidates}
 ### Output
 Return a JSON object with evaluations. Include a "reasoning" field for each score.
 Example:
-{
+{{
   "evaluations": [
-    { "question": "...", "reasoning": "...", "groundedness": 1, "relevance": 9, "correctness": 10 }
+    {{ "question": "...", "reasoning": "...", "groundedness": 1, "relevance": 9, "correctness": 10 }}
   ]
-}
+}}
 """
 
 # --- 2. HTML SANITIZERS (strip theme spans from main agent output) ---
