@@ -2,10 +2,13 @@
 import sys
 import json
 import asyncio
+import os
+import shutil
+import tempfile
 import logging
 from typing import Optional, Annotated, List
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, File, UploadFile, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from langgraph.prebuilt import create_react_agent
@@ -19,7 +22,7 @@ from src.agent_service.core.prompts import SYSTEM_PROMPT
 from src.agent_service.core.config import REDIS_URL, PORT, MODEL_NAME
 
 # Schemas
-from src.agent_service.core.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest, NvidiaConfig
+from src.agent_service.core.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest, NvidiaConfig, FAQEditRequest
 
 # Services
 from src.agent_service.core.utils import valid_session_id
@@ -37,6 +40,7 @@ from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_sh
 
 # Utils
 from src.agent_service.core.utils import _extract_tool_output
+from src.agent_service.faqs.pdf_parser import PDFQAParser
 
 logging.basicConfig(
     format="%(levelname)s [%(name)s] %(message)s",
@@ -438,12 +442,154 @@ async def logout_session(session_id: str):
         log.error(f"Logout Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/admin/faqs")
-async def update_faqs(request: FAQBatchRequest, x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"), x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"), x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")):
-    if not request.items: return {"status": "ignored", "message": "No items provided"}
-    data = [item.model_dump() for item in request.items]
-    result = await kb_service.ingest_faq_batch(data, groq_key=x_groq_key, openrouter_key=x_openrouter_key) # type: ignore
-    return {"status": "completed", "details": result}
+# --- STREAMING JSON Batch ---
+@app.post("/agent/admin/faqs/batch-json")
+async def update_faqs_json_stream(
+    request: Request, # Need raw request to parse body manually or use Pydantic in a specific way
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"), 
+    x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"), 
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+):
+    """
+    Real-time streaming ingestion for JSON batches.
+    """
+    try:
+        body = await request.json()
+        items = body.get("items", [])
+        
+        if not items:
+            async def empty_gen():
+                yield {"event": "error", "data": "No items provided"}
+            return EventSourceResponse(empty_gen())
+
+        # Use the generator from service
+        return EventSourceResponse(
+            kb_service.ingest_faq_batch_gen(items, groq_key=x_groq_key, openrouter_key=x_openrouter_key),
+            headers={"Cache-Control": "no-cache"}
+        )
+    except Exception as e:
+        log.error(f"Ingest Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- STREAMING PDF Upload ---
+@app.post("/agent/admin/faqs/upload-pdf")
+async def update_faqs_pdf_stream(
+    file: UploadFile = File(...),
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"),
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+):
+    """
+    Real-time streaming ingestion for PDF.
+    Step 1: Parse PDF (Sync, might take 1-2s).
+    Step 2: Stream ingestion of parsed items.
+    """
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+
+    # 1. Save Temp
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        shutil.copyfileobj(file.file, tmp_file)
+        tmp_path = tmp_file.name
+
+    async def pdf_ingestion_generator():
+        try:
+            # Emit Parsing Status
+            yield {"event": "progress", "data": json.dumps({"percent": 2, "message": "Parsing PDF Structure..."})}
+            
+            # Parse (Blocking operation, usually fast for standard PDFs)
+            parser = PDFQAParser(tmp_path)
+            parsed_data = parser.parse()
+
+            if not parsed_data:
+                yield {"event": "error", "data": "No Q&A pairs found in PDF."}
+                return
+
+            yield {"event": "progress", "data": json.dumps({"percent": 5, "message": f"Found {len(parsed_data)} pairs. Starting ingestion..."})}
+
+            # Delegate to the common ingestion generator
+            async for event in kb_service.ingest_faq_batch_gen(parsed_data, groq_key=x_groq_key, openrouter_key=x_openrouter_key):
+                yield event
+
+        except Exception as e:
+            yield {"event": "error", "data": str(e)}
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    return EventSourceResponse(pdf_ingestion_generator(), headers={"Cache-Control": "no-cache"})
+
+@app.get("/agent/admin/faqs")
+async def get_faqs(
+    limit: int = Query(100, ge=1, le=1000),
+    skip: int = Query(0, ge=0)
+):
+    """
+    Retrieve stored FAQs with pagination.
+    """
+    try:
+        data = await kb_service.get_all_faqs(limit=limit, skip=skip)
+        return {
+            "status": "success",
+            "count": len(data),
+            "limit": limit,
+            "skip": skip,
+            "items": data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/agent/admin/faqs")
+async def edit_faq(
+    request: FAQEditRequest,
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+):
+    """
+    Edit a specific FAQ. 
+    - `original_question`: The exact text of the question to find.
+    - `new_question`: (Optional) New text for the question (updates embedding).
+    - `new_answer`: (Optional) New text for the answer.
+    """
+    result = await kb_service.edit_faq(
+        original_question=request.original_question,
+        new_question=request.new_question,
+        new_answer=request.new_answer,
+        openrouter_key=x_openrouter_key
+    )
+    
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    
+    return result
+
+@app.delete("/agent/admin/faqs")
+async def delete_faq_endpoint(
+    question: str = Query(..., description="The exact question text to delete"),
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
+):
+    """
+    Delete an FAQ by providing the exact question string.
+    """
+    result = await kb_service.delete_faq(question)
+    
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+    
+    return result
+
+@app.delete("/agent/admin/faqs/all")
+async def clear_all_faqs_endpoint(
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
+):
+    """
+    DANGER: Wipes all FAQs from the database.
+    """
+    result = await kb_service.clear_all_faqs()
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+    return result
 
 if __name__ == "__main__":
     import uvicorn

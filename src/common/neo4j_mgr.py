@@ -38,3 +38,12 @@ class Neo4jManager:
         with driver.session() as session:
             result = session.run(query, params or {})
             return [record.data() for record in result]
+
+    @classmethod
+    def execute_read(cls, query, params=None):
+        """Helper to execute a read transaction."""
+        # Using session.run for consistency with execute_write
+        driver = cls.get_driver()
+        with driver.session() as session:
+            result = session.run(query, params or {})
+            return [record.data() for record in result]

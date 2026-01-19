@@ -1,13 +1,14 @@
 import logging
 from typing import List, Optional
+import json
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_openai import OpenAIEmbeddings
 from langchain_groq import ChatGroq
 
+
 from src.common.neo4j_mgr import Neo4jManager
-# Updated import path to core
 from src.agent_service.core.config import (
     GROQ_KEY_CYCLE, 
     GROQ_BASE_URL,
@@ -78,33 +79,53 @@ class KnowledgeBaseService:
         
         return prompt | llm | parser
 
-    async def ingest_faq_batch(self, items: List[dict], groq_key: str = None, openrouter_key: str = None) -> dict: # type: ignore
+    async def ingest_faq_batch_gen(self, items: List[dict], groq_key: str = None, openrouter_key: str = None):
+        """
+        Generator that yields progress updates while ingesting FAQs.
+        """
         driver = Neo4jManager.get_driver()
+        total_items = len(items)
         success_count = 0
         errors = []
+
+        yield {"event": "progress", "data": json.dumps({"percent": 5, "message": "Initializing Embeddings & Constraints..."})}
 
         # 0. Setup Embedding Model
         try:
             embeddings = self._get_embeddings(openrouter_key)
         except ValueError as e:
-            return {"status": "failed", "error": str(e)}
+            yield {"event": "error", "data": str(e)}
+            return
 
-        # 1. Ensure Constraints
-        with driver.session() as session:
-            session.run("CREATE CONSTRAINT question_uniq IF NOT EXISTS FOR (q:Question) REQUIRE q.text IS UNIQUE")
-            session.run("CREATE CONSTRAINT topic_uniq IF NOT EXISTS FOR (t:Topic) REQUIRE t.name IS UNIQUE")
-            session.run("CREATE CONSTRAINT product_uniq IF NOT EXISTS FOR (p:Product) REQUIRE p.name IS UNIQUE")
-            session.run("""
-                CREATE VECTOR INDEX question_embeddings IF NOT EXISTS
-                FOR (q:Question) ON (q.embedding)
-                OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
-            """)
+        # 1. Ensure Constraints (Fast)
+        try:
+            with driver.session() as session:
+                session.run("CREATE CONSTRAINT question_uniq IF NOT EXISTS FOR (q:Question) REQUIRE q.text IS UNIQUE")
+                session.run("CREATE CONSTRAINT topic_uniq IF NOT EXISTS FOR (t:Topic) REQUIRE t.name IS UNIQUE")
+                session.run("CREATE CONSTRAINT product_uniq IF NOT EXISTS FOR (p:Product) REQUIRE p.name IS UNIQUE")
+                session.run("""
+                    CREATE VECTOR INDEX question_embeddings IF NOT EXISTS
+                    FOR (q:Question) ON (q.embedding)
+                    OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
+                """)
+        except Exception as e:
+            log.error(f"Constraint Error: {e}")
+            # Continue anyway, constraints might already exist
 
-        # 2. Process Items
-        for item in items:
+        # 2. Process Items Loop
+        for i, item in enumerate(items):
             q_text = item.get("question")
             a_text = item.get("answer")
-            if not q_text or not a_text: continue
+            
+            # Calculate granular progress (Start at 10%, end at 95%)
+            percent = 10 + int((i / total_items) * 85)
+            yield {"event": "progress", "data": json.dumps({
+                "percent": percent, 
+                "message": f"Processing {i+1}/{total_items}: {q_text[:30]}..."
+            })}
+
+            if not q_text or not a_text: 
+                continue
 
             try:
                 # A. Generate Vector
@@ -141,6 +162,130 @@ class KnowledgeBaseService:
                 log.error(f"Failed to ingest FAQ '{q_text[:20]}...': {e}")
                 errors.append({"question": q_text, "error": str(e)})
 
-        return {"processed": len(items), "success": success_count, "errors": errors}
+        # Final Result
+        yield {
+            "event": "done", 
+            "data": json.dumps({
+                "processed": total_items, 
+                "success": success_count, 
+                "errors": errors
+            })
+        }
+
+    # --- NEW METHOD ADDED HERE ---
+    async def get_all_faqs(self, limit: int = 100, skip: int = 0) -> List[dict]:
+        """
+        Retrieves existing FAQs from Neo4j.
+        """
+        query = """
+        MATCH (q:Question)-[:HAS_ANSWER]->(a:Answer)
+        RETURN q.text as question, a.text as answer
+        ORDER BY q.text
+        SKIP $skip LIMIT $limit
+        """
+        try:
+            # Using execute_read from Neo4jManager
+            results = Neo4jManager.execute_read(query, {"skip": skip, "limit": limit})
+            return [{"question": r["question"], "answer": r["answer"]} for r in results]
+        except Exception as e:
+            log.error(f"Failed to fetch FAQs: {e}")
+            raise e
+
+    async def edit_faq(self, original_question: str, new_question: str = None, new_answer: str = None, openrouter_key: str = None) -> dict:
+        """
+        Updates an FAQ. If the question text changes, it regenerates the embedding.
+        """
+        driver = Neo4jManager.get_driver()
+        
+        # 1. Verify existence
+        verify_query = "MATCH (q:Question {text: $q}) RETURN q"
+        exists = Neo4jManager.execute_read(verify_query, {"q": original_question})
+        if not exists:
+            return {"status": "error", "message": "FAQ not found. Check exact spelling of the original question."}
+
+        updates = []
+        params = {"orig_q": original_question}
+
+        # 2. Handle Answer Update
+        if new_answer:
+            updates.append("SET a.text = $new_a")
+            params["new_a"] = new_answer
+
+        # 3. Handle Question Update (Expensive: requires embedding gen)
+        if new_question and new_question != original_question:
+            try:
+                embeddings = self._get_embeddings(openrouter_key)
+                # Generate new vector for the new question text
+                new_vector = await embeddings.aembed_query(new_question)
+                
+                updates.append("SET q.text = $new_q, q.embedding = $new_vec")
+                params["new_q"] = new_question
+                params["new_vec"] = new_vector
+            except Exception as e:
+                return {"status": "error", "message": f"Failed to generate embedding: {str(e)}"}
+
+        if not updates:
+            return {"status": "ignored", "message": "No changes provided"}
+
+        # 4. Execute Cypher Update
+        # Updates both q and a nodes found via the relationship
+        cypher = f"""
+        MATCH (q:Question {{text: $orig_q}})-[:HAS_ANSWER]->(a:Answer)
+        { " ".join(updates) }
+        RETURN q.text as q, a.text as a
+        """
+        
+        try:
+            Neo4jManager.execute_write(cypher, params)
+            return {
+                "status": "success", 
+                "original_question": original_question, 
+                "updated_fields": list(params.keys())
+            }
+        except Exception as e:
+            log.error(f"Error updating FAQ: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def delete_faq(self, question: str) -> dict:
+        """
+        Deletes a specific FAQ by its question text. 
+        Uses DETACH DELETE to remove relationships (to Answers/Topics) before deleting the node.
+        """
+        # Cypher to find the question node and delete it
+        query = "MATCH (q:Question {text: $q}) DETACH DELETE q"
+        
+        try:
+            # Execute write transaction
+            Neo4jManager.execute_write(query, {"q": question})
+            return {"status": "success", "message": "FAQ deleted", "question": question}
+        except Exception as e:
+            log.error(f"Error deleting FAQ: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def clear_all_faqs(self) -> dict:
+        """
+        Wipes all Question, Answer, Topic, and Product nodes from the database.
+        Use with caution.
+        """
+        # Cypher to detach delete everything related to the FAQ schema
+        query = """
+        MATCH (q:Question) DETACH DELETE q;
+        """
+        # Note: You might want to also cleanup orphan Answers/Topics if they aren't connected to anything else
+        # For now, deleting Questions and their relationships is the primary goal.
+        
+        # A more aggressive cleanup (optional, careful if these nodes are shared):
+        # MATCH (n) WHERE n:Question OR n:Answer OR n:Topic OR n:Product DETACH DELETE n
+        
+        try:
+            # We'll just delete Questions and Answers for now to be safe, 
+            # or use the specific label targeting your FAQ schema.
+            Neo4jManager.execute_write("MATCH (q:Question) DETACH DELETE q")
+            Neo4jManager.execute_write("MATCH (a:Answer) WHERE NOT (a)<-[:HAS_ANSWER]-(:Question) DETACH DELETE a")
+            
+            return {"status": "success", "message": "Knowledge base cleared."}
+        except Exception as e:
+            log.error(f"Error clearing KB: {e}")
+            return {"status": "error", "message": str(e)}
 
 kb_service = KnowledgeBaseService()

@@ -70,3 +70,15 @@ class JudgeResponse(BaseModel):
     evaluations: List[ScoredQuestion] = Field(
         description="List of evaluated questions with their scores."
     )
+
+class FAQItem(BaseModel):
+    question: str
+    answer: str
+
+class FAQBatchRequest(BaseModel):
+    items: List[FAQItem]
+
+class FAQEditRequest(BaseModel):
+    original_question: str
+    new_question: Optional[str] = None
+    new_answer: Optional[str] = None

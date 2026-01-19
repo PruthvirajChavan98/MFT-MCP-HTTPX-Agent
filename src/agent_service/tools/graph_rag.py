@@ -11,7 +11,7 @@ from src.common.neo4j_mgr import Neo4jManager
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 
 class GraphQueryInput(BaseModel):
-    """Input for the Hero Fincorp Graph Tool."""
+    """Input for the Mock Fin Tech's Graph Tool."""
     query: str = Field(
         description="A natural language question. Example: 'How do I close my loan?' or 'Contact for stolen bike'."
     )
@@ -70,7 +70,7 @@ def create_graph_tool(openrouter_api_key: Optional[str] = None) -> StructuredToo
     # We define the function inside so it captures 'openrouter_api_key' from this scope
     def query_hero_fincorp_wrapper(query: str) -> str:
         """
-        Performs a Vector Search on the Hero Fincorp Knowledge Graph (Neo4j).
+        Performs a Vector Search on the Mock Fin Tech's Knowledge Graph (Neo4j).
         """
         try:
             # Pass the dynamic key (or None) to the factory
@@ -114,7 +114,7 @@ def create_graph_tool(openrouter_api_key: Optional[str] = None) -> StructuredToo
 
     return StructuredTool.from_function(
         func=query_hero_fincorp_wrapper,
-        name="hero_fincorp_knowledge_base",
-        description="Search the Hero Fincorp FAQs database using vector semantic search. Use this for questions about processes, documents, contacts, loan products and miscellaneous questions.",
+        name="mock_fin_tech_knowledge_base",
+        description="Search the Mock Fin Tech's FAQs database using vector semantic search. Use this for questions about processes, documents, contacts, loan products and miscellaneous questions.",
         args_schema=GraphQueryInput,
     )
