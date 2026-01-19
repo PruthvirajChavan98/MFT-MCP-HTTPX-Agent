@@ -288,4 +288,56 @@ class KnowledgeBaseService:
             log.error(f"Error clearing KB: {e}")
             return {"status": "error", "message": str(e)}
 
+    async def semantic_search(self, query: str, limit: int = 5, openrouter_key: str = None) -> List[dict]:
+        """
+        Finds FAQs semantically similar to the query.
+        """
+        try:
+            embeddings = self._get_embeddings(openrouter_key)
+            vector = await embeddings.aembed_query(query)
+            
+            # Neo4j Vector Search Query
+            cypher = """
+            CALL db.index.vector.queryNodes('question_embeddings', $limit, $vector)
+            YIELD node, score
+            MATCH (node)-[:HAS_ANSWER]->(a:Answer)
+            RETURN node.text as question, a.text as answer, score
+            """
+            
+            results = Neo4jManager.execute_read(cypher, {"vector": vector, "limit": limit})
+            return results
+        except Exception as e:
+            log.error(f"Semantic Search Error: {e}")
+            raise e
+
+    async def delete_faq_by_vector(self, query: str, threshold: float = 0.92, openrouter_key: str = None) -> dict:
+        """
+        Finds the most similar FAQ and deletes it if the score > threshold.
+        """
+        try:
+            embeddings = self._get_embeddings(openrouter_key)
+            vector = await embeddings.aembed_query(query)
+            
+            # Find best match
+            find_query = """
+            CALL db.index.vector.queryNodes('question_embeddings', 1, $vector)
+            YIELD node, score
+            WHERE score > $threshold
+            MATCH (node)-[:HAS_ANSWER]->(a:Answer)
+            RETURN node.text as question, score
+            """
+            
+            match = Neo4jManager.execute_read(find_query, {"vector": vector, "threshold": threshold})
+            
+            if not match:
+                return {"status": "ignored", "message": "No matching FAQ found with high confidence."}
+            
+            target_question = match[0]['question']
+            
+            # Delegate to existing delete logic
+            return await self.delete_faq(target_question)
+            
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
 kb_service = KnowledgeBaseService()

@@ -17,7 +17,7 @@ def _valid_session_id(session_id: object) -> str:
         raise ValueError(f"Invalid session_id: {session_id!r}")
     return sid
 
-class HeroFincorpAuthAPIs:
+class MockFinTechAuthAPIs:
     def __init__(self, session_id: str, session_store: Optional[RedisSessionStore] = None):
         self.session_id = _valid_session_id(session_id)
         self.base_url = CRM_BASE_URL
@@ -46,7 +46,7 @@ class HeroFincorpAuthAPIs:
         headers = {"Accept": "application/json"}
         try:
             with httpx.Client(auth=self.auth, headers=headers, follow_redirects=True, timeout=20.0) as client:
-                resp = client.get(self._url(f"/herofin-service/get-contact-hint/{app_id}/"))
+                resp = client.get(self._url(f"/mockfin-service/get-contact-hint/{app_id}/"))
                 self.session_store.update(self.session_id, {
                     "last_contact_hint_app_id": app_id,
                     "last_contact_hint_status": resp.status_code,
@@ -98,7 +98,7 @@ class HeroFincorpAuthAPIs:
                 if not payload:
                      return self._to_vsc({"error": "Phone number unknown. Please provide phone number explicitly."})
 
-                resp = client.post(self._url("/herofin-service/otp/generate_new/"), json=payload)
+                resp = client.post(self._url("/mockfin-service/otp/generate_new/"), json=payload)
                 self.logger.info(f"POST otp/generate_new - {resp.status_code}")
                 
                 try: resp_json = resp.json() if resp.text else {}
@@ -147,7 +147,7 @@ class HeroFincorpAuthAPIs:
         payload = {"phone_number": phone_number, "app_id": app_id, "otp": otp}
         try:
             with httpx.Client(auth=self.auth, headers=headers, follow_redirects=True, timeout=30.0) as client:
-                resp = client.post(self._url("/herofin-service/otp/validate_new/"), json=payload)
+                resp = client.post(self._url("/mockfin-service/otp/validate_new/"), json=payload)
                 self.logger.info(f"POST otp/validate_new - {resp.status_code}")
 
                 if resp.status_code not in (200, 201):

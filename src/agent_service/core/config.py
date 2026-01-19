@@ -4,7 +4,7 @@ import json
 import itertools
 
 # Server Settings
-SERVER_NAME = "hero_fincorp"
+SERVER_NAME = "mock_fintech"
 SERVER_URL = os.getenv("MCP_SERVER_URL", "http://0.0.0.0:8050/sse")
 PORT = int(os.getenv("PORT", "8000"))
 

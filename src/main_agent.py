@@ -22,7 +22,7 @@ from src.agent_service.core.prompts import SYSTEM_PROMPT
 from src.agent_service.core.config import REDIS_URL, PORT, MODEL_NAME
 
 # Schemas
-from src.agent_service.core.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest, NvidiaConfig, FAQEditRequest
+from src.agent_service.core.schemas import AgentRequest, GroqConfig, OpenRouterConfig, FAQBatchRequest, NvidiaConfig, FAQEditRequest, FAQSemanticSearchRequest, FAQSemanticDeleteRequest
 
 # Services
 from src.agent_service.core.utils import valid_session_id
@@ -284,7 +284,7 @@ async def stream_agent(request: AgentRequest):
             log.info(f"[kb-first] sid={sid} tool={kb_payload.get('tool')}")
             async def kb_event_generator():
                 try:
-                    tool_name = kb_payload.get("tool", "hero_fincorp_knowledge_base")
+                    tool_name = kb_payload.get("tool", "mock_fintech_knowledge_base")
                     tool_input = kb_payload.get("input", {"query": request.question})
                     output = str(kb_payload.get("output", "") or "").replace("\r", "")
 
@@ -587,6 +587,36 @@ async def clear_all_faqs_endpoint(
     DANGER: Wipes all FAQs from the database.
     """
     result = await kb_service.clear_all_faqs()
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+    return result
+
+# --- SEMANTIC SEARCH ---
+@app.post("/agent/admin/faqs/semantic-search")
+async def semantic_search_endpoint(
+    request: FAQSemanticSearchRequest,
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+):
+    """
+    Finds FAQs semantically similar to the query.
+    """
+    try:
+        results = await kb_service.semantic_search(request.query, request.limit, x_openrouter_key)
+        return {"status": "success", "results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- SEMANTIC DELETE ---
+@app.post("/agent/admin/faqs/semantic-delete")
+async def semantic_delete_endpoint(
+    request: FAQSemanticDeleteRequest,
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
+):
+    """
+    Delete the FAQ most similar to the query string (if similarity > threshold).
+    """
+    result = await kb_service.delete_faq_by_vector(request.query, request.threshold, x_openrouter_key)
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
     return result

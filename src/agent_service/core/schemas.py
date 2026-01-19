@@ -82,3 +82,11 @@ class FAQEditRequest(BaseModel):
     original_question: str
     new_question: Optional[str] = None
     new_answer: Optional[str] = None
+
+class FAQSemanticSearchRequest(BaseModel):
+    query: str
+    limit: int = 5
+
+class FAQSemanticDeleteRequest(BaseModel):
+    query: str
+    threshold: float = 0.92

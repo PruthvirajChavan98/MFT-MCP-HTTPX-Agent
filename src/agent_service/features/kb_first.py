@@ -34,17 +34,17 @@ async def kb_first_payload(question: str, tools: List[StructuredTool]) -> Option
     if not q or not _KB_FIRST_RE.search(q):
         return None
 
-    kb = next((t for t in tools if getattr(t, "name", "") == "hero_fincorp_knowledge_base"), None)
+    kb = next((t for t in tools if getattr(t, "name", "") == "mock_fintech_knowledge_base"), None)
     if not kb:
         # Tool missing -> return correct fallback (never hallucinate "we can stop EMI")
-        return {"tool": "hero_fincorp_knowledge_base", "input": {"query": q}, "output": _FALLBACK}
+        return {"tool": "mock_fintech_knowledge_base", "input": {"query": q}, "output": _FALLBACK}
 
     try:
         out = await kb.ainvoke({"query": q})
         txt = _as_text(out).strip()
         if not txt or "No relevant information found" in txt:
-            return {"tool": "hero_fincorp_knowledge_base", "input": {"query": q}, "output": _FALLBACK}
-        return {"tool": "hero_fincorp_knowledge_base", "input": {"query": q}, "output": txt}
+            return {"tool": "mock_fintech_knowledge_base", "input": {"query": q}, "output": _FALLBACK}
+        return {"tool": "mock_fintech_knowledge_base", "input": {"query": q}, "output": txt}
     except Exception as e:
         # still return correct answer; include KB error signal for traceability
-        return {"tool": "hero_fincorp_knowledge_base", "input": {"query": q}, "output": f"Knowledge Base Error: {e}. {_FALLBACK}"}
+        return {"tool": "mock_fintech_knowledge_base", "input": {"query": q}, "output": f"Knowledge Base Error: {e}. {_FALLBACK}"}

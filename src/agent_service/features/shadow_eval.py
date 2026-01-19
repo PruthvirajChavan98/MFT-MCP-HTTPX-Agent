@@ -52,7 +52,7 @@
 #     {
 #         "name": "StolenVehicleEmiFaq",
 #         "when": r"(vehicle\s+is\s+stolen|stolen\s+vehicle|stop\s+my\s+emi|emi\s+presentation)",
-#         "require_tool": "hero_fincorp_knowledge_base",
+#         "require_tool": "mock_fintech_knowledge_base",
 #         "answer_pattern": r"(cannot\s*be\s*stopped|emi.*continue|continue\s*paying|credit\s*record|knowledge\s*base\s*error)",
 #     }
 # ]
@@ -526,7 +526,7 @@ DEFAULT_RULES = [
     {
         "name": "StolenVehicleEmiFaq",
         "when": r"(vehicle\s+is\s+stolen|stolen\s+vehicle|stop\s+my\s+emi|emi\s+presentation)",
-        "require_tool": "hero_fincorp_knowledge_base",
+        "require_tool": "mock_fintech_knowledge_base",
         "answer_pattern": r"(cannot\s*be\s*stopped|emi.*continue|continue\s*paying|credit\s*record|knowledge\s*base\s*error)",
     }
 ]

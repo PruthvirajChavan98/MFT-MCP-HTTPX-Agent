@@ -4,8 +4,8 @@ from typing import Any, Optional
 from fastmcp import FastMCP
 
 from .session_store import RedisSessionStore
-from .auth_api import HeroFincorpAuthAPIs
-from .core_api import HeroFincorpAPIs
+from .auth_api import MockFinTechAuthAPIs
+from .core_api import MockFinTechAPIs
 from .config import MCP_SERVER_HOST, MCP_SERVER_PORT
 from .description_utils import _d
 
@@ -20,10 +20,10 @@ def _touch(session_id: str, tool_name: str, extra: Optional[dict] = None):
     session_store.update(session_id, payload)
 
 def get_auth(session_id: str):
-    return HeroFincorpAuthAPIs(session_id, session_store=session_store)
+    return MockFinTechAuthAPIs(session_id, session_store=session_store)
 
 def get_api(session_id: str):
-    return HeroFincorpAPIs(session_id, session_store=session_store)
+    return MockFinTechAPIs(session_id, session_store=session_store)
 
 # @mcp.tool(name="get_contact_hint", description=<description>)
 # def get_contact_hint(app_id: str, session_id: str) -> str:

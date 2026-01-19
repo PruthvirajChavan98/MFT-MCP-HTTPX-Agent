@@ -19,7 +19,7 @@ PUBLIC_TOOLS = {
     "generate_otp",
     "validate_otp",
     "is_logged_in",
-    "hero_fincorp_knowledge_base" # The FAQ RAG tool
+    "mock_fintech_knowledge_base" # The FAQ RAG tool
 }
 
 class MCPManager:
@@ -137,7 +137,7 @@ class MCPManager:
 
         # 3. Add Local Graph Tool (FAQ)
         # This is generally considered "Public"
-        if is_auth or "hero_fincorp_knowledge_base" in PUBLIC_TOOLS:
+        if is_auth or "mock_fintech_knowledge_base" in PUBLIC_TOOLS:
             try:
                 # Pass the key here (it might be None, which is fine if env var is set)
                 graph_tool = create_graph_tool(openrouter_api_key=openrouter_api_key) # type: ignore

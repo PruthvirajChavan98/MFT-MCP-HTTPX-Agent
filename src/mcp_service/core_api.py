@@ -17,7 +17,7 @@ def _valid_session_id(session_id: object) -> str:
         raise ValueError(f"Invalid session_id: {session_id!r}")
     return sid
 
-class HeroFincorpAPIs:
+class MockFinTechAPIs:
     def __init__(self, session_id: str, session_store: Optional[RedisSessionStore] = None):
         self.session_id = _valid_session_id(session_id)
         self.logger = log
@@ -78,41 +78,41 @@ class HeroFincorpAPIs:
             return {"error": str(e)}
 
     def get_dashboard_home(self) -> str:
-        return self._to_toon(self._request("GET", "/herofin-service/home"))
+        return self._to_toon(self._request("GET", "/mockfin-service/home"))
 
     def get_loan_details(self) -> str:
         if not self.app_id: return self._to_toon({"error": "No app_id"})
-        return self._to_toon(self._request("GET", f"/herofin-service/loan/details/{self.app_id}/"))
+        return self._to_toon(self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/"))
 
     def get_foreclosure_details(self) -> str:
         if not self.app_id: return self._to_toon({"error": "No app_id"})
-        return self._to_toon(self._request("GET", f"/herofin-service/loan/foreclosuredetails/{self.app_id}/"))
+        return self._to_toon(self._request("GET", f"/mockfin-service/loan/foreclosuredetails/{self.app_id}/"))
 
     def get_overdue_details(self) -> str:
         if not self.app_id: return self._to_toon({"error": "No app_id"})
-        return self._to_toon(self._request("GET", f"/herofin-service/loan/overdue-details/{self.app_id}/"))
+        return self._to_toon(self._request("GET", f"/mockfin-service/loan/overdue-details/{self.app_id}/"))
 
     def get_noc_details(self) -> str:
         if not self.app_id: return self._to_toon({"error": "No app_id"})
-        return self._to_toon(self._request("GET", f"/herofin-service/loan/noc-details/{self.app_id}/"))
+        return self._to_toon(self._request("GET", f"/mockfin-service/loan/noc-details/{self.app_id}/"))
 
     def get_repayment_schedule(self) -> str:
         ident = self.app_id or self.loan_id
         if not ident: return self._to_toon({"error": "No app_id/loan_id"})
-        return self._to_toon(self._request("GET", f"/herofin-service/loan/repayment-schedule/{ident}/"))
+        return self._to_toon(self._request("GET", f"/mockfin-service/loan/repayment-schedule/{ident}/"))
 
     def download_welcome_letter(self) -> str:
-        return self._to_toon(self._request("GET", "/herofin-service/download/welcome-letter/"))
+        return self._to_toon(self._request("GET", "/mockfin-service/download/welcome-letter/"))
 
     def download_soa(self, start_date: str, end_date: str) -> str:
-        return self._to_toon(self._request("POST", "/herofin-service/download/soa/", json_body={"start_date": start_date, "end_date": end_date}))
+        return self._to_toon(self._request("POST", "/mockfin-service/download/soa/", json_body={"start_date": start_date, "end_date": end_date}))
 
     def initiate_transaction(self, amount: str, otp: str, payment_mode: str = "UPI") -> str:
         payload = {"phone_number": self.phone_number, "otp": otp, "amount": amount, "PaymentMode": payment_mode, "loan_app_id": self.app_id}
         return self._to_toon(self._request("POST", "/payments/initiate_transaction/", json_body=payload))
 
     def profile_phone_generate_otp(self, new_phone: str) -> str:
-        return self._to_toon(self._request("PUT", "/herofin-service/profiles/?update=phone_number", json_body={"phone_number": new_phone}))
+        return self._to_toon(self._request("PUT", "/mockfin-service/profiles/?update=phone_number", json_body={"phone_number": new_phone}))
 
     def profile_phone_validate_otp(self, new_phone: str, otp: str) -> str:
-        return self._to_toon(self._request("PUT", "/herofin-service/profiles/?update=phone_number", json_body={"phone_number": new_phone, "otp": otp}))
+        return self._to_toon(self._request("PUT", "/mockfin-service/profiles/?update=phone_number", json_body={"phone_number": new_phone, "otp": otp}))
