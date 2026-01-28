@@ -1,4 +1,3 @@
-# src/main_agent.py
 import sys
 import json
 import asyncio
@@ -319,11 +318,6 @@ async def stream_agent(request: AgentRequest):
 
         model, tools, sys_prompt, or_key = await _resolve_agent_resources(sid, request)
 
-        # --- OPTIMIZATION: Start Router in Background (NON-BLOCKING) ---
-        router_task = asyncio.create_task(
-            nbfc_router_service.classify(request.question, openrouter_api_key=or_key)
-        )
-
         # --- CONTEXT CAPTURE FOR JUDGE ---
         temp_agent = create_react_agent(model=model, tools=tools, checkpointer=CHECKPOINTER)
         state_snapshot = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
@@ -344,6 +338,13 @@ async def stream_agent(request: AgentRequest):
         )
         collector.case_id = app_id  # type: ignore
 
+        # Router result computed once per request
+        router_out = None
+        try:
+            router_out = await nbfc_router_service.classify(request.question, openrouter_api_key=or_key)
+        except Exception as e:
+            router_out = {"backend": "error", "error": str(e)}
+
         # KB-first guardrail
         kb_payload = await kb_first_payload(request.question, tools)
         if kb_payload:
@@ -351,6 +352,12 @@ async def stream_agent(request: AgentRequest):
 
             async def kb_event_generator():
                 try:
+                    # Emit router as a pseudo tool call + SSE event
+                    if router_out:
+                        collector.on_tool_start("nbfc_router", {"text": request.question})
+                        collector.on_tool_end("nbfc_router", json.dumps(router_out, ensure_ascii=False), tool_call_id="router")
+                        yield {"event": "router", "data": json.dumps(router_out, ensure_ascii=False)}
+
                     tool_name = kb_payload.get("tool", "mock_fintech_knowledge_base")
                     tool_input = kb_payload.get("input", {"query": request.question})
                     output = str(kb_payload.get("output", "") or "").replace("\r", "")
@@ -372,18 +379,6 @@ async def stream_agent(request: AgentRequest):
                     collector.on_done(final_output="", error=str(e))
                     yield {"event": "error", "data": str(e)}
                 finally:
-                    # Await background router task for LOGGING only (don't block user response)
-                    try:
-                        router_out = await router_task
-                        if router_out:
-                            # [NEW] Explicitly save to collector so it goes to DB
-                            collector.set_router_outcome(router_out)
-                            
-                            collector.on_tool_start("nbfc_router", {"text": request.question})
-                            collector.on_tool_end("nbfc_router", json.dumps(router_out, ensure_ascii=False), tool_call_id="router_bg")
-                    except Exception as re:
-                        log.error(f"Background router task failed: {re}")
-
                     asyncio.create_task(maybe_shadow_eval_commit(collector))
 
             return EventSourceResponse(kb_event_generator(), headers={"Cache-Control": "no-cache"})
@@ -397,7 +392,12 @@ async def stream_agent(request: AgentRequest):
         async def event_generator():
             final_parts: List[str] = []
             try:
-                # Start LLM stream immediately (Router is still running in background)
+                # Emit router as a pseudo tool call + SSE event
+                if router_out:
+                    collector.on_tool_start("nbfc_router", {"text": request.question})
+                    collector.on_tool_end("nbfc_router", json.dumps(router_out, ensure_ascii=False), tool_call_id="router")
+                    yield {"event": "router", "data": json.dumps(router_out, ensure_ascii=False)}
+
                 async for event in agent.astream_events(inputs, {"configurable": {"thread_id": sid}}, version="v2"):
                     kind = event["event"]
                     if kind == "on_chat_model_stream":
@@ -436,18 +436,6 @@ async def stream_agent(request: AgentRequest):
                 collector.on_done(final_output="".join(final_parts), error=err)
                 yield {"event": "error", "data": err}
             finally:
-                # Await background router task for LOGGING only
-                try:
-                    router_out = await router_task
-                    if router_out:
-                        # [NEW] Explicitly save to collector so it goes to DB
-                        collector.set_router_outcome(router_out)
-
-                        collector.on_tool_start("nbfc_router", {"text": request.question})
-                        collector.on_tool_end("nbfc_router", json.dumps(router_out, ensure_ascii=False), tool_call_id="router_bg")
-                except Exception as re:
-                    log.error(f"Background router task failed: {re}")
-
                 asyncio.create_task(maybe_shadow_eval_commit(collector))
 
         return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})

@@ -64,25 +64,6 @@ async def _publish_live(summary: Dict[str, Any]) -> None:
     """
     Push a small “new trace ingested” event to Redis Streams for live dashboards.
 
-
-async def _publish_router_job(trace_id: str, text: str) -> None:
-    \"\"\"Push a router classification job for router_worker (async).\"\"\"
-    try:
-        if not trace_id or not text:
-            return
-        r = Redis.from_url(REDIS_URL, decode_responses=True)
-
-        # XADD appends to stream; approximate trimming keeps memory bounded.
-        await r.xadd(
-            ROUTER_JOBS_STREAM_KEY,
-            {"trace_id": str(trace_id), "text": str(text)},
-            maxlen=ROUTER_JOBS_STREAM_MAXLEN,
-            approximate=True,
-        )
-        await r.close()
-    except Exception as e:
-        log.warning("[eval_ingest] router job publish failed: %s", e)
-
     Redis Streams: XADD appends, XREAD BLOCK tail-follows.
     XREAD docs: use '$' only for first call; resume from last ID to avoid gaps. :contentReference[oaicite:2]{index=2}
     """

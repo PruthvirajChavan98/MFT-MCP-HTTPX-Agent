@@ -319,13 +319,46 @@ async def eval_vector_search(
 
     return {"index": index, "k": req.k, "min_score": req.min_score, "items": out}
 
-# ... (Rest of file: metrics/summary, metrics/failures remain same) ...
-
+# -----------------------------
+# GET /eval/metrics/summary
+# -----------------------------
 @router.get("/metrics/summary")
 async def eval_metrics_summary(metric_name: Optional[str] = None, provider: Optional[str] = None, model: Optional[str] = None, status: Optional[str] = None):
-    q = "MATCH (r:EvalResult) WHERE r.metric_name IS NOT NULL AND ($metric_name IS NULL OR r.metric_name = $metric_name) OPTIONAL MATCH (t:EvalTrace {trace_id: r.trace_id}) WHERE ($provider IS NULL OR t.provider = $provider) AND ($model IS NULL OR t.model = $model) AND ($status IS NULL OR t.status = $status) WITH r.metric_name AS metric_name, count(r) AS count, avg(coalesce(r.score, 0.0)) AS avg_score, sum(CASE WHEN r.passed = true THEN 1 ELSE 0 END) AS pass_count RETURN metric_name, count, pass_count, (CASE WHEN count = 0 THEN 0.0 ELSE (toFloat(pass_count) / toFloat(count)) END) AS pass_rate, avg_score ORDER BY metric_name ASC"
+    # 1. Fetch grouped items via Cypher
+    q = """
+    MATCH (r:EvalResult) 
+    WHERE r.metric_name IS NOT NULL 
+      AND ($metric_name IS NULL OR r.metric_name = $metric_name) 
+    OPTIONAL MATCH (t:EvalTrace {trace_id: r.trace_id}) 
+    WHERE ($provider IS NULL OR t.provider = $provider) 
+      AND ($model IS NULL OR t.model = $model) 
+      AND ($status IS NULL OR t.status = $status) 
+    WITH r.metric_name AS metric_name, 
+         count(r) AS count, 
+         avg(coalesce(r.score, 0.0)) AS avg_score, 
+         sum(CASE WHEN r.passed = true THEN 1 ELSE 0 END) AS pass_count 
+    RETURN metric_name, count, pass_count, 
+           (CASE WHEN count = 0 THEN 0.0 ELSE (toFloat(pass_count) / toFloat(count)) END) AS pass_rate, 
+           avg_score 
+    ORDER BY metric_name ASC
+    """
+    
     rows = await run_in_threadpool(_rows, q, {"metric_name": metric_name, "provider": provider, "model": model, "status": status})
-    return {"items": rows}
+    
+    # 2. Calculate totals in Python
+    total_evals = sum(int(r.get("count", 0)) for r in rows)
+    total_passes = sum(int(r.get("pass_count", 0)) for r in rows)
+    
+    # Avoid division by zero
+    overall_rate = (total_passes / total_evals) if total_evals > 0 else 0.0
+
+    # 3. Return the calculated field alongside items
+    return {
+        "items": rows,
+        "total_metrics": len(rows),
+        "total_evals": total_evals,
+        "overall_pass_rate": overall_rate
+    }
 
 # -----------------------------
 # GET /eval/metrics/failures
@@ -426,3 +459,19 @@ async def eval_metrics_failures(
     )
 
     return {"limit": limit, "offset": offset, "items": rows}
+
+@router.get("/question-types")
+async def question_types(limit: int = 200):
+    rows = Neo4jManager.execute_read(
+        """
+        MATCH (t:EvalTrace)
+        WHERE t.started_at IS NOT NULL
+        WITH t ORDER BY t.started_at DESC LIMIT $limit
+        RETURN coalesce(t.router_reason, "Unknown") as reason, count(*) as n
+        ORDER BY n DESC
+        """,
+        {"limit": limit},
+    )
+    total = sum(int(r["n"]) for r in rows) or 1
+    items = [{"reason": r["reason"], "count": int(r["n"]), "pct": float(r["n"]) / total} for r in rows]
+    return {"limit": limit, "total": total, "items": items}
