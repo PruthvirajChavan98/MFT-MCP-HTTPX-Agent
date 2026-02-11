@@ -13,6 +13,7 @@ log = logging.getLogger("llm_client")
 def get_llm(
     model_name: str,
     *,
+    provider: Optional[str] = None,
     openrouter_api_key: Optional[str] = None,
     nvidia_api_key: Optional[str] = None,
     groq_api_key: Optional[str] = None,
@@ -21,65 +22,81 @@ def get_llm(
     max_tokens: Optional[int] = None,
 ) -> BaseChatModel:
     """
-    Unified factory using init_chat_model.
-    Supports OpenRouter, Nvidia, Groq, and standard providers via BYOK.
+    Unified factory with explicit provider selection.
+    Priority: explicit provider > key-based inference
     """
     if not model_name:
         raise ValueError("Model name is required.")
 
-    # Determine provider and key precedence
-    provider = None
     api_key = None
+    actual_provider = None
     
-    # 1. OpenRouter (Explicit or inferred from model name)
-    if openrouter_api_key:
-        provider = "openai" # OpenRouter is OpenAI-compatible
-        api_key = openrouter_api_key
-        # Ensure model has openai/ prefix if using OpenRouter
-        if "/" not in model_name:
-            model_name = f"openai/{model_name}"
-    
-    # 2. NVIDIA
-    elif nvidia_api_key or model_name.startswith("nvidia/"):
-        provider = "nvidia" 
-        api_key = nvidia_api_key
-    
-    # 3. Groq
-    elif groq_api_key or model_name.startswith("groq/"):
-        provider = "groq"
-        api_key = groq_api_key
-
-    if not api_key:
-        # Strict BYOK: Fail if no key is found for the inferred provider
-        raise ValueError(f"No API key provided for model '{model_name}'.")
+    # If provider explicitly specified, use that
+    if provider:
+        if provider == "openrouter":
+            if not openrouter_api_key:
+                raise ValueError("OpenRouter provider requires openrouter_api_key")
+            api_key = openrouter_api_key
+            actual_provider = "openai"  # OpenRouter uses OpenAI compatibility
+        elif provider == "nvidia":
+            if not nvidia_api_key:
+                raise ValueError("Nvidia provider requires nvidia_api_key")
+            api_key = nvidia_api_key
+            actual_provider = "nvidia"
+        elif provider == "groq":
+            if not groq_api_key:
+                raise ValueError("Groq provider requires groq_api_key")
+            api_key = groq_api_key
+            actual_provider = "groq"
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
+    else:
+        # Fallback: Priority-based selection from API keys
+        if openrouter_api_key and openrouter_api_key.startswith("sk-or-"):
+            actual_provider = "openai"
+            api_key = openrouter_api_key
+            log.info("Auto-detected OpenRouter from API key")
+        elif nvidia_api_key and nvidia_api_key.startswith("nvapi-"):
+            actual_provider = "nvidia"
+            api_key = nvidia_api_key
+            log.info("Auto-detected Nvidia from API key")
+        elif groq_api_key and groq_api_key.startswith("gsk_"):
+            actual_provider = "groq"
+            api_key = groq_api_key
+            log.info("Auto-detected Groq from API key")
+        else:
+            raise ValueError(
+                "No valid API key provided. Required formats:\n"
+                "- Groq: gsk_xxx\n"
+                "- OpenRouter: sk-or-xxx\n"
+                "- Nvidia: nvapi-xxx"
+            )
 
     # Configure kwargs
-    kwargs: Dict[str, Any] = {
-        "temperature": temperature,
-    }
+    kwargs: Dict[str, Any] = {"temperature": temperature}
     
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
-
-    # Reasoning effort mapping
     if reasoning_effort and reasoning_effort.lower() not in ("none", "default"):
         kwargs["reasoning_effort"] = reasoning_effort
-
-    # Specific base URLs if needed (using OpenAI compatibility layer for OpenRouter)
-    if openrouter_api_key:
+    
+    # OpenRouter-specific config
+    if actual_provider == "openai" and openrouter_api_key:
         kwargs["base_url"] = "https://openrouter.ai/api/v1"
-        kwargs["model_provider"] = "openai" # Force OpenAI adapter for OpenRouter
+
+    log.info(f"Initializing {actual_provider} with model: {model_name}")
 
     try:
         return init_chat_model(
             model=model_name,
-            model_provider=provider,
+            model_provider=actual_provider,
             api_key=api_key,
             **kwargs
         )
     except Exception as e:
-        log.error(f"Failed to init model {model_name}: {e}")
+        log.error(f"Failed to init model {model_name} with provider {actual_provider}: {e}")
         raise
+
 
 def get_embeddings(
     api_key: str,
@@ -93,7 +110,6 @@ def get_embeddings(
     if not api_key:
         raise ValueError("API Key required for embeddings.")
 
-    # Detect provider logic
     provider = "openai" 
     
     return init_embeddings(

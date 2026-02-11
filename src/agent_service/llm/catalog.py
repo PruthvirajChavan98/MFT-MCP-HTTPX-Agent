@@ -4,15 +4,14 @@ import asyncio
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+import os
+from typing import Any, Dict, List, Optional, Set, Tuple, Iterable
 
 import httpx
 from redis.asyncio import Redis
 
 from src.agent_service.core.config import (
-    GROQ_API_KEYS,
     GROQ_BASE_URL,
-    NVIDIA_API_KEY,
     NVIDIA_BASE_URL,
     REDIS_URL,
 )
@@ -111,11 +110,15 @@ class ModelService:
         return self._ensure_tool_specs(specs, provider="groq")
 
     async def fetch_groq_data(self) -> List[Dict[str, Any]]:
-        if not GROQ_API_KEYS: return []
+        # In BYOK mode, we don't have a server key to fetch the catalog.
+        # We can try to grab one from env if available, otherwise skip.
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key: return []
+        
         try:
             url = f"{GROQ_BASE_URL}/openai/v1/models"
             async with httpx.AsyncClient(timeout=20.0) as client:
-                resp = await client.get(url, headers={"Authorization": f"Bearer {GROQ_API_KEYS[0]}"})
+                resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
                 if resp.status_code != 200: return []
                 data = resp.json().get("data", [])
                 results = []
@@ -152,7 +155,7 @@ class ModelService:
                     mid = (m.get("id") or "").strip()
                     if not mid: continue
                     
-                    # Pricing normalization (OpenRouter API gives per-token string)
+                    # Pricing normalization
                     raw_p = m.get("pricing", {})
                     try:
                         p_float = float(raw_p.get("prompt", "0"))
@@ -188,12 +191,15 @@ class ModelService:
             return [], {}
 
     async def fetch_nvidia_data(self) -> List[Dict[str, Any]]:
-        if not NVIDIA_API_KEY: return []
+        # BYOK Check
+        api_key = os.getenv("NVIDIA_API_KEY")
+        if not api_key: return []
+        
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(f"{NVIDIA_BASE_URL}/models", headers={"Authorization": f"Bearer {NVIDIA_API_KEY}"})
+                resp = await client.get(f"{NVIDIA_BASE_URL}/models", headers={"Authorization": f"Bearer {api_key}"})
                 if resp.status_code != 200: return []
-                # ... (Simplified placeholder for brevity, assume prior logic) ...
+                # Simple implementation for now
                 return [] 
         except: return []
 
@@ -228,7 +234,6 @@ class ModelService:
         Efficiently looks up pricing for a model ID.
         Returns dict with 'prompt' and 'completion' rates (per token).
         """
-        # 1. Try Memory/Redis
         raw = await self.redis.get(self.PRICING_KEY)
         if raw:
             data = json.loads(raw)

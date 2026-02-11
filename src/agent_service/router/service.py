@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -13,6 +13,7 @@ from src.agent_service.llm.client import get_llm
 from .schemas import RouterResult, LabelScore
 from .prototypes_nbfc import SENTIMENT_PROTOTYPES, REASON_PROTOTYPES
 
+# Regex Patterns
 _PROFANITY = re.compile(r"\b(wtf|bc|mc|bkl|madarchod|behenchod)\b", re.I)
 _NEG_CUES  = re.compile(r"\b(refund|charged twice|not coming|failed|harass|fraud|unauthorized|penalty)\b", re.I)
 _POS_CUES  = re.compile(r"\b(thanks|thank you|love|great|mast|awesome|super smooth)\b", re.I)
@@ -23,9 +24,7 @@ def _cosine_top(
     *,
     topn: int = 3,
 ) -> Tuple[str, float, List[Tuple[str, float]]]:
-    # compute max cosine similarity per label (max-over-prototypes)
     import math
-
     def cos(a, b):
         dot = sum(x*y for x, y in zip(a, b))
         na = math.sqrt(sum(x*x for x in a)) or 1e-9
@@ -43,30 +42,36 @@ def _cosine_top(
 
 class RouterService:
     def __init__(self):
-        key = OPENROUTER_API_KEY
-        if not key:
-            raise ValueError("OPENROUTER_API_KEY required for embeddings router")
-
-        self.emb = OpenAIEmbeddings(
-            model="openai/text-embedding-3-small",
-            api_key=key,  # type: ignore
-            base_url=OPENROUTER_BASE_URL,
-            check_embedding_ctx_length=False,
-        )
+        # We perform lazy initialization of embeddings to allow for BYOK injection
+        # or graceful failure if no server-side key exists.
         self._sent_proto_vecs: Optional[Dict[str, List[List[float]]]] = None
         self._reason_proto_vecs: Optional[Dict[str, List[List[float]]]] = None
 
-    async def warm(self):
-        # Pre-embed prototypes once per process
-        if self._sent_proto_vecs is None:
-            self._sent_proto_vecs = {}
-            for k, texts in SENTIMENT_PROTOTYPES.items():
-                self._sent_proto_vecs[k] = [await self.emb.aembed_query(t) for t in texts]
+    def _get_embedder(self, api_key: Optional[str] = None):
+        key = api_key or OPENROUTER_API_KEY
+        if not key:
+            raise ValueError("Router requires an OpenRouter API Key (Server or Request).")
+        
+        return OpenAIEmbeddings(
+            model="openai/text-embedding-3-small",
+            api_key=key,
+            base_url=OPENROUTER_BASE_URL,
+            check_embedding_ctx_length=False,
+        )
 
-        if self._reason_proto_vecs is None:
-            self._reason_proto_vecs = {}
-            for k, texts in REASON_PROTOTYPES.items():
-                self._reason_proto_vecs[k] = [await self.emb.aembed_query(t) for t in texts]
+    async def warm(self, api_key: Optional[str] = None):
+        if self._sent_proto_vecs is not None:
+            return
+
+        emb = self._get_embedder(api_key)
+        
+        self._sent_proto_vecs = {}
+        for k, texts in SENTIMENT_PROTOTYPES.items():
+            self._sent_proto_vecs[k] = [await emb.aembed_query(t) for t in texts]
+
+        self._reason_proto_vecs = {}
+        for k, texts in REASON_PROTOTYPES.items():
+            self._reason_proto_vecs[k] = [await emb.aembed_query(t) for t in texts]
 
     def _override_sentiment(self, text: str) -> Optional[Tuple[str, str]]:
         t = text or ""
@@ -81,30 +86,32 @@ class RouterService:
     async def classify_embeddings(
         self,
         text: str,
+        openrouter_api_key: Optional[str] = None,
         *,
         sent_threshold: float = 0.24,
         reason_threshold: float = 0.32,
     ) -> RouterResult:
-        await self.warm()
+        await self.warm(openrouter_api_key)
         assert self._sent_proto_vecs and self._reason_proto_vecs
 
+        # Use the specific key for this query
+        emb = self._get_embedder(openrouter_api_key)
+        
         t0 = time.perf_counter()
+        qv = await emb.aembed_query(text)
 
-        qv = await self.emb.aembed_query(text)
-
-        # sentiment
+        # Sentiment
         s_label, s_score, s_top = _cosine_top(qv, self._sent_proto_vecs, topn=3)
 
         override = None
         ov = self._override_sentiment(text)
         if ov:
             s_label, override = ov[0], ov[1]
-            # keep original score but bump confidence slightly (optional)
             s_score = max(s_score, 0.60)
 
         sentiment = LabelScore(label=s_label, score=float(s_score), top=s_top)
 
-        # reason only if negative or near-negative
+        # Reason
         reason = None
         if s_label == "negative" or (s_label == "neutral" and s_score < 0.55):
             r_label, r_score, r_top = _cosine_top(qv, self._reason_proto_vecs, topn=3)
@@ -122,11 +129,10 @@ class RouterService:
             meta={"latency_ms": round(dt, 2)},
         )
 
-    async def classify_llm_glm47(self, text: str, *, openrouter_key: Optional[str] = None) -> RouterResult:
-        # Strict JSON classification
+    async def classify_llm_glm47(self, text: str, *, openrouter_api_key: Optional[str] = None) -> RouterResult:
         llm = get_llm(
             model_name="z-ai/glm-4.7",
-            openrouter_api_key=openrouter_key,  # BYOK allowed
+            openrouter_api_key=openrouter_api_key, 
         )
 
         parser = JsonOutputParser()
@@ -161,19 +167,29 @@ Text: {text}
             meta={"rationale": out.get("rationale")},
         )
 
-    async def classify_hybrid(self, text: str, *, openrouter_key: Optional[str] = None) -> RouterResult:
-        emb = await self.classify_embeddings(text)
+    async def classify(self, text: str, openrouter_api_key: Optional[str] = None, mode: Optional[str] = None) -> RouterResult:
+        # Default behavior
+        return await self.classify_hybrid(text, openrouter_api_key=openrouter_api_key)
 
-        # Only pay for LLM if embeddings confidence is weak / ambiguous
+    async def classify_hybrid(self, text: str, *, openrouter_api_key: Optional[str] = None) -> RouterResult:
+        emb = await self.classify_embeddings(text, openrouter_api_key=openrouter_api_key)
+
         s = emb.sentiment
         need_llm = (s.score < 0.55) or (s.label == "neutral" and (emb.reason and emb.reason.label == "unknown"))
 
         if not need_llm:
-            emb.backend = "hybrid"  # type: ignore
+            emb.backend = "hybrid" # type: ignore
             emb.meta["selected"] = "embeddings"
             return emb
 
-        llm = await self.classify_llm_glm47(text, openrouter_key=openrouter_key)
-        llm.backend = "hybrid"  # type: ignore
+        llm = await self.classify_llm_glm47(text, openrouter_api_key=openrouter_api_key)
+        llm.backend = "hybrid" # type: ignore
         llm.meta["selected"] = "llm_glm_4.7"
         return llm
+    
+    async def compare(self, text: str, openrouter_api_key: Optional[str] = None) -> Any:
+        # Debug tool to run both
+        e = await self.classify_embeddings(text, openrouter_api_key=openrouter_api_key)
+        l = await self.classify_llm_glm47(text, openrouter_api_key=openrouter_api_key)
+        return {"embeddings": e, "llm": l}
+

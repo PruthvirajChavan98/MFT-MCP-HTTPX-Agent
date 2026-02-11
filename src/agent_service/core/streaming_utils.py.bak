@@ -1,0 +1,239 @@
+"""
+Streaming Utilities and Tool Output Extraction
+Handles SSE event generation, tool output parsing, and streaming state management.
+"""
+import json
+import logging
+from typing import Dict, Any, Optional
+from dataclasses import dataclass, field
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class StreamingState:
+    """Tracks streaming session state and cumulative metrics."""
+    total_cost: float = 0.0
+    cumulative_usage: Dict[str, int] = field(default_factory=lambda: {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cached_tokens": 0,
+    })
+
+
+class StreamingUtils:
+    """Utilities for managing streaming state, events, and tool outputs."""
+    
+    @staticmethod
+    def extract_tool_output(output: Any) -> str:
+        """
+        Extract clean content from LangGraph/LangChain tool outputs.
+        
+        LangGraph tool_end events return ToolMessage objects, not plain strings.
+        DO NOT use str() as it produces: content="..." name=... tool_call_id=...
+        This method extracts the actual content string.
+        
+        Args:
+            output: Raw tool output (ToolMessage, dict, list, or string)
+            
+        Returns:
+            Clean string content suitable for streaming
+            
+        Examples:
+            ToolMessage(content='{"data": 123}') → '{"data": 123}'
+            {"content": "result"} → "result"
+            [ToolMessage(content="msg")] → "msg"
+        """
+        if output is None:
+            return ""
+        
+        # ToolMessage / BaseMessage-like objects (has .content attribute)
+        if hasattr(output, "content"):
+            content = getattr(output, "content", "")
+            return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+        
+        # Dict wrapper with content key
+        if isinstance(output, dict):
+            if "content" in output:
+                content = output["content"]
+                return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+            
+            # Sometimes wrapped in messages list
+            msgs = output.get("messages")
+            if isinstance(msgs, list):
+                for msg in reversed(msgs):
+                    if hasattr(msg, "content"):
+                        content = getattr(msg, "content", "")
+                        return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                    if isinstance(msg, str):
+                        return msg
+            
+            # Fallback: serialize entire dict
+            return json.dumps(output, ensure_ascii=False)
+        
+        # List of messages
+        if isinstance(output, list):
+            for msg in reversed(output):
+                if hasattr(msg, "content"):
+                    content = getattr(msg, "content", "")
+                    return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                if isinstance(msg, str):
+                    return msg
+            return json.dumps(output, ensure_ascii=False)
+        
+        # Final fallback: string conversion
+        return str(output)
+    
+    @staticmethod
+    def accumulate_usage(state: StreamingState, usage_metadata: Dict[str, Any]) -> None:
+        """
+        Accumulate token usage metrics from LLM responses.
+        
+        Handles different usage metadata formats:
+        - OpenAI/Groq: prompt_tokens, completion_tokens
+        - Anthropic: input_tokens, output_tokens
+        - Reasoning models: reasoning_tokens
+        - Cached prompts: cache_read_input_tokens
+        
+        Args:
+            state: StreamingState object to update in-place
+            usage_metadata: Usage metadata from LLM response
+        """
+        # Input tokens (prompt)
+        state.cumulative_usage["prompt_tokens"] += (
+            usage_metadata.get("input_tokens", 0) or 
+            usage_metadata.get("prompt_tokens", 0)
+        )
+        
+        # Output tokens (completion)
+        state.cumulative_usage["completion_tokens"] += (
+            usage_metadata.get("output_tokens", 0) or 
+            usage_metadata.get("completion_tokens", 0)
+        )
+        
+        # Total tokens
+        state.cumulative_usage["total_tokens"] += usage_metadata.get("total_tokens", 0)
+        
+        # Reasoning tokens (o1/o3 models)
+        if usage_metadata.get("reasoning_tokens"):
+            state.cumulative_usage["reasoning_tokens"] += usage_metadata.get("reasoning_tokens", 0)
+        
+        # Cached tokens (prompt caching)
+        if usage_metadata.get("cache_read_input_tokens"):
+            state.cumulative_usage["cached_tokens"] += usage_metadata.get("cache_read_input_tokens", 0)
+
+
+class SSEEventFormatter:
+    """
+    Server-Sent Events (SSE) formatter with consistent structure.
+    All events follow the format: {"event": "type", "data": "payload"}
+    """
+    
+    @staticmethod
+    def format_event(event_type: str, data: Any) -> Dict[str, str]:
+        """
+        Format SSE event with proper structure.
+        
+        Args:
+            event_type: Event type identifier (token, tool_start, etc.)
+            data: Event payload (auto-serialized if dict)
+            
+        Returns:
+            Formatted event dict with 'event' and 'data' keys
+        """
+        if isinstance(data, dict):
+            data_str = json.dumps(data, ensure_ascii=False)
+        else:
+            data_str = str(data)
+        
+        return {"event": event_type, "data": data_str}
+    
+    @staticmethod
+    def token_event(content: str) -> Dict[str, str]:
+        """Create token streaming event."""
+        return SSEEventFormatter.format_event("token", content)
+    
+    @staticmethod
+    def reasoning_token_event(content: str) -> Dict[str, str]:
+        """Create reasoning token event (o1/o3 models)."""
+        return SSEEventFormatter.format_event("reasoning_token", content)
+    
+    @staticmethod
+    def tool_start_event(tool_name: str, tool_input: Any) -> Dict[str, str]:
+        """Create tool invocation start event."""
+        return SSEEventFormatter.format_event("tool_start", {
+            "tool": tool_name,
+            "input": tool_input
+        })
+    
+    @staticmethod
+    def tool_end_event(
+        tool_name: str, 
+        output: str, 
+        tool_call_id: Optional[str] = None
+    ) -> Dict[str, str]:
+        """Create tool invocation end event."""
+        return SSEEventFormatter.format_event("tool_end", {
+            "tool": tool_name,
+            "output": output,
+            "tool_call_id": tool_call_id
+        })
+    
+    @staticmethod
+    def router_event(router_output: Dict[str, Any]) -> Dict[str, str]:
+        """Create router classification event."""
+        return SSEEventFormatter.format_event("router", router_output)
+    
+    @staticmethod
+    def cost_event(
+        total_cost: float,
+        usage: Dict[str, int],
+        model: str,
+        provider: str,
+        cached: bool = False
+    ) -> Dict[str, str]:
+        """
+        Create cost tracking event with detailed usage breakdown.
+        
+        Args:
+            total_cost: Total cost in USD
+            usage: Token usage dictionary
+            model: Model identifier
+            provider: Provider name
+            cached: Whether response was cached (KB-first)
+        """
+        cost_data = {
+            "total_cost": round(total_cost, 6),
+            "usage": {k: v for k, v in usage.items() if v > 0},
+            "model": model,
+            "provider": provider,
+            "currency": "USD"
+        }
+        
+        if cached:
+            cost_data["cached"] = True
+        
+        return SSEEventFormatter.format_event("cost", cost_data)
+    
+    @staticmethod
+    def done_event() -> Dict[str, str]:
+        """Create stream completion event."""
+        return SSEEventFormatter.format_event("done", "[DONE]")
+    
+    @staticmethod
+    def error_event(error_message: str) -> Dict[str, str]:
+        """Create error event."""
+        return SSEEventFormatter.format_event("error", error_message)
+
+
+# Singleton instances
+streaming_utils = StreamingUtils()
+sse_formatter = SSEEventFormatter()
+
+
+# Backward compatibility alias
+def _extract_tool_output(output: Any) -> str:
+    """DEPRECATED: Use streaming_utils.extract_tool_output() instead."""
+    return streaming_utils.extract_tool_output(output)

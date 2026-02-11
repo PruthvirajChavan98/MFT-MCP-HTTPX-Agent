@@ -1,110 +1,143 @@
+"""
+Generic Utility Functions
+Contains truly generic helpers that don't fit into specialized modules.
+Keep this module lean - domain-specific utils belong in dedicated modules.
+"""
 import json
-import redis
+import logging
 from typing import Any
-from langchain_core.messages import RemoveMessage
-from .config import KEEP_LAST, REDIS_URL
 
-def valid_session_id(session_id: object) -> str:
-    """Ensures session_id is a valid non-empty string."""
-    sid = str(session_id).strip() if session_id is not None else ""
-    if not sid or sid.lower() in {"null", "none"}:
-        raise ValueError(f"Invalid session_id: {session_id!r}")
-    return sid
+log = logging.getLogger(__name__)
+
 
 def normalize_result(result: Any) -> Any:
-    """Sanitizes output (truncates massive JSONs) for logging/LLM context."""
+    """
+    Sanitize output for logging and LLM context.
+    Truncates massive JSONs to prevent context overflow.
+    
+    Args:
+        result: Raw result from tool/LLM (list, dict, str, etc.)
+        
+    Returns:
+        Normalized result, truncated if exceeds 8000 chars
+        
+    Examples:
+        >>> normalize_result([ToolMessage(text='{"key": "value"}')])
+        '{"key": "value"}'
+        
+        >>> normalize_result({"large": "data" * 2000})
+        '{"large": "data..."}... [TRUNCATED]'
+    """
+    # Handle LangChain message lists
     if isinstance(result, list) and result:
         first = result[0]
         text = getattr(first, "text", None)
+        
         if isinstance(text, str):
             try:
                 parsed = json.loads(text)
                 dump = json.dumps(parsed, ensure_ascii=False, indent=2)
-                if len(dump) > 8000: 
+                
+                if len(dump) > 8000:
                     return dump[:8000] + "... [TRUNCATED]"
                 return dump
             except Exception:
                 return text
     
+    # Handle dict results
     if isinstance(result, dict):
         dump = json.dumps(result, ensure_ascii=False)
+        
         if len(dump) > 8000:
             return dump[:8000] + "... [TRUNCATED]"
-        return dump  # Return stringified dict even if small
-            
+        return dump
+    
+    # Return as-is for other types
     return result
 
-def keep_only_last_n_messages(state: dict, config: dict):
-    """LangGraph reducer to keep history short."""
-    msgs = list(state.get("messages", []))
-    if len(msgs) <= KEEP_LAST:
-        return {}
-    return {"messages": [RemoveMessage(id=msgs[i].id) for i in range(len(msgs) - KEEP_LAST)]}
 
-def is_user_authenticated(session_id: str) -> bool:
+def safe_json_loads(data: str, default: Any = None) -> Any:
     """
-    Directly checks Redis to see if the user has an active access_token.
-    This avoids passing sensitive tool definitions to unauthenticated users.
+    Safely parse JSON with fallback value.
+    
+    Args:
+        data: JSON string to parse
+        default: Fallback value if parsing fails (default: None)
+        
+    Returns:
+        Parsed JSON object or default value
+        
+    Examples:
+        >>> safe_json_loads('{"key": "value"}')
+        {'key': 'value'}
+        
+        >>> safe_json_loads('invalid json', default={})
+        {}
     """
     try:
-        # Use a localized client to ensure thread safety in async contexts if needed,
-        # or rely on the fact that we are just reading a key.
-        client = redis.from_url(REDIS_URL, decode_responses=True)
-        # MCP Session Store saves data directly against the session_id key
-        data_str = client.get(session_id)
-        if not data_str:
-            return False
+        return json.loads(data)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        log.debug(f"JSON parsing failed: {e}")
+        return default
+
+
+def safe_json_dumps(data: Any, default: str = "{}") -> str:
+    """
+    Safely serialize to JSON with fallback.
+    
+    Args:
+        data: Data to serialize
+        default: Fallback string if serialization fails
         
-        data = json.loads(str(data_str))
-        # Check for the presence of the token set by auth_api.py
-        return bool(data.get("access_token"))
-    except Exception:
-        return False
-
-
-# --- add this helper ---
-def _extract_tool_output(output: Any) -> str:
+    Returns:
+        JSON string or default value
     """
-    LangGraph/LangChain tool_end output is often a ToolMessage.
-    DO NOT str() it (that produces content="..." name=... tool_call_id=...).
-    We want the actual content string.
+    try:
+        return json.dumps(data, ensure_ascii=False)
+    except (TypeError, ValueError) as e:
+        log.debug(f"JSON serialization failed: {e}")
+        return default
+
+
+def truncate_string(text: str, max_length: int = 1000, suffix: str = "...") -> str:
     """
-    if output is None:
-        return ""
+    Truncate string to maximum length with suffix.
+    
+    Args:
+        text: String to truncate
+        max_length: Maximum length before truncation
+        suffix: Suffix to append if truncated
+        
+    Returns:
+        Truncated string
+    """
+    if len(text) <= max_length:
+        return text
+    return text[:max_length - len(suffix)] + suffix
 
-    # ToolMessage / BaseMessage-like
-    if hasattr(output, "content"):
-        c = getattr(output, "content", "")
-        return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
 
-    # Sometimes it's a dict wrapper
-    if isinstance(output, dict):
-        if "content" in output:
-            c = output.get("content")
-            return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
+# ============================================================================
+# BACKWARD COMPATIBILITY ALIASES
+# Import from specialized modules for legacy code support
+# ============================================================================
 
-        # Sometimes messages list
-        msgs = output.get("messages")
-        if isinstance(msgs, list):
-            for m in reversed(msgs):
-                if hasattr(m, "content"):
-                    c = getattr(m, "content", "")
-                    return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
-                if isinstance(m, str):
-                    return m
+from src.agent_service.core.session_utils import (
+    valid_session_id,
+    is_user_authenticated
+)
 
-        # fallback
-        return json.dumps(output, ensure_ascii=False)
+from src.agent_service.core.streaming_utils import (
+    _extract_tool_output
+)
 
-    # Sometimes it's a list
-    if isinstance(output, list):
-        for m in reversed(output):
-            if hasattr(m, "content"):
-                c = getattr(m, "content", "")
-                return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
-            if isinstance(m, str):
-                return m
-        return json.dumps(output, ensure_ascii=False)
+from src.agent_service.core.graph_utils import (
+    keep_only_last_n_messages
+)
 
-    # final fallback
-    return str(output)
+# Mark as deprecated for IDE warnings
+__deprecated__ = [
+    "valid_session_id",
+    "is_user_authenticated", 
+    "_extract_tool_output",
+    "keep_only_last_n_messages"
+]

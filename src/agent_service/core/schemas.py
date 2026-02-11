@@ -5,42 +5,40 @@ from pydantic import BaseModel, Field
 
 
 # =========================
-# Agent
+# Agent & Session Configuration
 # =========================
 
 class AgentRequest(BaseModel):
-    session_id: str
-    question: str
+    session_id: str = Field(..., description="Unique session identifier")
+    question: str = Field(..., description="User query")
 
-    # Optional overrides
+    # Optional overrides (Session-scope or Request-scope)
     system_prompt: Optional[str] = None
     model_name: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    provider: Optional[Literal["groq", "openrouter", "nvidia"]] = None
+
+    # BYOK Keys (Ephemeral)
     openrouter_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
-
-    # allow "default"/"none" for qwen, and low/medium/high for others
-    reasoning_effort: Optional[str] = None
+    groq_api_key: Optional[str] = None
 
 
-class BaseSessionConfig(BaseModel):
+class SessionConfig(BaseModel):
+    """
+    Unified configuration for a session. 
+    Replaces separate GroqConfig/OpenRouterConfig/NvidiaConfig.
+    """
     session_id: str
     system_prompt: Optional[str] = None
+    model_name: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    provider: Optional[Literal["groq", "openrouter", "nvidia"]] = None
 
+    # Persisted Keys
     openrouter_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
-
-
-class GroqConfig(BaseSessionConfig):
-    model_name: str
-
-
-class OpenRouterConfig(BaseSessionConfig):
-    model_name: str
-
-
-class NvidiaConfig(BaseSessionConfig):
-    model_name: str
+    groq_api_key: Optional[str] = None
 
 
 # =========================
@@ -53,7 +51,6 @@ class RouterClassifyRequest(BaseModel):
     session_id: Optional[str] = None
     text: str
     mode: Optional[RouterMode] = None
-
     openrouter_api_key: Optional[str] = None
 
 class RouterResultResponse(BaseModel):
@@ -66,7 +63,7 @@ class RouterResultResponse(BaseModel):
 
 
 # =========================
-# FAQ / KB
+# FAQ / Knowledge Base
 # =========================
 
 class FAQItem(BaseModel):
@@ -95,11 +92,15 @@ class FAQSemanticDeleteRequest(BaseModel):
 # =========================
 
 class FollowUpResponse(BaseModel):
-    questions: List[str] = Field(description="A list of 5 potential follow-up questions.", min_length=1, max_length=5)
+    questions: List[str] = Field(
+        description="A list of 5 potential follow-up questions.", 
+        min_length=1, 
+        max_length=5
+    )
 
 
 # =========================
-# Judge schemas
+# Judge Schemas
 # =========================
 
 class ScoredQuestion(BaseModel):
@@ -110,3 +111,36 @@ class ScoredQuestion(BaseModel):
 
 class JudgeResponse(BaseModel):
     evaluations: List[ScoredQuestion] = Field(description="List of evaluated questions with their scores.")
+
+
+# =========================
+# Cost Tracking
+# =========================
+
+class TokenUsage(BaseModel):
+    """Detailed token usage breakdown."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    
+    # Optional advanced fields
+    reasoning_tokens: Optional[int] = None  # For DeepSeek/O1/Qwen reasoning models
+    cached_tokens: Optional[int] = None     # For Claude/Gemini cache hits
+    audio_tokens: Optional[int] = None      # For multimodal audio
+
+
+class CostBreakdown(BaseModel):
+    """Detailed cost breakdown with pricing."""
+    prompt_cost: float = 0.0
+    completion_cost: float = 0.0
+    reasoning_cost: Optional[float] = None
+    cached_cost: Optional[float] = None
+    total_cost: float = 0.0
+    
+    # Metadata
+    model: str
+    provider: str
+    currency: str = "USD"
+    
+    # Token details
+    usage: TokenUsage

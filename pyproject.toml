@@ -7,15 +7,24 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
     "fastmcp>=2.9.0",
+    "gunicorn>=21.2.0",
     "httpx[http2]>=0.28.0",
     "langchain>=0.3.0", 
     "langchain-core>=0.3.0",
+    # -- Providers --
     "langchain-openai>=0.2.0",
     "langchain-anthropic>=0.2.0",
     "langchain-groq>=0.2.0",
     "langchain-nvidia-ai-endpoints>=0.3.0",
+    "langchain-deepseek>=0.1.0", 
+    # -- Integrations --
+    "langchain-neo4j>=0.1.0",
+    "langchain-mcp-adapters>=0.1.0",
+    "neo4j>=5.0.0",
+    # -- Graph --
     "langgraph>=0.2.0",
     "langgraph-checkpoint-redis==0.3.4",
+    # -- Utils --
     "mcp>=1.0.0",
     "pdfplumber>=0.11.0",
     "redis>=5.0.0",
