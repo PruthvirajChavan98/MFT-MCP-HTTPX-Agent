@@ -2,6 +2,9 @@ langchain-mcp-adapters
 fastmcp
 langchain
 langchain-openai
+langchain-anthropic
+langchain-google-genai
+langchain-nvidia-ai-endpoints
 langchain-deepseek
 langchain-groq
 langchain-neo4j

@@ -1,4 +1,4 @@
-# ===== src/agent_service/features/shadow_eval.py =====
+from __future__ import annotations
 
 import asyncio
 import json
@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 from starlette.concurrency import run_in_threadpool
-from redis.asyncio import Redis
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
 from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
@@ -74,8 +73,8 @@ Evaluate the "Assistant Answer" based on the provided Context.
 1. **Faithfulness**: Is the answer derived *only* from the Tool Outputs? (Score 1 if hallucinated, 5 if fully grounded).
 2. **Relevance**: Does the answer directly address the User Question? (Score 1 if evasive, 5 if direct).
 3. **Correctness**: 
-   - Did the assistant follow the **System Instructions** (e.g. refusal rules)? 
-   - Is the answer factually consistent with the **Tool Outputs**?
+    - Did the assistant follow the **System Instructions** (e.g. refusal rules)? 
+    - Is the answer factually consistent with the **Tool Outputs**?
 4. **Coherence**: Is the answer clear and professional?
 
 ### Input Data
