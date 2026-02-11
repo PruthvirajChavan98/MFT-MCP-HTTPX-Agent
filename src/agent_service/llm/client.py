@@ -1,174 +1,105 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import logging
+from typing import Optional, Dict, Any
 
-from langchain_deepseek import ChatDeepSeek
-from langchain_groq import ChatGroq
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
-from langchain_openai import OpenAIEmbeddings
+from langchain.chat_models import init_chat_model
+from langchain.embeddings import init_embeddings
+from langchain_core.language_models import BaseChatModel
+from langchain_core.embeddings import Embeddings
 
-from src.agent_service.core.config import (
-    GROQ_KEY_CYCLE,
-    GROQ_API_KEYS,
-    GROQ_BASE_URL,
-    OPENROUTER_API_KEY,
-    OPENROUTER_BASE_URL,
-    OPENROUTER_SITE_URL,
-    OPENROUTER_APP_TITLE,
-    OPENROUTER_EMBED_MODEL_DEFAULT,
-    NVIDIA_API_KEY,
-    NVIDIA_BASE_URL,
-    MODEL_NAME,
-)
-
-
-def _openrouter_headers() -> Optional[Dict[str, str]]:
-    h: Dict[str, str] = {}
-    if OPENROUTER_SITE_URL:
-        h["HTTP-Referer"] = OPENROUTER_SITE_URL
-    if OPENROUTER_APP_TITLE:
-        h["X-Title"] = OPENROUTER_APP_TITLE
-    return h or None
-
-
-def get_openrouter_embeddings(
-    openrouter_api_key: Optional[str] = None,
-    *,
-    model: Optional[str] = None,
-) -> OpenAIEmbeddings:
-    """
-    OpenRouter embeddings live at POST /embeddings under base_url=https://openrouter.ai/api/v1.
-    """
-    key = (openrouter_api_key or OPENROUTER_API_KEY or "").strip()
-    if not key:
-        raise ValueError("OpenRouter API Key required for embeddings")
-
-    return OpenAIEmbeddings(
-        model=(model or OPENROUTER_EMBED_MODEL_DEFAULT),
-        api_key=key,  # type: ignore
-        base_url=OPENROUTER_BASE_URL,
-        default_headers=_openrouter_headers(),
-        check_embedding_ctx_length=False,
-    )
-
+log = logging.getLogger("llm_client")
 
 def get_llm(
-    model_name: str = None,  # type: ignore
-    openrouter_api_key: str = None,  # type: ignore
-    nvidia_api_key: str = None,  # type: ignore
-    reasoning_effort: str = None,  # type: ignore
+    model_name: str,
     *,
-    streaming: bool = True,
+    openrouter_api_key: Optional[str] = None,
+    nvidia_api_key: Optional[str] = None,
+    groq_api_key: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
     temperature: float = 0.0,
-    max_tokens: int = 4096,
-    timeout: int = 60,
-):
-    target_model = model_name or MODEL_NAME
-    mid = target_model.lower()
+    max_tokens: Optional[int] = None,
+) -> BaseChatModel:
+    """
+    Unified factory using init_chat_model.
+    Supports OpenRouter, Nvidia, Groq, and standard providers via BYOK.
+    """
+    if not model_name:
+        raise ValueError("Model name is required.")
 
-    # Resolve Keys
-    effective_nvidia_key = (nvidia_api_key or NVIDIA_API_KEY or "").strip() or None
-    effective_openrouter_key = (openrouter_api_key or OPENROUTER_API_KEY or "").strip() or None
+    # Determine provider and key precedence
+    provider = None
+    api_key = None
+    
+    # 1. OpenRouter (Explicit or inferred from model name)
+    if openrouter_api_key:
+        provider = "openai" # OpenRouter is OpenAI-compatible
+        api_key = openrouter_api_key
+        # Ensure model has openai/ prefix if using OpenRouter
+        if "/" not in model_name:
+            model_name = f"openai/{model_name}"
+    
+    # 2. NVIDIA
+    elif nvidia_api_key or model_name.startswith("nvidia/"):
+        provider = "nvidia" 
+        api_key = nvidia_api_key
+    
+    # 3. Groq
+    elif groq_api_key or model_name.startswith("groq/"):
+        provider = "groq"
+        api_key = groq_api_key
 
-    # Flags
-    has_nv_key = bool(effective_nvidia_key)
+    if not api_key:
+        # Strict BYOK: Fail if no key is found for the inferred provider
+        raise ValueError(f"No API key provided for model '{model_name}'.")
 
-    # --- DECISION LOGIC ---
-    use_nvidia = False
-    use_groq = False
+    # Configure kwargs
+    kwargs: Dict[str, Any] = {
+        "temperature": temperature,
+    }
+    
+    if max_tokens:
+        kwargs["max_tokens"] = max_tokens
 
-    # 1) NVIDIA priority
-    if has_nv_key:
-        if mid.startswith("nvidia/"):
-            use_nvidia = True
-        elif "moonshot" in mid:
-            use_nvidia = True
-        elif "gpt-oss" in mid:
-            use_nvidia = True
-        elif "deepseek" in mid and "r1" in mid:
-            use_nvidia = True
-        elif "llama" in mid and "nvidia" in mid:
-            use_nvidia = True
-        elif nvidia_api_key:
-            use_nvidia = True
+    # Reasoning effort mapping
+    if reasoning_effort and reasoning_effort.lower() not in ("none", "default"):
+        kwargs["reasoning_effort"] = reasoning_effort
 
-    # 2) Groq if not NVIDIA
-    if not use_nvidia:
-        if "/" not in target_model:
-            use_groq = True
-        elif target_model.startswith("groq/"):
-            use_groq = True
-        elif not effective_openrouter_key and GROQ_KEY_CYCLE:
-            use_groq = True
+    # Specific base URLs if needed (using OpenAI compatibility layer for OpenRouter)
+    if openrouter_api_key:
+        kwargs["base_url"] = "https://openrouter.ai/api/v1"
+        kwargs["model_provider"] = "openai" # Force OpenAI adapter for OpenRouter
 
-    # --- INSTANTIATION ---
-
-    if use_nvidia:
-        if not effective_nvidia_key:
-            raise ValueError("NVIDIA API Key required (BYOK or Server)")
-
-        model_kwargs: Dict[str, Any] = {}
-        if reasoning_effort and reasoning_effort not in ["default", "none"]:
-            model_kwargs["reasoning_effort"] = reasoning_effort
-
-        return ChatNVIDIA(
-            model=target_model,
-            api_key=effective_nvidia_key,
-            base_url=NVIDIA_BASE_URL,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            streaming=streaming,
-            model_kwargs=model_kwargs,
+    try:
+        return init_chat_model(
+            model=model_name,
+            model_provider=provider,
+            api_key=api_key,
+            **kwargs
         )
+    except Exception as e:
+        log.error(f"Failed to init model {model_name}: {e}")
+        raise
 
-    if use_groq:
-        if not GROQ_KEY_CYCLE:
-            raise ValueError("No Groq API Keys configured")
+def get_embeddings(
+    api_key: str,
+    model: str = "openai/text-embedding-3-small",
+    base_url: str = "https://openrouter.ai/api/v1"
+) -> Embeddings:
+    """
+    Unified embeddings factory using init_embeddings.
+    Defaults to OpenRouter (OpenAI-compatible).
+    """
+    if not api_key:
+        raise ValueError("API Key required for embeddings.")
 
-        current_api_key = next(GROQ_KEY_CYCLE)
-
-        r_format = None
-        r_effort = None
-        if "gpt-oss" in mid:
-            r_format = "parsed"
-            r_effort = reasoning_effort or "medium"
-        elif "qwen" in mid:
-            r_format = "parsed"
-            r_effort = reasoning_effort or "default"
-        elif "deepseek" in mid:
-            r_format = "raw"
-
-        return ChatGroq(
-            api_key=current_api_key,  # type: ignore
-            base_url=GROQ_BASE_URL,
-            model=target_model,
-            streaming=streaming,
-            temperature=temperature,
-            reasoning_format=r_format,
-            reasoning_effort=r_effort,
-        )
-
-    # 3) OpenRouter fallback
-    if not effective_openrouter_key:
-        raise ValueError("OpenRouter API Key required (Fallthrough)")
-
-    extra_body: Dict[str, Any] = {}
-    is_native_reasoning = any(x in mid for x in ["openai/o1", "openai/o3"])
-    if is_native_reasoning:
-        if reasoning_effort:
-            extra_body["reasoning_effort"] = reasoning_effort
-    else:
-        # OpenRouter supports reasoning tokens; enable when streaming UX wants it
-        extra_body["reasoning"] = {"enabled": True} if streaming else {"enabled": False}
-
-    return ChatDeepSeek(
-        model=target_model,
-        api_key=effective_openrouter_key,  # type: ignore
-        api_base=OPENROUTER_BASE_URL,
-        default_headers=_openrouter_headers(),
-        temperature=temperature,
-        streaming=streaming,
-        timeout=timeout,
-        max_retries=2,
-        extra_body=extra_body,
+    # Detect provider logic
+    provider = "openai" 
+    
+    return init_embeddings(
+        model=model,
+        provider=provider,
+        api_key=api_key,
+        base_url=base_url,
+        check_embedding_ctx_length=False
     )

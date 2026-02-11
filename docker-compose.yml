@@ -41,13 +41,24 @@ services:
     build:
       context: .
     container_name: hfcl_agent
-    command: ["uvicorn", "src.main_agent:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: [
+      "gunicorn", "src.main_agent:app",
+      "--config", "gunicorn.conf.py",
+      "--bind", "0.0.0.0:8000",
+      "--workers", "2",
+      "--worker-class", "uvicorn.workers.UvicornWorker",
+      "--timeout", "0",
+      "--access-logfile", "-",
+      "--error-logfile", "-",
+      "--log-level", "info"
+    ]
     ports:
       - "127.0.0.1:8005:8000"
     env_file:
       - .env
     environment:
       PORT: "8000"
+      GUNICORN_WORKERS: "4"
       MCP_SERVER_URL: "http://mcp:8050/sse"
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
@@ -59,14 +70,11 @@ services:
       SHADOW_EVAL_SAMPLE_RATE: "1.0"
       SHADOW_EVAL_CAPTURE: "full"
 
-      # OpenRouter attribution (optional but recommended)
-      # Put real values in .env; these defaults are safe
       OPENROUTER_SITE_URL: "${OPENROUTER_SITE_URL}"
       OPENROUTER_APP_TITLE: "${OPENROUTER_APP_TITLE}"
 
-      # NBFC router (GLM vs embeddings)
       NBFC_ROUTER_ENABLED: "true"
-      NBFC_ROUTER_MODE: "hybrid"            # embeddings|llm|hybrid|compare
+      NBFC_ROUTER_MODE: "hybrid"
       NBFC_ROUTER_CHAT_MODEL: "z-ai/glm-4.7"
       NBFC_ROUTER_EMBED_MODEL: "openai/text-embedding-3-small"
       NBFC_ROUTER_CACHE_DIR: ".cache_nbfc_router"

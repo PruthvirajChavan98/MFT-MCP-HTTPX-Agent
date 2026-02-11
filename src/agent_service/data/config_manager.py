@@ -10,12 +10,12 @@ class ConfigManager:
     async def set_config(
         self, 
         session_id: str, 
-        system_prompt: str = None, # type: ignore
-        model_name: str = None, # type: ignore
-        openrouter_api_key: str = None, # type: ignore
-        nvidia_api_key: Optional[str] = None,  # type: ignore
-        reasoning_effort: str = None # type: ignore
-        ): # type: ignore
+        system_prompt: Optional[str] = None,
+        model_name: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
+        nvidia_api_key: Optional[str] = None,
+        reasoning_effort: Optional[str] = None
+    ) -> None:
         """Saves configuration to Redis hash."""
         key = f"agent:config:{session_id}"
         data = {}

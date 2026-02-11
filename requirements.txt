@@ -12,4 +12,6 @@ fastapi
 strawberry-graphql
 redis
 pdfplumber
+gunicorn
+uvicorn[standard]
 https://github.com/toon-format/toon-python.git
