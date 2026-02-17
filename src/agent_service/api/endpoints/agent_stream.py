@@ -5,14 +5,17 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from sse_starlette.sse import EventSourceResponse
 
 from src.agent_service.core.cost import calculate_run_cost_detailed
 from src.agent_service.core.rate_limiter_manager import (
     enforce_rate_limit,
     get_rate_limiter_manager,
+)
+from src.agent_service.core.recursive_rag_graph import (
+    build_recursive_rag_graph,
+    initial_recursive_rag_state,
 )
 from src.agent_service.core.resource_resolver import resource_resolver
 from src.agent_service.core.schemas import AgentRequest
@@ -38,24 +41,37 @@ def extract_reasoning_tokens(usage_metadata: Any) -> int:
     """
     reasoning_tokens = 0
 
-    # LangChain standard: output_token_details.reasoning
     if hasattr(usage_metadata, "output_token_details"):
         details = getattr(usage_metadata, "output_token_details", {})
         if isinstance(details, dict):
             reasoning_tokens = details.get("reasoning", 0)
 
-    # Direct reasoning_tokens field (Groq/OpenRouter)
     if hasattr(usage_metadata, "reasoning_tokens"):
         reasoning_tokens = getattr(usage_metadata, "reasoning_tokens", 0)
     elif isinstance(usage_metadata, dict):
         reasoning_tokens = usage_metadata.get("reasoning_tokens", 0)
 
-        # Check nested output_token_details
         if not reasoning_tokens:
             output_details = usage_metadata.get("output_token_details", {})
             reasoning_tokens = output_details.get("reasoning", 0)
 
     return reasoning_tokens
+
+
+def _message_content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if text:
+                    parts.append(str(text))
+        return "".join(parts).strip()
+    return str(content) if content is not None else ""
 
 
 @router.post("/stream")
@@ -70,30 +86,24 @@ async def stream_agent(request: AgentRequest, http_request: Request):
     - Returns 429 Too Many Requests if limit exceeded
     """
     try:
-        # Rate limiting (first line of defense)
         manager = get_rate_limiter_manager()
         limiter = await manager.get_agent_stream_limiter()
 
-        # Use session ID as identifier for fair per-session limiting
         sid = session_utils.validate_session_id(request.session_id)
         identifier = f"session:{sid}"
 
         await enforce_rate_limit(http_request, limiter, identifier)
 
-        # Resolve all resources
         resources = await resource_resolver.resolve_agent_resources(sid, request)
 
-        # Start router classification in background
         router_task = asyncio.create_task(
             nbfc_router_service.classify(
                 request.question, openrouter_api_key=resources.openrouter_api_key
             )
         )
 
-        # Get app_id for shadow eval
         app_id = await session_utils.get_app_id_for_session(sid)
 
-        # Initialize shadow eval collector
         collector = ShadowEvalCollector(
             session_id=sid,
             question=request.question,
@@ -105,7 +115,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
         )
         collector.case_id = app_id
 
-        # KB-first guardrail (cached response)
         kb_payload = await kb_first_payload(request.question, resources.tools)
         if kb_payload:
 
@@ -115,17 +124,14 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     tool_input = kb_payload.get("input", {})
                     output = str(kb_payload.get("output", ""))
 
-                    # Track in collector
                     collector.on_tool_start(tool_name, tool_input)
                     collector.on_tool_end(tool_name, output, tool_call_id="kb_first")
 
-                    # Stream events
                     yield sse_formatter.token_event(output)
 
                     collector.on_token(output)
                     collector.on_done(final_output=output, error=None)
 
-                    # No cost for cached KB response
                     yield sse_formatter.cost_event(
                         total_cost=0.0,
                         usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
@@ -134,7 +140,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         cached=True,
                     )
 
-                    # Track zero-cost KB hit
                     tracker = get_session_cost_tracker()
                     await tracker.add_cost(
                         session_id=sid,
@@ -155,7 +160,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         r_out = await router_task
                         if r_out:
                             collector.set_router_outcome(r_out)
-                    except:
+                    except Exception:
                         pass
                     asyncio.create_task(
                         maybe_shadow_eval_commit(
@@ -170,112 +175,109 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
             return EventSourceResponse(kb_event_generator(), headers={"Cache-Control": "no-cache"})
 
-        # Validate tools
         if not resources.tools:
             raise HTTPException(status_code=500, detail="No tools loaded")
 
-        # Get checkpointer
         from src.main_agent import app
 
         checkpointer = app.state.checkpointer
-
-        # Create agent
-        agent = create_agent(
-            resources.model,
-            resources.tools,
+        graph = build_recursive_rag_graph(
+            model=resources.model,
+            tools=resources.tools,
             system_prompt=resources.system_prompt,
             checkpointer=checkpointer,
         )
 
-        # Main streaming event generator
         async def event_generator():
             state = StreamingState()
             router_sent = False
+            pending_tool_calls: dict[str, tuple[str, Any]] = {}
+
+            seen_messages = 0
+            final_messages: list[Any] = []
+            final_output = ""
 
             try:
-                # Stream agent events immediately (don't wait for router)
-                async for event in agent.astream_events(
-                    {"messages": [HumanMessage(content=request.question)]},
+                async for snapshot in graph.astream(
+                    initial_recursive_rag_state(request.question),
                     {"configurable": {"thread_id": sid}},
-                    version="v2",
+                    stream_mode="values",
                 ):
-                    # Check if router finished and hasn't been sent yet
+                    messages = snapshot.get("messages", [])
+                    if not isinstance(messages, list):
+                        continue
+
                     if not router_sent and router_task.done():
                         try:
                             router_out = router_task.result()
                             if router_out:
                                 collector.set_router_outcome(router_out)
                                 yield sse_formatter.router_event(router_out)
-                                router_sent = True
+                            router_sent = True
                         except Exception as e:
                             log.warning(f"Router classification failed: {e}")
                             router_sent = True
 
-                    kind = event["event"]
-                    data = event["data"]
+                    new_messages = messages[seen_messages:]
+                    seen_messages = len(messages)
+                    final_messages = messages
 
-                    # Token streaming
-                    if kind == "on_chat_model_stream":
-                        chunk = data["chunk"]
+                    for msg in new_messages:
+                        if isinstance(msg, AIMessage):
+                            tool_calls = getattr(msg, "tool_calls", []) or []
 
-                        # Reasoning tokens streaming (Groq parsed format)
-                        if hasattr(chunk, "additional_kwargs"):
-                            r_content = chunk.additional_kwargs.get("reasoning_content")
-                            if r_content:
-                                collector.on_reasoning(str(r_content))
-                                yield sse_formatter.reasoning_token_event(str(r_content))
+                            for tool_call in tool_calls:
+                                t_name = tool_call.get("name", "tool")
+                                t_input = tool_call.get("args", {})
+                                t_id = tool_call.get("id") or t_name
+                                pending_tool_calls[t_id] = (t_name, t_input)
+                                collector.on_tool_start(t_name, t_input)
+                                yield sse_formatter.tool_start_event(t_name, t_input)
 
-                        # Regular tokens
-                        if chunk.content:
-                            txt = str(chunk.content)
-                            collector.on_token(txt)
-                            yield sse_formatter.token_event(txt)
+                            text = _message_content_to_text(getattr(msg, "content", ""))
+                            if text:
+                                final_output += text
+                                collector.on_token(text)
+                                yield sse_formatter.token_event(text)
 
-                    # Tool execution start
-                    elif kind == "on_tool_start":
-                        t_name = event["name"]
-                        t_input = data.get("input")
-                        collector.on_tool_start(t_name, t_input)
-                        yield sse_formatter.tool_start_event(t_name, t_input)
+                            usage_meta = getattr(msg, "usage_metadata", None)
+                            if usage_meta:
+                                if hasattr(usage_meta, "__dict__"):
+                                    usage = dict(usage_meta.__dict__)
+                                elif isinstance(usage_meta, dict):
+                                    usage = dict(usage_meta)
+                                else:
+                                    usage = {}
 
-                    # Tool execution end
-                    elif kind == "on_tool_end":
-                        t_name = event["name"]
-                        raw_output = data.get("output")
-                        output = streaming_utils.extract_tool_output(raw_output)
-                        run_id = event.get("run_id")
-                        collector.on_tool_end(t_name, output, tool_call_id=run_id)
-                        yield sse_formatter.tool_end_event(t_name, output, run_id)
+                                reasoning = extract_reasoning_tokens(usage_meta)
+                                if reasoning > 0:
+                                    usage["reasoning_tokens"] = reasoning
 
-                    # Cost tracking with reasoning tokens
-                    elif kind == "on_chat_model_end":
-                        out_msg = data.get("output")
-                        if hasattr(out_msg, "usage_metadata") and out_msg.usage_metadata:
-                            usage_meta = out_msg.usage_metadata
+                                cost, _ = await calculate_run_cost_detailed(
+                                    resources.model_name, usage, resources.provider
+                                )
+                                state.total_cost += cost
+                                streaming_utils.accumulate_usage(state, usage)
 
-                            # Convert to dict for manipulation
-                            if hasattr(usage_meta, "__dict__"):
-                                usage = dict(usage_meta.__dict__)
-                            elif isinstance(usage_meta, dict):
-                                usage = dict(usage_meta)
-                            else:
-                                usage = {}
-
-                            # Extract reasoning tokens from multiple sources
-                            reasoning = extract_reasoning_tokens(usage_meta)
-                            if reasoning > 0:
-                                usage["reasoning_tokens"] = reasoning
-
-                            # Calculate detailed cost
-                            cost, breakdown = await calculate_run_cost_detailed(
-                                resources.model_name, usage, resources.provider
+                        elif isinstance(msg, ToolMessage):
+                            t_id = getattr(msg, "tool_call_id", None) or ""
+                            t_name, t_input = pending_tool_calls.get(
+                                t_id, (getattr(msg, "name", None) or "tool", {})
                             )
-                            state.total_cost += cost
+                            output = streaming_utils.extract_tool_output(msg)
+                            collector.on_tool_end(t_name, output, tool_call_id=t_id)
+                            yield sse_formatter.tool_end_event(t_name, output, t_id)
 
-                            # Accumulate usage
-                            streaming_utils.accumulate_usage(state, usage)
+                if not final_output:
+                    for msg in reversed(final_messages):
+                        if isinstance(msg, AIMessage):
+                            text = _message_content_to_text(getattr(msg, "content", ""))
+                            if text:
+                                final_output = text
+                                collector.on_token(text)
+                                yield sse_formatter.token_event(text)
+                            break
 
-                # After agent streaming completes, ensure router result is captured
                 if not router_sent:
                     try:
                         router_out = await router_task
@@ -285,10 +287,8 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     except Exception as e:
                         log.warning(f"Router classification failed: {e}")
 
-                # Mark completion
-                collector.on_done(final_output="", error=None)
+                collector.on_done(final_output=final_output, error=None)
 
-                # Final cost event with reasoning tokens
                 yield sse_formatter.cost_event(
                     total_cost=state.total_cost,
                     usage=state.cumulative_usage,
@@ -296,7 +296,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     provider=resources.provider,
                 )
 
-                # Track session cost in Redis
                 tracker = get_session_cost_tracker()
                 await tracker.add_cost(
                     session_id=sid,
@@ -309,7 +308,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
                 yield sse_formatter.done_event()
 
-                # Commit shadow eval with all keys + model info
                 asyncio.create_task(
                     maybe_shadow_eval_commit(
                         collector,
@@ -327,7 +325,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                 collector.on_done(final_output="", error=err)
                 yield sse_formatter.error_event(err)
 
-                # Pass all keys even on error
                 asyncio.create_task(
                     maybe_shadow_eval_commit(
                         collector,
@@ -342,7 +339,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
         return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         log.error(f"Stream setup error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
