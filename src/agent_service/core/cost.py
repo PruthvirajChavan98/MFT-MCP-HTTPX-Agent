@@ -25,13 +25,16 @@ async def calculate_run_cost_detailed(
     try:
         target = model_id.strip()
         
+        # Extract token counts (support multiple formats)
+        prompt_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens)
+        
+        # ✅ Reasoning tokens (o1/o3/gpt-oss models)
+        reasoning_tokens = usage.get("reasoning_tokens", 0)
+        
         # FREE TIER: Groq and Nvidia
         if provider in ("groq", "nvidia"):
-            prompt_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
-            completion_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
-            total_tokens = usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens)
-            reasoning_tokens = usage.get("reasoning_tokens", 0)
-            
             breakdown = {
                 "prompt_cost": 0.0,
                 "completion_cost": 0.0,
@@ -46,7 +49,7 @@ async def calculate_run_cost_detailed(
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
-                    "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,
+                    "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,  # ✅ Include
                     "cached_tokens": None,
                 },
                 "pricing_rates": {
@@ -63,11 +66,6 @@ async def calculate_run_cost_detailed(
         
         if not pricing:
             log.warning(f"No pricing found for {target}, assuming free")
-            # Fallback to free if pricing unavailable
-            prompt_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
-            completion_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
-            total_tokens = usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens)
-            
             return 0.0, {
                 "prompt_cost": 0.0,
                 "completion_cost": 0.0,
@@ -81,18 +79,10 @@ async def calculate_run_cost_detailed(
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
+                    "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,  # ✅ Include
                 }
             }
 
-        # Extract token counts (support multiple formats)
-        prompt_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens)
-        
-        # Advanced tokens (optional)
-        reasoning_tokens = usage.get("reasoning_tokens", 0)
-        cached_tokens = usage.get("cache_read_input_tokens", 0) or usage.get("cached_tokens", 0)
-        
         # Pricing rates (per token)
         p_rate = float(pricing.get("prompt", 0))
         c_rate = float(pricing.get("completion", 0))
@@ -104,7 +94,8 @@ async def calculate_run_cost_detailed(
         # Reasoning cost (same as completion for most models)
         reasoning_cost = reasoning_tokens * c_rate if reasoning_tokens > 0 else None
         
-        # Cached tokens are typically cheaper (50% discount for most providers)
+        # Cached tokens
+        cached_tokens = usage.get("cache_read_input_tokens", 0) or usage.get("cached_tokens", 0)
         cached_cost = cached_tokens * (p_rate * 0.5) if cached_tokens > 0 else None
         
         total_cost = prompt_cost + completion_cost
@@ -127,7 +118,7 @@ async def calculate_run_cost_detailed(
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
                 "total_tokens": total_tokens,
-                "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,
+                "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,  # ✅ Include
                 "cached_tokens": cached_tokens if cached_tokens > 0 else None,
             },
             "pricing_rates": {
@@ -143,7 +134,6 @@ async def calculate_run_cost_detailed(
     except Exception as e:
         log.error(f"Failed to calculate detailed cost for {model_id}: {e}")
         return 0.0, {}
-
 
 async def calculate_run_cost(model_id: str, usage: Dict[str, int]) -> float:
     """

@@ -50,7 +50,7 @@ async def update_faqs_json_stream(
             return EventSourceResponse(empty_gen())
         
         return EventSourceResponse(
-            kb_service.ingest_faq_batch_gen(items, groq_key=x_groq_key, openrouter_key=x_openrouter_key),
+            kb_service.ingest_faq_batch_gen(items, groq_key=x_groq_key or "", openrouter_key=x_openrouter_key or ""),
             headers={"Cache-Control": "no-cache"}
         )
     except Exception as e:
@@ -63,7 +63,7 @@ async def update_faqs_pdf_stream(
     x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"),
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
@@ -83,7 +83,7 @@ async def update_faqs_pdf_stream(
             
             yield {"event": "progress", "data": json.dumps({"percent": 5, "message": f"Found {len(parsed_data)} pairs. Starting ingestion..."})}
             
-            async for event in kb_service.ingest_faq_batch_gen(parsed_data, groq_key=x_groq_key, openrouter_key=x_openrouter_key):
+            async for event in kb_service.ingest_faq_batch_gen(parsed_data, groq_key=x_groq_key or "", openrouter_key=x_openrouter_key or ""):
                 yield event
         except Exception as e:
             yield {"event": "error", "data": str(e)}
@@ -109,9 +109,9 @@ async def edit_faq(
 ):
     result = await kb_service.edit_faq(
         original_question=request.original_question,
-        new_question=request.new_question,
-        new_answer=request.new_answer,
-        openrouter_key=x_openrouter_key,
+        new_question=request.new_question or "",
+        new_answer=request.new_answer or "",
+        openrouter_key=x_openrouter_key or "",
     )
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
@@ -140,7 +140,7 @@ async def semantic_search_endpoint(
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
 ):
     try:
-        results = await kb_service.semantic_search(request.query, request.limit, x_openrouter_key)
+        results = await kb_service.semantic_search(request.query, request.limit, x_openrouter_key or "")
         return {"status": "success", "results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -151,7 +151,7 @@ async def semantic_delete_endpoint(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"), 
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
 ):
-    result = await kb_service.delete_faq_by_vector(request.query, request.threshold, x_openrouter_key)
+    result = await kb_service.delete_faq_by_vector(request.query, request.threshold, x_openrouter_key or "")
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
     return result

@@ -2,46 +2,62 @@ Root: /home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools
 ================================================================================
 ### PROJECT STRUCTURE
 ================================================================================
-./ [61.9kt]
+./ [72.3kt]
 ├── cloudflared/ [83t]
 │   └── config.yml [83t]
 ├── scripts/ [2.4kt]
 │   ├── ingest_faq.py [1.6kt]
 │   └── ingest_grounding.py [849t]
-├── src/ [55.5kt]
-│   ├── agent_service/ [43.3kt]
-│   │   ├── api/ [11.8kt]
+├── src/ [65.7kt]
+│   ├── agent_service/ [56.6kt]
+│   │   ├── api/ [17.5kt]
+│   │   │   ├── endpoints/ [5.7kt]
+│   │   │   │   ├── __init__.py [43t]
+│   │   │   │   ├── agent_query.py [547t]
+│   │   │   │   ├── agent_stream.py [2.2kt]
+│   │   │   │   ├── follow_up.py [687t]
+│   │   │   │   ├── health.py [66t]
+│   │   │   │   ├── models.py [143t]
+│   │   │   │   ├── router_endpoints.py [255t]
+│   │   │   │   └── sessions.py [1.7kt]
 │   │   │   ├── __init__.py
 │   │   │   ├── admin.py [1.5kt]
 │   │   │   ├── eval_ingest.py [1.9kt]
 │   │   │   ├── eval_live.py [669t]
 │   │   │   ├── eval_read.py [5.1kt]
 │   │   │   └── graphql.py [2.6kt]
-│   │   ├── core/ [2.8kt]
+│   │   ├── core/ [11.0kt]
 │   │   │   ├── __init__.py
+│   │   │   ├── app_factory.py [776t]
 │   │   │   ├── config.py [831t]
-│   │   │   ├── cost.py [321t]
+│   │   │   ├── cost.py [1.2kt]
+│   │   │   ├── graph_utils.py [291t]
 │   │   │   ├── prompts.py [121t]
-│   │   │   ├── schemas.py [684t]
-│   │   │   └── utils.py [889t]
-│   │   ├── data/ [550t]
+│   │   │   ├── resource_resolver.py [847t]
+│   │   │   ├── schemas.py [993t]
+│   │   │   ├── session_cost.py [2.6kt]
+│   │   │   ├── session_utils.py [1.1kt]
+│   │   │   ├── streaming_utils.py [1.9kt]
+│   │   │   └── utils.py [263t]
+│   │   ├── data/ [579t]
 │   │   │   ├── __init__.py
-│   │   │   └── config_manager.py [550t]
-│   │   ├── eval_store/ [3.6kt]
-│   │   │   ├── embedder.py [1.8kt]
-│   │   │   └── judge.py [1.8kt]
+│   │   │   └── config_manager.py [579t]
+│   │   ├── eval_store/ [4.0kt]
+│   │   │   ├── embedder.py [2.0kt]
+│   │   │   └── judge.py [1.9kt]
 │   │   ├── faqs/ [837t]
 │   │   │   └── pdf_parser.py [837t]
-│   │   ├── features/ [12.7kt]
+│   │   ├── features/ [11.6kt]
 │   │   │   ├── __init__.py
 │   │   │   ├── follow_up.py [2.1kt]
 │   │   │   ├── kb_first.py [549t]
-│   │   │   ├── nbfc_router.py [5.8kt]
-│   │   │   └── shadow_eval.py [4.2kt]
-│   │   ├── llm/ [3.5kt]
+│   │   │   ├── nbfc_router.py [3.4kt]
+│   │   │   ├── prototypes_nbfc.py [1.0kt]
+│   │   │   └── shadow_eval.py [4.5kt]
+│   │   ├── llm/ [3.6kt]
 │   │   │   ├── __init__.py
 │   │   │   ├── catalog.py [2.7kt]
-│   │   │   └── client.py [746t]
+│   │   │   └── client.py [912t]
 │   │   ├── router/ [3.3kt]
 │   │   │   ├── nbfc_taxonomy.py [110t]
 │   │   │   ├── prototypes_nbfc.py [455t]
@@ -65,30 +81,30 @@ Root: /home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools
 │   │   ├── session_store.py [577t]
 │   │   ├── tool_descriptions.json [1.3kt]
 │   │   └── utils.py [1.2kt]
-│   ├── main_agent.py [3.9kt]
+│   ├── main_agent.py [815t]
 │   └── main_mcp.py [20t]
 ├── tests/ [1.4kt]
 │   ├── __init__.py
 │   ├── test_agent_utils.py [481t]
 │   ├── test_mcp_utils.py [485t]
 │   └── test_session_store.py [449t]
-├── Dockerfile [191t]
-├── Makefile [472t]
+├── Dockerfile [196t]
+├── Makefile [501t]
 ├── README.md
-├── docker-compose.yml [933t]
+├── docker-compose.yml [1.2kt]
 ├── gunicorn.conf.py [235t]
 ├── pyproject.toml [380t]
-├── requirements.txt [92t]
+├── requirements.txt [93t]
 └── start.sh [177t]
 
-16 directories, 61 files
+17 directories, 76 files
 
 ================================================================================
 ### FILE CONTENTS
 ================================================================================
 
 
-===== Makefile [472 tokens] =====
+===== Makefile [501 tokens] =====
 .PHONY: help install dev test lint format clean docker-build docker-up docker-down docker-logs docker-restart deploy
 
 help:
@@ -154,9 +170,15 @@ begin:
 	$(MAKE) docker-up
 	docker compose logs agent --tail 200
 
+down-up:
+	rm -f uv.lock && uv sync
+	docker compose down
+	docker compose build
+	docker compose up -d
 
 
-===== Dockerfile [191 tokens] =====
+
+===== Dockerfile [196 tokens] =====
 FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
@@ -178,7 +200,7 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Copy application
+# ✅ Copy everything (simple fix)
 COPY . .
 
 # Install project
@@ -191,19 +213,29 @@ EXPOSE 8000
 CMD ["python", "src/main_mcp.py"]
 
 
-===== docker-compose.yml [933 tokens] =====
+===== docker-compose.yml [1,193 tokens] =====
 services:
   redis:
     image: redis/redis-stack-server:latest
     container_name: hfcl_redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - redis_data:/data
+    networks:
+      - hfcl_network
 
   neo4j:
     image: neo4j:5.26.0
     container_name: hfcl_neo4j
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
       NEO4J_AUTH: neo4j/password
       NEO4J_PLUGINS: '["apoc"]'
@@ -214,26 +246,41 @@ services:
     volumes:
       - ./neo4j_data:/data
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   mcp:
     build:
       context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - hfcl_mcp:latest
+    image: hfcl_mcp:latest
     container_name: hfcl_mcp
     command: ["python", "src/main_mcp.py"]
+    ports:
+      - "127.0.0.1:8050:8050"
     env_file:
       - .env
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   agent:
     build:
       context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - hfcl_agent:latest
+    image: hfcl_agent:latest
     container_name: hfcl_agent
     command: [
       "gunicorn", "src.main_agent:app",
@@ -261,8 +308,8 @@ services:
       NEO4J_PASSWORD: "password"
 
       SHADOW_EVAL_ENABLED: "1"
-      SHADOW_EVAL_SAMPLE_RATE: "1.0"
-      SHADOW_EVAL_CAPTURE: "full"
+      SHADOW_EVAL_SAMPLE_RATE: "0.1"
+      SHADOW_EVAL_CAPTURE: "light"
 
       OPENROUTER_SITE_URL: "${OPENROUTER_SITE_URL}"
       OPENROUTER_APP_TITLE: "${OPENROUTER_APP_TITLE}"
@@ -279,6 +326,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -292,10 +341,16 @@ services:
       - agent
       - mcp
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   router_worker:
     build:
       context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - hfcl_router_worker:latest
+    image: hfcl_router_worker:latest
     container_name: hfcl_router_worker
     command: ["python", "-m", "src.agent_service.router.worker"]
     env_file:
@@ -309,6 +364,15 @@ services:
       - redis
       - neo4j
     restart: unless-stopped
+    networks:
+      - hfcl_network
+
+networks:
+  hfcl_network:
+    driver: bridge
+
+volumes:
+  redis_data:
 
 
 ===== pyproject.toml [380 tokens] =====
@@ -404,8 +468,8 @@ if [ -f .env ]; then
 fi
 
 # Default values
-PORT=${PORT:-8000}
-WORKERS=${GUNICORN_WORKERS:-4}
+PORT=${PORT:-8015}
+WORKERS=${GUNICORN_WORKERS:-2}
 
 echo "Starting HFCL Agent with Gunicorn..."
 echo "Port: $PORT"
@@ -423,7 +487,7 @@ exec gunicorn src.main_agent:app \
 
 
 
-===== requirements.txt [92 tokens] =====
+===== requirements.txt [93 tokens] =====
 langchain-mcp-adapters
 fastmcp
 langchain
@@ -441,6 +505,7 @@ pdfplumber
 gunicorn
 uvicorn[standard]
 https://github.com/toon-format/toon-python.git
+
 
 
 ===== README.md [0 tokens] =====
@@ -935,89 +1000,89 @@ def test_keep_only_last_n_messages():
 
 
 
-===== src/main_agent.py [3,911 tokens] =====
-import sys
-import json
-import asyncio
+===== src/main_agent.py [815 tokens] =====
+# src/main_agent.py
+
+"""
+HFCL Agent Service - Main Application Entry Point
+Production-grade AI agent API with LangGraph integration.
+"""
 import logging
-from typing import Optional
 from contextlib import asynccontextmanager
+import asyncio
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sse_starlette.sse import EventSourceResponse
-
-# LangChain V1 / LangGraph Imports
-from langchain_core.messages import HumanMessage
-from langchain.agents import create_agent
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from strawberry.fastapi import GraphQLRouter
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
-# Enterprise Modules
-from src.agent_service.core.prompts import SYSTEM_PROMPT
-from src.agent_service.core.config import REDIS_URL, PORT, MODEL_NAME
-from src.agent_service.core.schemas import (
-    AgentRequest, GroqConfig, OpenRouterConfig, NvidiaConfig, RouterClassifyRequest
-)
-from src.agent_service.core.utils import valid_session_id, _extract_tool_output
-from src.agent_service.core.cost import calculate_run_cost
-from src.agent_service.llm.client import get_llm
+from src.agent_service.core.config import REDIS_URL, PORT
+from src.agent_service.core.session_utils import close_redis
 from src.agent_service.tools.mcp_manager import mcp_manager
 from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.catalog import model_service
 
-# Routers
+# Import existing routers
 from src.agent_service.api.graphql import schema
 from src.agent_service.api.eval_ingest import router as eval_router
 from src.agent_service.api.eval_read import router as eval_read_router
 from src.agent_service.api.admin import router as admin_router
 
-from src.agent_service.features.follow_up import follow_up_service
-from src.agent_service.features.kb_first import kb_first_payload
-from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_shadow_eval_commit
-from src.agent_service.features.nbfc_router import nbfc_router_service
+# Import new endpoint routers
+from src.agent_service.api.endpoints.health import router as health_router
+from src.agent_service.api.endpoints.models import router as models_router
+from src.agent_service.api.endpoints.sessions import router as sessions_router
+from src.agent_service.api.endpoints.router_endpoints import router as router_router
+from src.agent_service.api.endpoints.agent_query import router as query_router
+from src.agent_service.api.endpoints.agent_stream import router as stream_router
+from src.agent_service.api.endpoints.follow_up import router as follow_up_router
 
-# Setup Standard Logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+)
 log = logging.getLogger("main_agent")
 
-CHECKPOINTER: Optional[AsyncRedisSaver] = None
-
-async def _get_app_id_for_session(session_id: str) -> Optional[str]:
-    try:
-        from redis.asyncio import Redis
-        client = Redis.from_url(REDIS_URL, decode_responses=True)
-        data_str = await client.get(session_id)
-        await client.close()
-        if data_str:
-            data = json.loads(str(data_str))
-            return data.get("app_id")
-    except Exception:
-        pass
-    return None
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    global CHECKPOINTER
-    log.info(f"STARTUP: Redis Checkpointer at {REDIS_URL}")
-
+async def lifespan(app_instance: FastAPI):
+    """Application lifespan manager."""
+    log.info(f"🚀 STARTUP: Initializing services...")
+    log.info(f"📦 Redis Checkpointer: {REDIS_URL}")
+    
     cache_task = asyncio.create_task(model_service.start_background_loop())
-
+    
     try:
         async with AsyncRedisSaver.from_conn_string(REDIS_URL) as checkpointer:
-            CHECKPOINTER = checkpointer
+            app_instance.state.checkpointer = checkpointer
+            
             await mcp_manager.initialize()
+            log.info("✅ MCP Manager initialized")
+            
             yield
-
+            
+            log.info("🛑 SHUTDOWN: Cleaning up resources...")
             cache_task.cancel()
             await mcp_manager.shutdown()
             await config_manager.close()
-            log.info("SHUTDOWN: Resources cleared")
+            await close_redis()
+            log.info("✅ Shutdown complete")
+            
     except Exception as e:
-        log.critical(f"CRITICAL STARTUP FAILURE: {e}")
+        log.critical(f"❌ CRITICAL STARTUP FAILURE: {e}")
         raise e
 
-app = FastAPI(lifespan=lifespan)
+
+# Create FastAPI app
+app = FastAPI(
+    title="HFCL Agent Service",
+    description="Production-grade AI Agent API with LangGraph",
+    version="2.0.0",
+    lifespan=lifespan
+)
+
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1026,378 +1091,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount GraphQL
 graphql_app = GraphQLRouter(schema)
-app.include_router(graphql_app, prefix="/graphql")
-app.include_router(eval_router, prefix="/eval")
-app.include_router(eval_read_router, prefix="/eval")
-app.include_router(admin_router) # Includes /agent/admin/* and /agent/all-follow-ups
+app.include_router(graphql_app, prefix="/graphql", tags=["graphql"])
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "agent"}
+# Mount evaluation endpoints
+app.include_router(eval_router, prefix="/eval", tags=["evaluation"])
+app.include_router(eval_read_router, prefix="/eval", tags=["evaluation"])
 
-@app.get("/agent/models")
-async def list_models():
-    try:
-        data = await model_service.get_cached_data()
-        total_models = sum(len(cat["models"]) for cat in data)
-        return {"count": total_models, "categories": data}
-    except Exception as e:
-        log.error(f"Model Fetch Error: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+# Mount admin endpoints
+app.include_router(admin_router, tags=["admin"])
 
-@app.get("/agent/sessions")
-async def list_active_sessions():
-    try:
-        sessions = await config_manager.list_sessions()
-        return {"count": len(sessions), "sessions": sessions}
-    except Exception as e:
-        log.error(f"List Sessions Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Mount new modular endpoints
+app.include_router(health_router)
+app.include_router(models_router)
+app.include_router(sessions_router)
+app.include_router(router_router)
+app.include_router(query_router)
+app.include_router(stream_router)
+app.include_router(follow_up_router)
 
-@app.get("/agent/verify/{session_id}")
-async def verify_session(session_id: str):
-    sid = valid_session_id(session_id)
-    exists = await config_manager.session_exists(sid)
-    if not exists:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"session_id": sid, "exists": True}
+log.info("✅ All routers mounted")
 
-@app.get("/agent/config/{session_id}")
-async def get_session_config(session_id: str):
-    sid = valid_session_id(session_id)
-    stored = await config_manager.get_config(sid)
-    has_or_key = bool(stored.get("openrouter_api_key"))
-    has_nv_key = bool(stored.get("nvidia_api_key"))
-    return {
-        "session_id": sid,
-        "system_prompt": stored.get("system_prompt") or SYSTEM_PROMPT.strip(),
-        "model_name": stored.get("model_name") or MODEL_NAME,
-        "reasoning_effort": stored.get("reasoning_effort"),
-        "has_custom_key": has_or_key,
-        "has_openrouter_key": has_or_key,
-        "has_nvidia_key": has_nv_key,
-        "is_customized": bool(stored),
-    }
-
-@app.post("/agent/config/groq")
-async def config_groq_session(config: GroqConfig):
-    sid = valid_session_id(config.session_id)
-    await config_manager.set_config(
-        sid,
-        system_prompt=config.system_prompt,
-        model_name=config.model_name,
-        reasoning_effort=config.reasoning_effort,
-        openrouter_api_key=config.openrouter_api_key,
-        nvidia_api_key=config.nvidia_api_key,
-    )
-    return {"status": "updated", "provider": "groq", "session_id": sid}
-
-@app.post("/agent/config/openrouter")
-async def config_openrouter_session(config: OpenRouterConfig):
-    sid = valid_session_id(config.session_id)
-    await config_manager.set_config(
-        sid,
-        system_prompt=config.system_prompt,
-        model_name=config.model_name,
-        reasoning_effort=config.reasoning_effort,
-        openrouter_api_key=config.openrouter_api_key,
-        nvidia_api_key=config.nvidia_api_key,
-    )
-    return {"status": "updated", "provider": "openrouter", "session_id": sid}
-
-@app.post("/agent/config/nvidia")
-async def config_nvidia_session(config: NvidiaConfig):
-    sid = valid_session_id(config.session_id)
-    await config_manager.set_config(
-        sid,
-        system_prompt=config.system_prompt,
-        model_name=config.model_name,
-        reasoning_effort=config.reasoning_effort,
-        openrouter_api_key=config.openrouter_api_key,
-        nvidia_api_key=config.nvidia_api_key,
-    )
-    return {"status": "updated", "provider": "nvidia", "session_id": sid}
-
-async def _resolve_agent_resources(sid: str, request: AgentRequest):
-    saved_config = await config_manager.get_config(sid)
-    
-    model_name = request.model_name or saved_config.get("model_name") or MODEL_NAME
-    sys_prompt = request.system_prompt or saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
-    reasoning_effort = request.reasoning_effort or saved_config.get("reasoning_effort")
-    
-    or_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
-    nv_key = request.nvidia_api_key or saved_config.get("nvidia_api_key")
-    
-    # Unified Factory Init (LangChain V1)
-    model = get_llm(
-        model_name=model_name,
-        openrouter_api_key=or_key,
-        nvidia_api_key=nv_key,
-        reasoning_effort=reasoning_effort
-    )
-    
-    tools = mcp_manager.rebuild_tools_for_user(sid, openrouter_api_key=or_key)
-    
-    # Return keys and model_name for downstream usage (Cost/FollowUp)
-    return model, tools, sys_prompt, or_key, model_name
-
-def _infer_provider_from_model_name(model_name: str) -> str:
-    mn = (model_name or "").strip().lower()
-    if mn.startswith("nvidia/"): return "nvidia"
-    if mn.startswith("groq/"): return "groq"
-    if "/" in mn: return "openrouter"
-    return "groq"
-
-@app.post("/agent/router/classify")
-async def router_classify(req: RouterClassifyRequest):
-    try:
-        out = await nbfc_router_service.classify(
-            req.text,
-            openrouter_api_key=req.openrouter_api_key,
-            mode=req.mode,
-        )
-        return out
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/agent/router/compare")
-async def router_compare(req: RouterClassifyRequest):
-    try:
-        out = await nbfc_router_service.compare(req.text, openrouter_api_key=req.openrouter_api_key)
-        return out
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/agent/query")
-async def query_agent(request: AgentRequest):
-    try:
-        sid = valid_session_id(request.session_id)
-        model, tools, sys_prompt, or_key, _ = await _resolve_agent_resources(sid, request)
-
-        router_out = None
-        try:
-            router_out = await nbfc_router_service.classify(request.question, openrouter_api_key=or_key)
-        except Exception:
-            router_out = None
-
-        kb_payload = await kb_first_payload(request.question, tools)
-        if kb_payload:
-            return {"response": kb_payload["output"], "kb_first": True, "router": router_out}
-
-        if not tools:
-            raise HTTPException(status_code=500, detail="No tools loaded")
-
-        # LangGraph V1 Agent
-        agent = create_agent(model, tools, system_prompt=sys_prompt, checkpointer=CHECKPOINTER)
-        inputs = {"messages": [HumanMessage(request.question)]}
-        
-        resp = await agent.ainvoke(inputs, {"configurable": {"thread_id": sid}})
-        return {"response": resp, "router": router_out}
-    except Exception as e:
-        log.error(f"Query Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/agent/stream")
-async def stream_agent(request: AgentRequest):
-    try:
-        sid = valid_session_id(request.session_id)
-        model, tools, sys_prompt, or_key, model_id = await _resolve_agent_resources(sid, request)
-        
-        provider = _infer_provider_from_model_name(model_id)
-        router_task = asyncio.create_task(nbfc_router_service.classify(request.question, openrouter_api_key=or_key))
-
-        # Capture State for Eval
-        app_id = await _get_app_id_for_session(sid)
-        
-        collector = ShadowEvalCollector(
-            session_id=sid,
-            question=request.question,
-            provider=provider,
-            model=model_id,
-            endpoint="/agent/stream",
-            system_prompt=sys_prompt,
-            tool_definitions="" # Tools are passed to model, collector infers from events
-        )
-        collector.case_id = app_id
-
-        # KB Guardrail
-        kb_payload = await kb_first_payload(request.question, tools)
-        if kb_payload:
-            async def kb_event_generator():
-                try:
-                    tool_name = kb_payload.get("tool", "kb")
-                    tool_input = kb_payload.get("input", {})
-                    output = str(kb_payload.get("output", ""))
-                    
-                    collector.on_tool_start(tool_name, tool_input)
-                    collector.on_tool_end(tool_name, output, tool_call_id="kb_first")
-                    
-                    yield {"event": "tool_start", "data": json.dumps({"tool": tool_name, "input": tool_input}, ensure_ascii=False)}
-                    yield {"event": "tool_end", "data": json.dumps({"tool": tool_name, "tool_call_id": "kb_first", "output": output}, ensure_ascii=False)}
-                    
-                    yield {"event": "token", "data": output}
-                    collector.on_token(output)
-                    
-                    collector.on_done(final_output=output, error=None)
-                    yield {"event": "done", "data": "[DONE]"}
-                except Exception as e:
-                    collector.on_done(final_output="", error=str(e))
-                    yield {"event": "error", "data": str(e)}
-                finally:
-                    try:
-                        r_out = await router_task
-                        if r_out: collector.set_router_outcome(r_out)
-                    except Exception: pass
-                    asyncio.create_task(maybe_shadow_eval_commit(collector))
-
-            return EventSourceResponse(kb_event_generator(), headers={"Cache-Control": "no-cache"})
-
-        if not tools:
-            raise HTTPException(status_code=500, detail="No tools loaded")
-
-        # LangGraph Agent
-        agent = create_agent(model, tools, system_prompt=sys_prompt, checkpointer=CHECKPOINTER)
-        
-        async def event_generator():
-            total_cost = 0.0
-            total_tokens = 0
-            
-            try:
-                # Resolve Router first to emit event
-                try:
-                    router_out = await router_task
-                    if router_out:
-                        collector.set_router_outcome(router_out)
-                        yield {"event": "router", "data": json.dumps(router_out, ensure_ascii=False)}
-                except Exception:
-                    pass
-
-                async for event in agent.astream_events(
-                    {"messages": [HumanMessage(content=request.question)]},
-                    {"configurable": {"thread_id": sid}},
-                    version="v2"
-                ):
-                    kind = event["event"]
-                    data = event["data"]
-                    
-                    if kind == "on_chat_model_stream":
-                        chunk = data["chunk"]
-                        # Extract reasoning if available (DeepSeek/O1)
-                        if hasattr(chunk, "additional_kwargs"):
-                            r_content = chunk.additional_kwargs.get("reasoning_content")
-                            if r_content:
-                                yield {"event": "reasoning_token", "data": str(r_content)}
-                        
-                        if chunk.content:
-                            txt = str(chunk.content)
-                            collector.on_token(txt)
-                            yield {"event": "token", "data": txt}
-                            
-                    elif kind == "on_tool_start":
-                        t_name = event["name"]
-                        t_input = data.get("input")
-                        collector.on_tool_start(t_name, t_input)
-                        yield {"event": "tool_start", "data": json.dumps({"tool": t_name, "input": t_input}, ensure_ascii=False)}
-                        
-                    elif kind == "on_tool_end":
-                        t_name = event["name"]
-                        output = _extract_tool_output(data.get("output"))
-                        run_id = event.get("run_id")
-                        collector.on_tool_end(t_name, output, tool_call_id=run_id)
-                        yield {"event": "tool_end", "data": json.dumps({"tool": t_name, "output": output, "tool_call_id": run_id}, ensure_ascii=False)}
-
-                    # Enterprise Cost Tracking
-                    elif kind == "on_chat_model_end":
-                        out_msg = data.get("output")
-                        if hasattr(out_msg, "usage_metadata") and out_msg.usage_metadata:
-                            usage = out_msg.usage_metadata
-                            cost = await calculate_run_cost(model_id, usage)
-                            total_cost += cost
-                            total_tokens += usage.get("total_tokens", 0)
-
-                collector.on_done(final_output="", error=None)
-                yield {"event": "cost", "data": json.dumps({"cost": total_cost, "tokens": total_tokens})}
-                yield {"event": "done", "data": "[DONE]"}
-                
-                asyncio.create_task(maybe_shadow_eval_commit(collector))
-
-            except Exception as e:
-                err = str(e)
-                log.error(f"Stream Error: {err}")
-                collector.on_done(final_output="", error=err)
-                yield {"event": "error", "data": err}
-                asyncio.create_task(maybe_shadow_eval_commit(collector))
-
-        return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})
-
-    except Exception as e:
-        log.error(f"Stream Setup Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/agent/follow-up")
-async def generate_follow_up(request: AgentRequest):
-    try:
-        sid = valid_session_id(request.session_id)
-        model, tools, _, or_key, _ = await _resolve_agent_resources(sid, request)
-        
-        # We need the conversation history
-        # Create a temporary agent to fetch state
-        temp_agent = create_agent(model, tools, checkpointer=CHECKPOINTER)
-        state = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
-        messages = state.values.get("messages", []) if state else []
-        
-        questions = await follow_up_service.generate_questions(
-            messages=messages,
-            llm=model,
-            tools=tools,
-            openrouter_key=or_key
-        )
-        return {"questions": questions}
-    except Exception as e:
-        log.error(f"Follow-up Error: {e}")
-        return {"questions": []}
-
-@app.post("/agent/follow-up-stream")
-async def generate_follow_up_stream(request: AgentRequest):
-    try:
-        sid = valid_session_id(request.session_id)
-        model, tools, _, or_key, _ = await _resolve_agent_resources(sid, request)
-        
-        temp_agent = create_agent(model, tools, checkpointer=CHECKPOINTER)
-        state = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
-        messages = state.values.get("messages", []) if state else []
-
-        async def event_generator():
-            try:
-                async for event in follow_up_service.generate_questions_stream(
-                    messages=messages,
-                    llm=model,
-                    tools=tools,
-                    openrouter_key=or_key
-                ):
-                    yield event
-            except Exception as e:
-                yield {"event": "error", "data": str(e)}
-        
-        return EventSourceResponse(event_generator())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/agent/logout/{session_id}")
-async def logout_session(session_id: str):
-    try:
-        sid = valid_session_id(session_id)
-        await config_manager.delete_session(sid)
-        log.info(f"LOGOUT: Session {sid} cleared")
-        return {"status": "logged_out", "session_id": sid, "message": "Session cleared."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
+    log.info(f"🚀 Starting HFCL Agent Service on port {PORT}")
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
-
 
 
 ===== src/main_mcp.py [20 tokens] =====
@@ -2441,7 +2161,7 @@ async def eval_live(
 
 
 
-===== src/agent_service/api/admin.py [1,485 tokens] =====
+===== src/agent_service/api/admin.py [1,499 tokens] =====
 import json
 import logging
 import os
@@ -2494,7 +2214,7 @@ async def update_faqs_json_stream(
             return EventSourceResponse(empty_gen())
         
         return EventSourceResponse(
-            kb_service.ingest_faq_batch_gen(items, groq_key=x_groq_key, openrouter_key=x_openrouter_key),
+            kb_service.ingest_faq_batch_gen(items, groq_key=x_groq_key or "", openrouter_key=x_openrouter_key or ""),
             headers={"Cache-Control": "no-cache"}
         )
     except Exception as e:
@@ -2507,7 +2227,7 @@ async def update_faqs_pdf_stream(
     x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"),
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
@@ -2527,7 +2247,7 @@ async def update_faqs_pdf_stream(
             
             yield {"event": "progress", "data": json.dumps({"percent": 5, "message": f"Found {len(parsed_data)} pairs. Starting ingestion..."})}
             
-            async for event in kb_service.ingest_faq_batch_gen(parsed_data, groq_key=x_groq_key, openrouter_key=x_openrouter_key):
+            async for event in kb_service.ingest_faq_batch_gen(parsed_data, groq_key=x_groq_key or "", openrouter_key=x_openrouter_key or ""):
                 yield event
         except Exception as e:
             yield {"event": "error", "data": str(e)}
@@ -2553,9 +2273,9 @@ async def edit_faq(
 ):
     result = await kb_service.edit_faq(
         original_question=request.original_question,
-        new_question=request.new_question,
-        new_answer=request.new_answer,
-        openrouter_key=x_openrouter_key,
+        new_question=request.new_question or "",
+        new_answer=request.new_answer or "",
+        openrouter_key=x_openrouter_key or "",
     )
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
@@ -2584,7 +2304,7 @@ async def semantic_search_endpoint(
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
 ):
     try:
-        results = await kb_service.semantic_search(request.query, request.limit, x_openrouter_key)
+        results = await kb_service.semantic_search(request.query, request.limit, x_openrouter_key or "")
         return {"status": "success", "results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2595,7 +2315,7 @@ async def semantic_delete_endpoint(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"), 
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key")
 ):
-    result = await kb_service.delete_faq_by_vector(request.query, request.threshold, x_openrouter_key)
+    result = await kb_service.delete_faq_by_vector(request.query, request.threshold, x_openrouter_key or "")
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
     return result
@@ -3086,6 +2806,865 @@ async def question_types(limit: int = 200):
 
 
 
+===== src/agent_service/api/endpoints/health.py [66 tokens] =====
+"""Health check and system status endpoints."""
+from fastapi import APIRouter
+
+router = APIRouter(tags=["health"])
+
+
+@router.get("/health")
+async def health_check():
+    """System health check endpoint."""
+    return {"status": "healthy", "service": "agent", "version": "2.0.0"}
+
+
+
+===== src/agent_service/api/endpoints/follow_up.py [687 tokens] =====
+"""Follow-up question generation endpoints."""
+import logging
+from fastapi import APIRouter, HTTPException
+from sse_starlette.sse import EventSourceResponse
+from langchain.agents import create_agent
+
+from src.agent_service.core.schemas import AgentRequest
+from src.agent_service.core.session_utils import session_utils
+from src.agent_service.core.resource_resolver import resource_resolver
+from src.agent_service.features.follow_up import follow_up_service
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/agent", tags=["follow-up"])
+
+
+@router.post("/follow-up")
+async def generate_follow_up(request: AgentRequest):
+    """
+    Generate follow-up questions based on conversation history.
+    Non-streaming version that returns all questions at once.
+    """
+    try:
+        sid = session_utils.validate_session_id(request.session_id)
+        
+        # Resolve resources
+        resources = await resource_resolver.resolve_agent_resources(sid, request)
+        
+        # Get checkpointer
+        from src.main_agent import app
+        checkpointer = app.state.checkpointer
+        
+        # Create temporary agent to access state
+        temp_agent = create_agent(
+            resources.model,
+            resources.tools,
+            checkpointer=checkpointer
+        )
+        
+        # Get conversation state
+        state = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
+        messages = state.values.get("messages", []) if state else []
+        
+        # Generate questions
+        questions = await follow_up_service.generate_questions(
+            messages=messages,
+            llm=resources.model,
+            tools=resources.tools,
+            openrouter_key=resources.api_key
+        )
+        
+        return {
+            "questions": questions,
+            "provider": resources.provider
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.error(f"Follow-up generation error: {e}")
+        return {"questions": []}
+
+
+@router.post("/follow-up-stream")
+async def generate_follow_up_stream(request: AgentRequest):
+    """
+    Generate follow-up questions with streaming.
+    Streams questions as they're generated.
+    """
+    try:
+        sid = session_utils.validate_session_id(request.session_id)
+        
+        # Resolve resources
+        resources = await resource_resolver.resolve_agent_resources(sid, request)
+        
+        # Get checkpointer
+        from src.main_agent import app
+        checkpointer = app.state.checkpointer
+        
+        # Create temporary agent
+        temp_agent = create_agent(
+            resources.model,
+            resources.tools,
+            checkpointer=checkpointer
+        )
+        
+        # Get conversation state
+        state = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
+        messages = state.values.get("messages", []) if state else []
+        
+        # Stream events generator
+        async def event_generator():
+            try:
+                async for event in follow_up_service.generate_questions_stream(
+                    messages=messages,
+                    llm=resources.model,
+                    tools=resources.tools,
+                    openrouter_key=resources.api_key
+                ):
+                    yield event
+            except Exception as e:
+                yield {"event": "error", "data": str(e)}
+        
+        return EventSourceResponse(event_generator())
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+===== src/agent_service/api/endpoints/agent_query.py [547 tokens] =====
+"""Agent query endpoint (non-streaming)."""
+import logging
+from fastapi import APIRouter, HTTPException
+from langchain_core.messages import HumanMessage
+from langchain.agents import create_agent
+
+from src.agent_service.core.schemas import AgentRequest
+from src.agent_service.core.session_utils import session_utils
+from src.agent_service.core.resource_resolver import resource_resolver
+from src.agent_service.features.kb_first import kb_first_payload
+from src.agent_service.features.nbfc_router import nbfc_router_service
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/agent", tags=["agent-query"])
+
+
+@router.post("/query")
+async def query_agent(request: AgentRequest):
+    """
+    Non-streaming agent query endpoint.
+    Processes question and returns complete response.
+    """
+    try:
+        sid = session_utils.validate_session_id(request.session_id)
+        
+        # Resolve all resources
+        resources = await resource_resolver.resolve_agent_resources(sid, request)
+        
+        # Router classification (optional, runs in background)
+        router_out = None
+        try:
+            router_out = await nbfc_router_service.classify(
+                request.question, 
+                openrouter_api_key=resources.api_key
+            )
+        except Exception as e:
+            log.warning(f"Router classification failed: {e}")
+            router_out = None
+        
+        # KB-first guardrail (returns cached response if available)
+        kb_payload = await kb_first_payload(request.question, resources.tools)
+        if kb_payload:
+            return {
+                "response": kb_payload["output"],
+                "kb_first": True,
+                "router": router_out
+            }
+        
+        # Validate tools are loaded
+        if not resources.tools:
+            raise HTTPException(status_code=500, detail="No tools loaded")
+        
+        # Get checkpointer from app state
+        from fastapi import Request
+        # Access via closure or pass as dependency
+        from src.main_agent import app
+        checkpointer = app.state.checkpointer
+        
+        # Create and invoke agent
+        agent = create_agent(
+            resources.model,
+            resources.tools,
+            system_prompt=resources.system_prompt,
+            checkpointer=checkpointer
+        )
+        
+        inputs = {"messages": [HumanMessage(request.question)]}
+        resp = await agent.ainvoke(inputs, {"configurable": {"thread_id": sid}})
+        
+        return {
+            "response": resp,
+            "router": router_out,
+            "provider": resources.provider
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.error(f"Query error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+===== src/agent_service/api/endpoints/sessions.py [1,708 tokens] =====
+"""Session management and cost tracking endpoints."""
+import logging
+from fastapi import APIRouter, HTTPException, Query
+
+from src.agent_service.core.schemas import SessionConfig
+from src.agent_service.core.session_utils import session_utils
+from src.agent_service.core.session_cost import get_session_cost_tracker
+from src.agent_service.core.config import MODEL_NAME
+from src.agent_service.core.prompts import SYSTEM_PROMPT
+from src.agent_service.data.config_manager import config_manager
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/agent", tags=["sessions"])
+
+
+@router.get("/sessions")
+async def list_active_sessions():
+    """List all active sessions."""
+    try:
+        sessions = await config_manager.list_sessions()
+        return {"count": len(sessions), "sessions": sessions}
+    except Exception as e:
+        log.error(f"List sessions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/verify/{session_id}")
+async def verify_session(session_id: str):
+    """Verify if a session exists."""
+    try:
+        sid = session_utils.validate_session_id(session_id)
+        exists = await config_manager.session_exists(sid)
+        
+        if not exists:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return {"session_id": sid, "exists": True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/config/{session_id}")
+async def get_session_config(session_id: str):
+    """Retrieve session configuration."""
+    try:
+        sid = session_utils.validate_session_id(session_id)
+        stored = await config_manager.get_config(sid)
+        
+        return {
+            "session_id": sid,
+            "system_prompt": stored.get("system_prompt") or SYSTEM_PROMPT.strip(),
+            "model_name": stored.get("model_name") or MODEL_NAME,
+            "reasoning_effort": stored.get("reasoning_effort"),
+            "has_openrouter_key": bool(stored.get("openrouter_api_key")),
+            "has_nvidia_key": bool(stored.get("nvidia_api_key")),
+            "has_groq_key": bool(stored.get("groq_api_key")),
+            "provider": stored.get("provider"),
+            "is_customized": bool(stored),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/config")
+async def config_session(config: SessionConfig):
+    """Update session configuration."""
+    try:
+        sid = session_utils.validate_session_id(config.session_id)
+        
+        await config_manager.set_config(
+            sid,
+            system_prompt=config.system_prompt,
+            model_name=config.model_name,
+            reasoning_effort=config.reasoning_effort,
+            openrouter_api_key=config.openrouter_api_key,
+            nvidia_api_key=config.nvidia_api_key,
+            groq_api_key=config.groq_api_key,
+            provider=config.provider
+        )
+        
+        return {
+            "status": "updated",
+            "session_id": sid,
+            "model": config.model_name,
+            "provider": config.provider or "auto-detected"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/logout/{session_id}")
+async def logout_session(session_id: str):
+    """Clear session data and logout."""
+    try:
+        sid = session_utils.validate_session_id(session_id)
+        await config_manager.delete_session(sid)
+        
+        log.info(f"Session {sid} logged out")
+        return {"status": "logged_out", "session_id": sid, "message": "Session cleared."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Cost tracking endpoints
+
+@router.get("/sessions/{session_id}/cost")
+async def get_session_cost(session_id: str):
+    """
+    Get detailed cost tracking for a session.
+    
+    Returns:
+        - total_cost: Total USD spent
+        - total_requests: Number of API calls
+        - total_tokens: All token usage
+        - by_model: Cost breakdown per model
+        - by_provider: Cost breakdown per provider
+        - average_cost_per_request: Mean cost
+    """
+    try:
+        sid = session_utils.validate_session_id(session_id)
+        tracker = get_session_cost_tracker()
+        cost_data = await tracker.get_cost(sid)
+        
+        if not cost_data:
+            return {
+                "session_id": sid,
+                "total_cost": 0.0,
+                "total_requests": 0,
+                "total_tokens": 0,
+                "message": "No cost data tracked for this session"
+            }
+        
+        return cost_data
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/sessions/{session_id}/cost/history")
+async def get_session_cost_history(
+    session_id: str,
+    limit: int = Query(default=100, ge=1, le=1000, description="Max entries to return")
+):
+    """
+    Get recent cost history for session (chronological log).
+    
+    Args:
+        limit: Max number of entries (1-1000, default 100)
+    
+    Returns:
+        List of cost entries with timestamps, most recent first
+    """
+    try:
+        sid = session_utils.validate_session_id(session_id)
+        tracker = get_session_cost_tracker()
+        history = await tracker.get_history(sid, limit=limit)
+        
+        return {
+            "session_id": sid,
+            "history": history,
+            "count": len(history)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/sessions/{session_id}/cost")
+async def reset_session_cost(session_id: str):
+    """
+    Reset cost tracking for a session.
+    
+    Note: This does NOT delete the session itself, only cost data.
+    """
+    try:
+        sid = session_utils.validate_session_id(session_id)
+        tracker = get_session_cost_tracker()
+        success = await tracker.reset_cost(sid)
+        
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No cost data found for session {sid}"
+            )
+        
+        return {
+            "session_id": sid,
+            "status": "reset",
+            "message": "Cost tracking reset successfully"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/sessions/summary")
+async def get_all_sessions_cost_summary():
+    """
+    Get cost summary across all active sessions.
+    
+    Returns:
+        - active_sessions: Count of sessions with cost data
+        - total_cost: Sum across all sessions
+        - total_requests: Total API calls
+        - sessions: List of sessions sorted by cost (highest first)
+    """
+    tracker = get_session_cost_tracker()
+    summary = await tracker.get_all_sessions_summary()
+    return summary
+
+@router.delete("/sessions/cleanup")
+async def cleanup_corrupted_cost_keys():
+    """
+    Admin endpoint: Clean up corrupted cost tracking keys.
+    
+    This removes keys with wrong Redis types (from old implementations).
+    """
+    try:
+        from src.agent_service.core.session_cost import SessionCostTracker
+        from src.agent_service.core.session_utils import get_redis
+        
+        redis = await get_redis()
+        pattern = f"{SessionCostTracker.COST_KEY_PREFIX}:*"
+        
+        deleted_keys = []
+        
+        async for key in redis.scan_iter(match=pattern, count=100):
+            try:
+                key_type = await redis.type(key)
+                
+                # Delete non-string keys (corrupted from old implementations)
+                if key_type != "string":
+                    await redis.delete(key)
+                    deleted_keys.append({"key": key, "type": key_type})
+                    log.info(f"Deleted corrupted key {key} (type: {key_type})")
+            except Exception as e:
+                log.error(f"Failed to process key {key}: {e}")
+        
+        return {
+            "status": "cleanup_complete",
+            "deleted_keys": len(deleted_keys),
+            "keys": deleted_keys[:20]  # Show first 20
+        }
+    except Exception as e:
+        log.error(f"Cleanup failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+===== src/agent_service/api/endpoints/models.py [143 tokens] =====
+"""Model catalog and listing endpoints."""
+import logging
+from fastapi import APIRouter, HTTPException
+
+from src.agent_service.llm.catalog import model_service
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/agent", tags=["models"])
+
+
+@router.get("/models")
+async def list_models():
+    """List all available models from catalog."""
+    try:
+        data = await model_service.get_cached_data()
+        total_models = sum(len(cat["models"]) for cat in data)
+        return {"count": total_models, "categories": data}
+    except Exception as e:
+        log.error(f"Model fetch error: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+
+===== src/agent_service/api/endpoints/agent_stream.py [2,235 tokens] =====
+"""Agent streaming endpoint with SSE."""
+import json
+import asyncio
+import logging
+from typing import Any
+from fastapi import APIRouter, HTTPException
+from sse_starlette.sse import EventSourceResponse
+from langchain_core.messages import HumanMessage
+from langchain.agents import create_agent
+
+from src.agent_service.core.schemas import AgentRequest
+from src.agent_service.core.session_utils import session_utils
+from src.agent_service.core.session_cost import get_session_cost_tracker
+from src.agent_service.core.resource_resolver import resource_resolver
+from src.agent_service.core.streaming_utils import (
+    streaming_utils, sse_formatter, StreamingState
+)
+from src.agent_service.core.cost import calculate_run_cost_detailed
+from src.agent_service.features.kb_first import kb_first_payload
+from src.agent_service.features.nbfc_router import nbfc_router_service
+from src.agent_service.features.shadow_eval import (
+    ShadowEvalCollector, maybe_shadow_eval_commit
+)
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/agent", tags=["agent-stream"])
+
+
+def extract_reasoning_tokens(usage_metadata: Any) -> int:
+    """
+    Extract reasoning tokens from various usage metadata formats.
+    
+    Supports:
+    - LangChain UsageMetadata with output_token_details.reasoning
+    - Groq API format
+    - OpenRouter format
+    """
+    reasoning_tokens = 0
+    
+    # LangChain standard: output_token_details.reasoning
+    if hasattr(usage_metadata, 'output_token_details'):
+        details = getattr(usage_metadata, 'output_token_details', {})
+        if isinstance(details, dict):
+            reasoning_tokens = details.get('reasoning', 0)
+    
+    # Direct reasoning_tokens field (Groq/OpenRouter)
+    if hasattr(usage_metadata, 'reasoning_tokens'):
+        reasoning_tokens = getattr(usage_metadata, 'reasoning_tokens', 0)
+    elif isinstance(usage_metadata, dict):
+        reasoning_tokens = usage_metadata.get('reasoning_tokens', 0)
+        
+        # Check nested output_token_details
+        if not reasoning_tokens:
+            output_details = usage_metadata.get('output_token_details', {})
+            reasoning_tokens = output_details.get('reasoning', 0)
+    
+    return reasoning_tokens
+
+
+@router.post("/stream")
+async def stream_agent(request: AgentRequest):
+    """
+    Streaming agent endpoint with Server-Sent Events.
+    Streams tokens, tool calls, and cost information in real-time.
+    """
+    try:
+        sid = session_utils.validate_session_id(request.session_id)
+        
+        # Resolve all resources
+        resources = await resource_resolver.resolve_agent_resources(sid, request)
+        
+        # Start router classification in background
+        router_task = asyncio.create_task(
+            nbfc_router_service.classify(
+                request.question,
+                openrouter_api_key=resources.openrouter_api_key
+            )
+        )
+        
+        # Get app_id for shadow eval
+        app_id = await session_utils.get_app_id_for_session(sid)
+        
+        # Initialize shadow eval collector
+        collector = ShadowEvalCollector(
+            session_id=sid,
+            question=request.question,
+            provider=resources.provider,
+            model=resources.model_name,
+            endpoint="/agent/stream",
+            system_prompt=resources.system_prompt,
+            tool_definitions=""
+        )
+        collector.case_id = app_id
+        
+        # KB-first guardrail (cached response)
+        kb_payload = await kb_first_payload(request.question, resources.tools)
+        if kb_payload:
+            async def kb_event_generator():
+                try:
+                    tool_name = kb_payload.get("tool", "kb")
+                    tool_input = kb_payload.get("input", {})
+                    output = str(kb_payload.get("output", ""))
+                    
+                    # Track in collector
+                    collector.on_tool_start(tool_name, tool_input)
+                    collector.on_tool_end(tool_name, output, tool_call_id="kb_first")
+                    
+                    # Stream events
+                    yield sse_formatter.token_event(output)
+                    
+                    collector.on_token(output)
+                    collector.on_done(final_output=output, error=None)
+                    
+                    # No cost for cached KB response
+                    yield sse_formatter.cost_event(
+                        total_cost=0.0,
+                        usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        model=resources.model_name,
+                        provider=resources.provider,
+                        cached=True
+                    )
+                    
+                    # Track zero-cost KB hit
+                    tracker = get_session_cost_tracker()
+                    await tracker.add_cost(
+                        session_id=sid,
+                        cost=0.0,
+                        usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        model=resources.model_name,
+                        provider="kb_cache",
+                        metadata={"endpoint": "/agent/stream", "cached": True}
+                    )
+                    
+                    yield sse_formatter.done_event()
+                    
+                except Exception as e:
+                    collector.on_done(final_output="", error=str(e))
+                    yield sse_formatter.error_event(str(e))
+                finally:
+                    try:
+                        r_out = await router_task
+                        if r_out:
+                            collector.set_router_outcome(r_out)
+                    except:
+                        pass
+                    asyncio.create_task(maybe_shadow_eval_commit(
+                        collector,
+                        openrouter_api_key=resources.openrouter_api_key,
+                        nvidia_api_key=resources.nvidia_api_key,
+                        groq_api_key=resources.groq_api_key,
+                        model_name=resources.model_name,
+                        provider=resources.provider
+                    ))
+            
+            return EventSourceResponse(
+                kb_event_generator(),
+                headers={"Cache-Control": "no-cache"}
+            )
+        
+        # Validate tools
+        if not resources.tools:
+            raise HTTPException(status_code=500, detail="No tools loaded")
+        
+        # Get checkpointer
+        from src.main_agent import app
+        checkpointer = app.state.checkpointer
+        
+        # Create agent
+        agent = create_agent(
+            resources.model,
+            resources.tools,
+            system_prompt=resources.system_prompt,
+            checkpointer=checkpointer
+        )
+        
+        # Main streaming event generator
+        async def event_generator():
+            state = StreamingState()
+            
+            try:
+                # Wait for router result and stream it
+                try:
+                    router_out = await router_task
+                    if router_out:
+                        collector.set_router_outcome(router_out)
+                        yield sse_formatter.router_event(router_out)
+                except Exception as e:
+                    log.warning(f"Router failed: {e}")
+                
+                # Stream agent events
+                async for event in agent.astream_events(
+                    {"messages": [HumanMessage(content=request.question)]},
+                    {"configurable": {"thread_id": sid}},
+                    version="v2"
+                ):
+                    kind = event["event"]
+                    data = event["data"]
+                    
+                    # Token streaming
+                    if kind == "on_chat_model_stream":
+                        chunk = data["chunk"]
+                        
+                        # Reasoning tokens streaming (Groq parsed format)
+                        if hasattr(chunk, "additional_kwargs"):
+                            r_content = chunk.additional_kwargs.get("reasoning_content")
+                            if r_content:
+                                collector.on_reasoning(str(r_content))
+                                yield sse_formatter.reasoning_token_event(str(r_content))
+                        
+                        # Regular tokens
+                        if chunk.content:
+                            txt = str(chunk.content)
+                            collector.on_token(txt)
+                            yield sse_formatter.token_event(txt)
+                    
+                    # Tool execution start
+                    elif kind == "on_tool_start":
+                        t_name = event["name"]
+                        t_input = data.get("input")
+                        collector.on_tool_start(t_name, t_input)
+                        yield sse_formatter.tool_start_event(t_name, t_input)
+                    
+                    # Tool execution end
+                    elif kind == "on_tool_end":
+                        t_name = event["name"]
+                        raw_output = data.get("output")
+                        output = streaming_utils.extract_tool_output(raw_output)
+                        run_id = event.get("run_id")
+                        collector.on_tool_end(t_name, output, tool_call_id=run_id)
+                        yield sse_formatter.tool_end_event(t_name, output, run_id)
+                    
+                    # Cost tracking with reasoning tokens
+                    elif kind == "on_chat_model_end":
+                        out_msg = data.get("output")
+                        if hasattr(out_msg, "usage_metadata") and out_msg.usage_metadata:
+                            usage_meta = out_msg.usage_metadata
+                            
+                            # Convert to dict for manipulation
+                            if hasattr(usage_meta, '__dict__'):
+                                usage = dict(usage_meta.__dict__)
+                            elif isinstance(usage_meta, dict):
+                                usage = dict(usage_meta)
+                            else:
+                                usage = {}
+                            
+                            # Extract reasoning tokens from multiple sources
+                            reasoning = extract_reasoning_tokens(usage_meta)
+                            if reasoning > 0:
+                                usage['reasoning_tokens'] = reasoning
+                            
+                            # Calculate detailed cost
+                            cost, breakdown = await calculate_run_cost_detailed(
+                                resources.model_name,
+                                usage,
+                                resources.provider
+                            )
+                            state.total_cost += cost
+                            
+                            # Accumulate usage
+                            streaming_utils.accumulate_usage(state, usage)
+                
+                # Mark completion
+                collector.on_done(final_output="", error=None)
+                
+                # Final cost event with reasoning tokens
+                yield sse_formatter.cost_event(
+                    total_cost=state.total_cost,
+                    usage=state.cumulative_usage,
+                    model=resources.model_name,
+                    provider=resources.provider
+                )
+                
+                # Track session cost in Redis
+                tracker = get_session_cost_tracker()
+                await tracker.add_cost(
+                    session_id=sid,
+                    cost=state.total_cost,
+                    usage=state.cumulative_usage,
+                    model=resources.model_name,
+                    provider=resources.provider,
+                    metadata={"endpoint": "/agent/stream"}
+                )
+                
+                yield sse_formatter.done_event()
+                
+                # Commit shadow eval with all keys + model info
+                asyncio.create_task(maybe_shadow_eval_commit(
+                    collector,
+                    openrouter_api_key=resources.openrouter_api_key,
+                    nvidia_api_key=resources.nvidia_api_key,
+                    groq_api_key=resources.groq_api_key,
+                    model_name=resources.model_name,
+                    provider=resources.provider
+                ))
+                
+            except Exception as e:
+                err = str(e)
+                log.error(f"Stream error: {err}")
+                collector.on_done(final_output="", error=err)
+                yield sse_formatter.error_event(err)
+                
+                # Pass all keys even on error
+                asyncio.create_task(maybe_shadow_eval_commit(
+                    collector,
+                    openrouter_api_key=resources.openrouter_api_key,
+                    nvidia_api_key=resources.nvidia_api_key,
+                    groq_api_key=resources.groq_api_key,
+                    model_name=resources.model_name,
+                    provider=resources.provider
+                ))
+        
+        return EventSourceResponse(
+            event_generator(),
+            headers={"Cache-Control": "no-cache"}
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.error(f"Stream setup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+===== src/agent_service/api/endpoints/router_endpoints.py [255 tokens] =====
+"""NBFC router classification endpoints."""
+import logging
+from fastapi import APIRouter, HTTPException
+
+from src.agent_service.core.schemas import RouterClassifyRequest
+from src.agent_service.features.nbfc_router import nbfc_router_service
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/agent/router", tags=["router"])
+
+
+@router.post("/classify")
+async def router_classify(req: RouterClassifyRequest):
+    """Classify query using NBFC router."""
+    try:
+        result = await nbfc_router_service.classify(
+            req.text,
+            openrouter_api_key=req.openrouter_api_key,
+            mode=req.mode,
+        )
+        return result
+    except Exception as e:
+        log.error(f"Router classify error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/compare")
+async def router_compare(req: RouterClassifyRequest):
+    """Compare router classifications."""
+    try:
+        result = await nbfc_router_service.compare(
+            req.text,
+            openrouter_api_key=req.openrouter_api_key
+        )
+        return result
+    except Exception as e:
+        log.error(f"Router compare error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+===== src/agent_service/api/endpoints/__init__.py [43 tokens] =====
+"""
+API Endpoints Package
+Groups related endpoints into logical modules.
+"""
+from fastapi import APIRouter
+
+# Create a main router for agent endpoints
+agent_router = APIRouter(prefix="/agent", tags=["agent"])
+
+
+
 ===== src/agent_service/features/kb_first.py [549 tokens] =====
 from __future__ import annotations
 
@@ -3140,7 +3719,7 @@ async def kb_first_payload(question: str, tools: List[StructuredTool]) -> Option
 
 
 
-===== src/agent_service/features/shadow_eval.py [4,231 tokens] =====
+===== src/agent_service/features/shadow_eval.py [4,526 tokens] =====
 # ===== src/agent_service/features/shadow_eval.py =====
 
 import asyncio
@@ -3160,7 +3739,7 @@ from redis.asyncio import Redis
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
 from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
-from src.agent_service.eval_store.judge import judge_service
+from src.agent_service.eval_store.judge import judge_service, LLMJudge
 from src.agent_service.eval_store.embedder import EvalEmbedder
 from src.agent_service.core.config import ENABLE_LLM_JUDGE, JUDGE_MODEL_NAME
 from src.agent_service.llm.client import get_llm
@@ -3529,7 +4108,12 @@ def compute_non_llm_metrics(
 
 async def compute_llm_metrics(
     trace: Dict[str, Any],
-    collector: ShadowEvalCollector
+    collector: ShadowEvalCollector,
+    openrouter_api_key: Optional[str] = None,
+    nvidia_api_key: Optional[str] = None,
+    groq_api_key: Optional[str] = None,
+    model_name: Optional[str] = None,  # ← ADD THIS
+    provider: Optional[str] = None      # ← ADD THIS
 ) -> List[Dict[str, Any]]:
     
     if not ENABLE_LLM_JUDGE:
@@ -3561,6 +4145,17 @@ async def compute_llm_metrics(
 
     results = []
     
+    # ✅ Use session's model and keys instead of separate judge model
+    judge_model_name = model_name or trace.get("model") or JUDGE_MODEL_NAME
+    
+    # Create judge instance with session's API keys and model
+    judge = LLMJudge(
+        model_name=judge_model_name,  # ← Use session's model
+        openrouter_api_key=openrouter_api_key,
+        nvidia_api_key=nvidia_api_key,
+        groq_api_key=groq_api_key
+    )
+    
     metrics_to_run = [
         ("relevance", question, answer, context_str),
         ("helpfulness", question, answer, context_str),
@@ -3570,13 +4165,13 @@ async def compute_llm_metrics(
     ]
 
     tasks = [
-        judge_service.evaluate_pointwise(m, q, a, c) 
+        judge.evaluate_pointwise(m, q, a, c) 
         for m, q, a, c in metrics_to_run
     ]
     
     eval_results = await asyncio.gather(*tasks)
 
-    full_name = judge_service.model_name
+    full_name = judge.model_name
     short_name = full_name.split("/", 1)[-1] if "/" in full_name else full_name
     judge_id = f"llm_judge:{short_name}"
 
@@ -3590,7 +4185,7 @@ async def compute_llm_metrics(
             "reasoning": res["reasoning"],
             "evaluator_id": judge_id,
             "evidence": [],
-            "meta": {"mode": "pointwise_g_eval"}
+            "meta": {"mode": "pointwise_g_eval", "same_model_as_session": True}
         })
 
     return results
@@ -3602,7 +4197,14 @@ async def _commit_bundle(trace: Dict[str, Any], events: List[Dict[str, Any]], ev
     if evals:
         await run_in_threadpool(STORE.upsert_evals, trace["trace_id"], evals)
 
-async def maybe_shadow_eval_commit(collector: ShadowEvalCollector) -> None:
+async def maybe_shadow_eval_commit(
+    collector: ShadowEvalCollector,
+    openrouter_api_key: Optional[str] = None,
+    nvidia_api_key: Optional[str] = None,
+    groq_api_key: Optional[str] = None,
+    model_name: Optional[str] = None,  # ← ADD THIS
+    provider: Optional[str] = None      # ← ADD THIS
+) -> None:
     try:
         if not await should_shadow_eval():
             return
@@ -3615,26 +4217,205 @@ async def maybe_shadow_eval_commit(collector: ShadowEvalCollector) -> None:
             events = collector.events
 
         evals = compute_non_llm_metrics(trace, events, collector.tool_names)
-        llm_evals = await compute_llm_metrics(trace, collector)
+        
+        # Pass session's model to judge
+        llm_evals = await compute_llm_metrics(
+            trace, 
+            collector,
+            openrouter_api_key=openrouter_api_key,
+            nvidia_api_key=nvidia_api_key,
+            groq_api_key=groq_api_key,
+            model_name=model_name,  # ← Pass session model
+            provider=provider        # ← Pass provider
+        )
         evals.extend(llm_evals)
 
         await _commit_bundle(trace, events, evals)
 
-        # Trigger Embeddings for Vector Search
         try:
-            # Fire-and-forget; don't block the main response if embedding is slow
-            # embed_trace_if_needed is async, so we await it here
-            await EMBEDDER.embed_trace_if_needed(trace, events)
+            # Use session's OpenRouter key for embeddings
+            embedder = EvalEmbedder(openrouter_api_key=openrouter_api_key)
             
-            # Optionally embed results too
+            await embedder.embed_trace_if_needed(trace, events)
             for ev in evals:
-                await EMBEDDER.embed_eval_if_needed(trace["trace_id"], ev)
+                await embedder.embed_eval_if_needed(trace["trace_id"], ev)
         except Exception as e:
             log.warning(f"[shadow_eval] Embedding generation failed: {e}")
 
         log.info(f"[shadow_eval] committed trace_id={collector.trace_id} events={len(events)} evals={len(evals)}")
     except Exception as e:
         log.exception(f"[shadow_eval] commit failed: {e}")
+
+
+===== src/agent_service/features/prototypes_nbfc.py [1,008 tokens] =====
+from typing import Dict, List
+
+# =============================================================================
+# Sentiment Prototypes (Reference Vectors)
+# =============================================================================
+
+SENTIMENT_PROTOTYPES: Dict[str, List[str]] = {
+    "positive": [
+        "thank you so much",
+        "thanks for the help",
+        "great service",
+        "app is working perfectly",
+        "love the quick approval",
+        "received the money instantly, thanks",
+        "good experience",
+        "support was helpful",
+        "excellent app",
+        "mast hai",
+        "badiya hai",
+        "super smooth process",
+    ],
+    "negative": [
+        "this is a scam",
+        "fake app",
+        "fraud company",
+        "stop harassing me",
+        "i will complain to rbi",
+        "worst experience ever",
+        "customer care is useless",
+        "why did you deduct money",
+        "cheaters",
+        "bakwaas app",
+        "gandu",
+        "madarchod",
+        "bhenchod",
+        "bloody scammers",
+        "i want to close my loan immediately",
+        "stop calling my relatives",
+    ],
+    "neutral": [
+        "what is my outstanding balance?",
+        "how to pay emi?",
+        "change my mobile number",
+        "i want to foreclose",
+        "what are the charges?",
+        "when is the due date?",
+        "is this app safe?",
+        "how to apply for top up?",
+        "need noc",
+        "update my kyc",
+        "payment not reflecting",
+        "login issue",
+        "otp not coming",
+    ]
+}
+
+# =============================================================================
+# Reason Prototypes (Intent Classification)
+# =============================================================================
+
+REASON_PROTOTYPES: Dict[str, List[str]] = {
+    "lead_intent_new_loan": [
+        "I want a loan",
+        "apply for personal loan",
+        "how to get money?",
+        "need urgent cash",
+        "loan limit increase",
+        "top up loan available?",
+        "eligibility check",
+    ],
+    "application_status_approval": [
+        "check my application status",
+        "why is it rejected?",
+        "pending since yesterday",
+        "when will it be approved?",
+        "under review for long time",
+        "kyc verified but no approval",
+    ],
+    "disbursal": [
+        "money not credited",
+        "loan approved but not received",
+        "when will money come to bank?",
+        "disbursement pending",
+        "amount deducted but not credited",
+    ],
+    "emi_payment_reflecting": [
+        "paid emi but not updated",
+        "payment failed",
+        "money cut from bank but showing due",
+        "how to pay manually?",
+        "paytm not working",
+        "upi link for payment",
+        "already paid",
+    ],
+    "foreclosure_partpayment": [
+        "i want to close my loan",
+        "foreclosure charges",
+        "prepayment option",
+        "close account permanently",
+        "noc letter request",
+        "pay full amount now",
+    ],
+    "charges_fees_penalty": [
+        "why extra charges?",
+        "processing fee is too high",
+        "penalty charges explanation",
+        "hidden charges",
+        "why insurance fee deducted?",
+        "bounce charges refund",
+    ],
+    "nach_autodebit_bounce": [
+        "stop auto debit",
+        "nach failed",
+        "change bank for auto debit",
+        "bounce charge why?",
+        "cancel enach",
+        "disable autopay",
+    ],
+    "kyc_verification": [
+        "kyc rejected",
+        "video kyc not working",
+        "pan card upload error",
+        "aadhaar verification failed",
+        "selfie not uploading",
+        "documents required",
+    ],
+    "otp_login_app_tech": [
+        "otp not received",
+        "cannot login",
+        "app crashing",
+        "invalid pin",
+        "change mobile number",
+        "login error",
+        "forgot password",
+    ],
+    "statement_receipt": [
+        "send loan statement",
+        "need payment receipt",
+        "repayment schedule",
+        "send noc to email",
+        "download statement",
+    ],
+    "collections_harassment": [
+        "stop calling me",
+        "agent is abusive",
+        "harassment complaint",
+        "calling my parents",
+        "recovery agent threat",
+        "do not call contact list",
+    ],
+    "fraud_security": [
+        "this is fraud",
+        "unauthorized transaction",
+        "someone took loan in my name",
+        "fake profile",
+        "report scam",
+        "account hacked",
+    ],
+    "customer_support": [
+        "call me",
+        "customer care number",
+        "talk to human",
+        "chat with agent",
+        "support team email",
+        "raise a ticket",
+    ]
+}
+
 
 
 ===== src/agent_service/features/follow_up.py [2,126 tokens] =====
@@ -3901,7 +4682,7 @@ follow_up_service = FollowUpQuestionGenerator()
 
 
 
-===== src/agent_service/features/nbfc_router.py [5,798 tokens] =====
+===== src/agent_service/features/nbfc_router.py [3,410 tokens] =====
 from __future__ import annotations
 
 import asyncio
@@ -3915,138 +4696,72 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 from pydantic import BaseModel, Field
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 
-from langchain_deepseek import ChatDeepSeek
-from langchain_openai import OpenAIEmbeddings
-
+# Enterprise Imports (Use Factory, not raw classes)
+from src.agent_service.llm.client import get_llm, get_embeddings
+from src.agent_service.core.config import (
+    NBFC_ROUTER_ENABLED,
+    NBFC_ROUTER_MODE,
+    NBFC_ROUTER_CHAT_MODEL,
+    NBFC_ROUTER_EMBED_MODEL,
+    NBFC_ROUTER_CACHE_DIR,
+    # Thresholds
+    NBFC_ROUTER_SENTIMENT_THRESHOLD,
+    NBFC_ROUTER_SENTIMENT_MARGIN,
+    NBFC_ROUTER_REASON_UNKNOWN_GATE,
+    NBFC_ROUTER_REASON_MARGIN,
+    NBFC_ROUTER_FALLBACK_SENTIMENT_SCORE,
+    NBFC_ROUTER_FALLBACK_REASON_SCORE,
+)
 
 # =============================================================================
-# Labels
+# Labels & Constants
 # =============================================================================
 
 SentimentLabel = Literal["positive", "neutral", "negative", "mixed", "unknown"]
-
 ReasonLabel = Literal[
-    "lead_intent_new_loan",
-    "eligibility_offer",
-    "loan_terms_rates",
-    "kyc_verification",
-    "otp_login_app_tech",
-    "application_status_approval",
-    "disbursal",
-    "emi_payment_reflecting",
-    "nach_autodebit_bounce",
-    "charges_fees_penalty",
-    "foreclosure_partpayment",
-    "statement_receipt",
-    "collections_harassment",
-    "fraud_security",
-    "customer_support",
-    "unknown",
+    "lead_intent_new_loan", "eligibility_offer", "loan_terms_rates", "kyc_verification",
+    "otp_login_app_tech", "application_status_approval", "disbursal", "emi_payment_reflecting",
+    "nach_autodebit_bounce", "charges_fees_penalty", "foreclosure_partpayment",
+    "statement_receipt", "collections_harassment", "fraud_security", "customer_support", "unknown",
 ]
 
-
-# =============================================================================
-# Config (env-driven, stable)
-# =============================================================================
-
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip()
-OPENROUTER_SITE_URL = (os.getenv("OPENROUTER_SITE_URL") or "").strip() or None
-OPENROUTER_APP_TITLE = (os.getenv("OPENROUTER_APP_TITLE") or "").strip() or None
-
-NBFC_ROUTER_ENABLED = os.getenv("NBFC_ROUTER_ENABLED", "true").lower() in ("1", "true", "yes", "y")
-NBFC_ROUTER_MODE = os.getenv("NBFC_ROUTER_MODE", "hybrid").strip().lower()  # embeddings|llm|hybrid|compare
-NBFC_ROUTER_CHAT_MODEL = os.getenv("NBFC_ROUTER_CHAT_MODEL", "z-ai/glm-4.7").strip()
-NBFC_ROUTER_EMBED_MODEL = os.getenv("NBFC_ROUTER_EMBED_MODEL", "openai/text-embedding-3-small").strip()
-NBFC_ROUTER_CACHE_DIR = os.getenv("NBFC_ROUTER_CACHE_DIR", ".cache_nbfc_router").strip()
-
-# thresholds tuned for openai/text-embedding-3-small scale (adjust with eval later)
-SENTIMENT_THRESHOLD = float(os.getenv("NBFC_ROUTER_SENTIMENT_THRESHOLD", "0.26"))
-SENTIMENT_MARGIN = float(os.getenv("NBFC_ROUTER_SENTIMENT_MARGIN", "0.03"))
-REASON_UNKNOWN_GATE = float(os.getenv("NBFC_ROUTER_REASON_UNKNOWN_GATE", "0.30"))
-REASON_MARGIN = float(os.getenv("NBFC_ROUTER_REASON_MARGIN", "0.03"))
-
-# when embeddings are low-confidence -> call LLM
-FALLBACK_SENTIMENT_SCORE = float(os.getenv("NBFC_ROUTER_FALLBACK_SENTIMENT_SCORE", "0.33"))
-FALLBACK_REASON_SCORE = float(os.getenv("NBFC_ROUTER_FALLBACK_REASON_SCORE", "0.60"))
-
-# always call LLM for these (high-stakes)
 FORCE_LLM_RE = re.compile(r"\b(fraud|unauthorized|harass|harassment|threat|abuse)\b", re.I)
+PROFANITY_RE = re.compile(r"\b(fuck|fucking|wtf|shit|madarchod|bhenchod|bc|mc|chutiya|gandu)\b", re.I)
+POS_CUES_RE = re.compile(r"\b(thanks|thank you|thx|love|loved|awesome|amazing|great|super smooth|mast|bhadiya|badiya)\b|(❤️|😍|🔥|💯)", re.I)
+NEG_EMOTION_RE = re.compile(r"\b(worst|pathetic|unacceptable|frustrat|pissed|angry|annoyed|harass|fraud|refund|charged twice)\b", re.I)
+FORECLOSE_RE = re.compile(r"\b(foreclose|foreclosure|preclose|part payment|partpay|noc)\b", re.I)
+QUESTION_RE = re.compile(r"(\?|how much|how to|charges|fee|process|kya|kaise|kitna|kitne)\b", re.I)
+OPS_INTENT_RE = re.compile(r"\b(interest|rate|roi|emi|fee|charges|apply|status|approved|disburs|kyc|pan|otp|login|nach|statement|support)\b", re.I)
 
+# ... (Prototypes imported from module or defined here. 
+# For brevity in this fix, we assume they are imported or re-defined. 
+# We'll re-define simpler versions to ensure standalone function)
 
-def _headers() -> Optional[Dict[str, str]]:
-    h: Dict[str, str] = {}
-    if OPENROUTER_SITE_URL:
-        h["HTTP-Referer"] = OPENROUTER_SITE_URL
-    if OPENROUTER_APP_TITLE:
-        h["X-Title"] = OPENROUTER_APP_TITLE
-    return h or None
+from .prototypes_nbfc import SENTIMENT_PROTOTYPES, REASON_PROTOTYPES
 
+REASON_BOOSTS: List[Tuple[str, re.Pattern, float]] = [
+    ("loan_terms_rates", re.compile(r"\b(interest rate|roi|rate|tenure|emi|processing fee|charges)\b", re.I), 0.08),
+    ("disbursal", re.compile(r"\b(approved|approval)\b.*\b(not received|not credited)\b", re.I), 0.10),
+    ("kyc_verification", re.compile(r"\b(kyc|pan|aadhaar|verification)\b", re.I), 0.10),
+    ("otp_login_app_tech", re.compile(r"\b(otp|login|app)\b", re.I), 0.10),
+    ("collections_harassment", re.compile(r"\b(harass|recovery agent)\b", re.I), 0.12),
+    ("fraud_security", re.compile(r"\b(fraud|scam|unauthorized)\b", re.I), 0.12),
+]
 
 def _norm(s: str) -> str:
-    s = (s or "").strip()
-    s = re.sub(r"\s+", " ", s)
-    return s
-
+    return re.sub(r"\s+", " ", (s or "").strip())
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     a = a / (np.linalg.norm(a) + 1e-12)
     b = b / (np.linalg.norm(b) + 1e-12)
     return float(np.dot(a, b))
 
-
 def _sha256_json(obj: Any) -> str:
     blob = json.dumps(obj, ensure_ascii=False, sort_keys=True).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()
-
-
-# =============================================================================
-# Tone != "has an issue"
-# sentiment = emotional tone
-# =============================================================================
-
-PROFANITY_RE = re.compile(
-    r"\b(fuck|fucking|wtf|shit|madarchod|bhenchod|bc|mc|chutiya|gandu)\b",
-    re.IGNORECASE,
-)
-
-POS_CUES_RE = re.compile(
-    r"\b(thanks|thank you|thx|love|loved|awesome|amazing|great|super smooth|"
-    r"mast|bhadiya|badiya|resolved|sorted|helpful|quick|fast)\b|"
-    r"(❤️|😍|🔥|💯)",
-    re.IGNORECASE,
-)
-
-NEG_EMOTION_RE = re.compile(
-    r"\b("
-    r"worst|pathetic|unacceptable|frustrat(ed|ing)|pissed|angry|annoyed|"
-    r"harass|harassment|threat|abuse|stop calling|too many calls|"
-    r"scam|fraud|unauthorized|hacked|"
-    r"refund my money|refund.*(asap|now|immediately)|"
-    r"charged twice|double charged|overcharged"
-    r")\b",
-    re.IGNORECASE,
-)
-
-FORECLOSE_RE = re.compile(r"\b(foreclose|foreclosure|preclose|pre-closure|part payment|partpay|noc)\b", re.I)
-QUESTION_RE = re.compile(r"(\?|how much|how to|charges|fee|process|kya|kaise|kitna|kitne)\b", re.I)
-
-OPS_INTENT_RE = re.compile(
-    r"\b("
-    r"interest rate|roi|rate|tenure|emi|processing fee|charges|fee|"
-    r"apply|application|loan status|approved|approval|rejected|declined|"
-    r"disbursal|disburse|credited|not credited|not received|money not received|amount not received|"
-    r"kyc|pan|aadhaar|verification|mismatch|document|"
-    r"otp|login|app|crash|error|not working|"
-    r"nach|autodebit|mandate|bounce|"
-    r"foreclose|foreclosure|preclose|part payment|partpay|noc|"
-    r"statement|receipt|certificate|schedule|"
-    r"support|customer care|ticket|complaint|escalation|"
-    r"recovery|collections|overdue"
-    r")\b",
-    re.IGNORECASE,
-)
-
 
 def _tone_override(text: str) -> Optional[Tuple[SentimentLabel, str]]:
     t = text
@@ -4056,132 +4771,16 @@ def _tone_override(text: str) -> Optional[Tuple[SentimentLabel, str]]:
 
     if FORECLOSE_RE.search(t) and QUESTION_RE.search(t) and not has_neg and not has_prof:
         return ("neutral", "foreclosure_inquiry")
-
     if has_pos and (has_neg or has_prof):
         return ("mixed", "pos+neg_emotion")
-
-    if has_pos and not (has_neg or has_prof):
+    if has_pos:
         return ("positive", "positive_cues")
-
     if has_neg or has_prof:
-        why = []
-        if has_prof:
-            why.append("profanity")
-        if has_neg:
-            why.append("neg_emotion")
-        return ("negative", "+".join(why))
-
+        return ("negative", "neg_emotion/profanity")
     return None
 
-
 # =============================================================================
-# Prototypes
-# =============================================================================
-
-SENTIMENT_PROTOS: Dict[str, List[str]] = {
-    "positive": [
-        "Thanks! Super smooth experience, love the service ❤️",
-        "Great support, very helpful",
-        "Awesome experience, everything went smooth 🔥",
-        "bhai mast service, full satisfied 💯",
-    ],
-    "neutral": [
-        "KYC stuck, PAN name mismatch, what to do?",
-        "Disbursal kab hoga? approved but money not received",
-        "OTP is not coming, app keeps failing on login",
-        "What is the interest rate for 24 months?",
-        "How to download loan statement?",
-        "How to check loan status?",
-    ],
-    "negative": [
-        "Bro wtf, loan still not approved since 5 days",
-        "This is unacceptable, refund my money ASAP",
-        "Stop calling me, harassment by recovery agent",
-        "Worst experience, totally disappointed 😡",
-        "Charged twice, overcharged, fix it now",
-    ],
-}
-
-REASON_PROTOS: Dict[str, List[str]] = {
-    "lead_intent_new_loan": [
-        "I want a new loan, how to apply, eligibility, required documents",
-        "apply now, interested in loan, want to proceed",
-        "loan chahiye, apply karna hai",
-    ],
-    "eligibility_offer": [
-        "check eligibility, pre-approved offer, limit, income criteria",
-        "why am I not eligible, offer not showing",
-    ],
-    "loan_terms_rates": [
-        "what is the interest rate, ROI, tenure, EMI, processing fee, charges",
-        "interest rate for 24 months, EMI calculation",
-        "rate kitna hai, tenure options, EMI kitni banegi",
-    ],
-    "kyc_verification": [
-        "kyc stuck, verification failed, documents rejected, selfie failed",
-        "PAN/Aadhaar mismatch, address proof issue",
-        "pan name mismatch, aadhaar mismatch",
-    ],
-    "otp_login_app_tech": [
-        "otp not coming, login issue, app crash, technical error",
-        "app not working, server error, cannot verify otp",
-    ],
-    "application_status_approval": [
-        "loan application status, approval pending, rejected/declined",
-        "when will approval come, still pending",
-        "why rejected, underwriting pending",
-    ],
-    "disbursal": [
-        "disbursal delayed, amount not credited, disbursement pending",
-        "approved but money not received, amount not received after approval",
-        "disbursal kab hoga, credit nahi hua",
-    ],
-    "emi_payment_reflecting": [
-        "emi paid but not updated, payment not reflecting, receipt issue",
-        "UPI paid but not showing, paid but still shows overdue",
-    ],
-    "nach_autodebit_bounce": [
-        "NACH auto-debit failed, bounce, mandate issue, bank debit failed",
-        "autopay setup, mandate not active",
-    ],
-    "charges_fees_penalty": [
-        "processing fee, late fee, penalty, hidden charges, extra charge",
-        "why penalty applied, charges are wrong",
-    ],
-    "foreclosure_partpayment": [
-        "foreclosure, part payment, pre-closure charges, NOC",
-        "how to close loan early, settlement amount",
-    ],
-    "statement_receipt": [
-        "download loan statement, repayment schedule, interest certificate",
-        "need receipt for EMI, transaction receipt",
-    ],
-    "collections_harassment": [
-        "too many collection calls, harassment, abusive agent",
-        "recovery team threatening, stop calling",
-    ],
-    "fraud_security": [
-        "unauthorized transaction, scam, suspicious activity, account hacked",
-        "someone used my details, identity misuse",
-    ],
-    "customer_support": [
-        "customer care not responding, ticket unresolved, escalation",
-        "need to talk to agent, callback request",
-    ],
-}
-
-REASON_BOOSTS: List[Tuple[str, re.Pattern, float]] = [
-    ("loan_terms_rates", re.compile(r"\b(interest rate|roi|rate|tenure|emi|processing fee|charges)\b", re.I), 0.08),
-    ("disbursal", re.compile(r"\b(approved|approval)\b.*\b(not received|not credited|money not received|amount not received|credit nahi)\b", re.I), 0.10),
-    ("kyc_verification", re.compile(r"\b(kyc|pan|aadhaar|verification)\b.*\b(stuck|failed|mismatch|rejected)\b", re.I), 0.10),
-    ("otp_login_app_tech", re.compile(r"\b(otp|login|app)\b.*\b(not coming|failed|error|crash|not working)\b", re.I), 0.10),
-    ("collections_harassment", re.compile(r"\b(harass|harassment|threat|abuse|too many calls|recovery agent|collection)\b", re.I), 0.12),
-    ("fraud_security", re.compile(r"\b(fraud|scam|unauthorized|hacked|suspicious)\b", re.I), 0.12),
-]
-
-
-# =============================================================================
-# Cache prototype embeddings to disk (fast start; avoids re-embedding)
+# Caching
 # =============================================================================
 
 class _ProtoCache:
@@ -4195,62 +4794,50 @@ class _ProtoCache:
 
     def load(self, model: str, fp: str) -> Optional[Dict[str, List[List[float]]]]:
         p = self._path(model, fp)
-        if not p.exists():
-            return None
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            return None
+        if not p.exists(): return None
+        try: return json.loads(p.read_text(encoding="utf-8"))
+        except: return None
 
     def save(self, model: str, fp: str, data: Dict[str, List[List[float]]]) -> None:
         p = self._path(model, fp)
         p.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
+@dataclass
+class _ProtoBank:
+    vectors: Dict[str, List[np.ndarray]]
 
 # =============================================================================
 # Embeddings Router
 # =============================================================================
 
-@dataclass
-class _ProtoBank:
-    vectors: Dict[str, List[np.ndarray]]
-
-
 class EmbeddingsRouter:
-    def __init__(self, api_key: str, embed_model: str):
-        self.api_key = api_key
+    def __init__(self, embed_model: str):
         self.embed_model = embed_model
-        self.emb = OpenAIEmbeddings(
-            model=embed_model,
-            api_key=api_key,  # type: ignore
-            base_url=OPENROUTER_BASE_URL,
-            default_headers=_headers(),
-            check_embedding_ctx_length=False,
-        )
         self.cache = _ProtoCache(NBFC_ROUTER_CACHE_DIR)
         self._lock = asyncio.Lock()
         self._ready = False
         self._sent_bank: Optional[_ProtoBank] = None
         self._reason_bank: Optional[_ProtoBank] = None
 
-    async def _build_bank(self, protos: Dict[str, List[str]], cache_prefix: str) -> _ProtoBank:
+    async def _build_bank(self, protos: Dict[str, List[str]], cache_prefix: str, api_key: str) -> _ProtoBank:
         fp = _sha256_json({"prefix": cache_prefix, "protos": protos})
         cached = self.cache.load(self.embed_model, fp)
         if cached is not None:
-            out: Dict[str, List[np.ndarray]] = {}
-            for label, vecs in cached.items():
-                out[label] = [np.asarray(v, dtype=np.float32) for v in vecs]
+            out = {k: [np.asarray(v, dtype=np.float32) for v in vecs] for k, vecs in cached.items()}
             return _ProtoBank(vectors=out)
 
-        # batch embeddings (best practice)
-        labels: List[str] = []
-        flat: List[str] = []
+        # Generate fresh embeddings using Factory
+        emb = get_embeddings(api_key=api_key, model=self.embed_model)
+        
+        flat = []
+        labels = []
         for lab, texts in protos.items():
             for t in texts:
                 labels.append(lab)
                 flat.append(_norm(t))
 
-        vecs = await self.emb.aembed_documents(flat)
+        vecs = await emb.aembed_documents(flat)
+        
         ser: Dict[str, List[List[float]]] = {}
         out2: Dict[str, List[np.ndarray]] = {}
         for lab, v in zip(labels, vecs):
@@ -4260,251 +4847,158 @@ class EmbeddingsRouter:
         self.cache.save(self.embed_model, fp, ser)
         return _ProtoBank(vectors=out2)
 
-    async def ensure_ready(self) -> None:
-        if self._ready:
-            return
+    async def ensure_ready(self, api_key: str) -> None:
+        if self._ready: return
         async with self._lock:
-            if self._ready:
-                return
-            self._sent_bank = await self._build_bank(SENTIMENT_PROTOS, "sentiment_tone_v1")
-            self._reason_bank = await self._build_bank(REASON_PROTOS, "reason_v1")
+            if self._ready: return
+            self._sent_bank = await self._build_bank(SENTIMENT_PROTOTYPES, "sentiment_v1", api_key)
+            self._reason_bank = await self._build_bank(REASON_PROTOTYPES, "reason_v1", api_key)
             self._ready = True
 
-    async def _score(self, bank: _ProtoBank, text: str) -> List[Tuple[str, float]]:
-        v = np.asarray(await self.emb.aembed_query(_norm(text)), dtype=np.float32)
-        scored: List[Tuple[str, float]] = []
+    async def _score(self, bank: _ProtoBank, text: str, api_key: str) -> List[Tuple[str, float]]:
+        emb = get_embeddings(api_key=api_key, model=self.embed_model)
+        v = np.asarray(await emb.aembed_query(_norm(text)), dtype=np.float32)
+        scored = []
         for label, vecs in bank.vectors.items():
             scored.append((label, max(_cosine(v, pv) for pv in vecs)))
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored
 
-    async def classify_sentiment(self, text: str) -> Dict[str, Any]:
-        await self.ensure_ready()
-        assert self._sent_bank is not None
+    async def classify(self, text: str, api_key: str) -> Dict[str, Any]:
+        await self.ensure_ready(api_key)
+        
+        # Sentiment
+        scored_s = await self._score(self._sent_bank, text, api_key) # type: ignore
+        best_s, score_s = scored_s[0]
+        
+        label_s = best_s
+        if score_s < NBFC_ROUTER_SENTIMENT_THRESHOLD:
+            label_s = "unknown"
+        elif len(scored_s) > 1 and (scored_s[0][1] - scored_s[1][1]) < NBFC_ROUTER_SENTIMENT_MARGIN:
+            label_s = f"ambiguous:{scored_s[0][0]}|{scored_s[1][0]}"
 
-        scored = await self._score(self._sent_bank, text)
-        best_label, best_score = scored[0]
+        ov = _tone_override(text)
+        if ov: label_s = ov[0]
 
-        label: str = best_label
-        if best_score < SENTIMENT_THRESHOLD:
-            label = "unknown"
-        elif len(scored) > 1 and (scored[0][1] - scored[1][1]) < SENTIMENT_MARGIN:
-            label = f"ambiguous:{scored[0][0]}|{scored[1][0]}"
-
-        overridden = False
-        override_reason = None
-
-        # override only when low confidence / ambiguous
-        if label == "unknown" or label.startswith("ambiguous:") or best_score < FALLBACK_SENTIMENT_SCORE:
-            ov = _tone_override(text)
-            if ov:
-                label, override_reason = ov
-                overridden = True
-
-        return {
-            "label": label,
-            "score": float(best_score),
-            "topk": [(a, float(b)) for a, b in scored[:3]],
-            "overridden": overridden,
-            "override_reason": override_reason,
-        }
-
-    async def classify_reason(self, text: str) -> Dict[str, Any]:
-        await self.ensure_ready()
-        assert self._reason_bank is not None
-
-        scored = await self._score(self._reason_bank, text)
-
-        # apply lexical boosts
-        bumps: Dict[str, float] = {}
-        for lab, pat, bump in REASON_BOOSTS:
-            if pat.search(text):
-                bumps[lab] = max(bumps.get(lab, 0.0), bump)
-
-        if bumps:
-            scored = [(lab, sc + bumps.get(lab, 0.0)) for (lab, sc) in scored]
-            scored.sort(key=lambda x: x[1], reverse=True)
-
-        best_label, best_score = scored[0]
-        label: str = best_label
-
-        if best_score < REASON_UNKNOWN_GATE:
-            label = "unknown"
-        elif len(scored) > 1 and (scored[0][1] - scored[1][1]) < REASON_MARGIN:
-            label = f"ambiguous:{scored[0][0]}|{scored[1][0]}"
-
-        return {
-            "label": label,
-            "score": float(best_score),
-            "topk": [(a, float(b)) for a, b in scored[:3]],
-        }
-
-    async def classify(self, text: str) -> Dict[str, Any]:
-        t = _norm(text)
-        s = await self.classify_sentiment(t)
-
-        need_reason = bool(OPS_INTENT_RE.search(t)) or s["label"] in ("negative", "mixed") or ("negative" in s["label"] if isinstance(s["label"], str) and s["label"].startswith("ambiguous:") else False)
-
-        r = None
+        # Reason
+        need_reason = bool(OPS_INTENT_RE.search(text)) or label_s in ("negative", "mixed")
+        reason_res = None
+        
         if need_reason:
-            r = await self.classify_reason(t)
+            scored_r = await self._score(self._reason_bank, text, api_key) # type: ignore
+            # Boosts
+            bumps = {}
+            for lab, pat, bump in REASON_BOOSTS:
+                if pat.search(text): bumps[lab] = max(bumps.get(lab, 0.0), bump)
+            
+            if bumps:
+                scored_r = [(l, s + bumps.get(l, 0.0)) for l, s in scored_r]
+                scored_r.sort(key=lambda x: x[1], reverse=True)
 
-        # pure praise -> no reason
-        if s["label"] == "positive" and not OPS_INTENT_RE.search(t):
-            r = None
+            best_r, score_r = scored_r[0]
+            label_r = best_r
+            if score_r < NBFC_ROUTER_REASON_UNKNOWN_GATE:
+                label_r = "unknown"
+            
+            reason_res = {"label": label_r, "score": float(score_r), "topk": [(l, float(s)) for l,s in scored_r[:3]]}
 
-        return {"sentiment": s, "reason": r, "backend": "embeddings"}
-
+        return {
+            "sentiment": {"label": label_s, "score": float(score_s)},
+            "reason": reason_res,
+            "backend": "embeddings"
+        }
 
 # =============================================================================
-# LLM Router (GLM-4.7 via OpenRouter using ChatDeepSeek)
+# LLM Router
 # =============================================================================
 
 class LLMRoute(BaseModel):
     sentiment: SentimentLabel
     reason: ReasonLabel
-    confidence: float = Field(ge=0.0, le=1.0)
-    reason_confidence: float = Field(ge=0.0, le=1.0)
-    short_rationale: Optional[str] = Field(default=None, description="One short sentence. No chain-of-thought.")
-
+    confidence: float
+    reason_confidence: float
+    short_rationale: Optional[str]
 
 class LLMRouter:
-    def __init__(self, api_key: str, chat_model: str):
-        self.api_key = api_key
+    def __init__(self, chat_model: str):
         self.chat_model = chat_model
-        self.llm = ChatDeepSeek(
-            model=chat_model,
-            api_key=api_key,  # type: ignore
-            api_base=OPENROUTER_BASE_URL,
-            default_headers=_headers(),
-            temperature=0,
-            streaming=False,
-            max_retries=2,
-            timeout=30,
-        )
-        # Try structured output; we will fallback to manual JSON parsing if provider rejects.
-        self.structured = self.llm.with_structured_output(LLMRoute)
-
         self.system = (
-            "You are an NBFC chatbot router.\n"
-            "Output MUST be valid JSON matching the schema.\n\n"
-            "Sentiment is EMOTIONAL TONE (not 'has an issue'):\n"
-            "- positive: praise/thanks\n"
-            "- negative: anger/frustration/harassment/fraud/demanding tone\n"
-            "- neutral: informational or problem report without emotional language\n"
-            "- mixed: praise + complaint\n"
-            "- unknown if unclear\n\n"
-            "Reason should be the best ops queue when relevant; if message is pure praise with no request, use reason='unknown' and low reason_confidence.\n"
-            "No markdown."
+            "You are an NBFC chatbot router. Output JSON only.\n"
+            "Sentiment: positive, negative, neutral, mixed, unknown.\n"
+            "Reason: Choose from standard list or unknown."
         )
 
-    @staticmethod
-    def _extract_json(s: str) -> dict:
-        m = re.search(r"\{.*\}", s, flags=re.S)
-        if not m:
-            raise ValueError("No JSON object found")
-        return json.loads(m.group(0))
-
-    async def classify(self, text: str) -> Dict[str, Any]:
-        t = _norm(text)
+    async def classify(self, text: str, api_key: str) -> Dict[str, Any]:
+        llm = get_llm(
+            model_name=self.chat_model,
+            openrouter_api_key=api_key,
+            temperature=0.0
+        )
+        
+        # Try structured output if available, else standard JSON parsing
         try:
-            out: LLMRoute = await self.structured.ainvoke([("system", self.system), ("human", t)])
+            structured = llm.with_structured_output(LLMRoute)
+            out = await structured.ainvoke([("system", self.system), ("human", text)])
         except Exception:
-            raw = await self.llm.ainvoke([("system", self.system), ("human", t)])
-            payload = self._extract_json(getattr(raw, "content", str(raw)))
-            out = LLMRoute(**payload)
+            # Fallback
+            chain = llm | JsonOutputParser(pydantic_object=LLMRoute)
+            out = await chain.ainvoke([("system", self.system), ("human", text)])
 
-        s = {"label": out.sentiment, "score": float(out.confidence), "topk": [], "overridden": False, "override_reason": None}
-        r = {"label": out.reason, "score": float(out.reason_confidence), "topk": [], "meta": {"rationale": out.short_rationale}}
-
-        if out.sentiment == "positive" and not OPS_INTENT_RE.search(t):
-            r = None
-
-        return {"sentiment": s, "reason": r, "backend": "llm_glm-4.7"}
-
-
-# =============================================================================
-# Hybrid Router (permanent: embeddings first, LLM on demand)
-# =============================================================================
-
-class HybridRouter:
-    def __init__(self, emb: EmbeddingsRouter, llm: LLMRouter):
-        self.emb = emb
-        self.llm = llm
-
-    async def classify(self, text: str) -> Dict[str, Any]:
-        t = _norm(text)
-        e = await self.emb.classify(t)
-
-        # force LLM
-        if FORCE_LLM_RE.search(t):
-            l = await self.llm.classify(t)
-            l["backend"] = "hybrid->llm_glm-4.7"
-            return l
-
-        s = e["sentiment"]
-        r = e["reason"]
-
-        need_llm = False
-        if s["label"] == "unknown" or (isinstance(s["label"], str) and s["label"].startswith("ambiguous:")) or float(s["score"]) < FALLBACK_SENTIMENT_SCORE:
-            need_llm = True
-
-        expect_reason = bool(OPS_INTENT_RE.search(t)) or s["label"] in ("negative", "mixed")
-        if expect_reason:
-            if r is None:
-                need_llm = True
-            else:
-                if r["label"] == "unknown" or (isinstance(r["label"], str) and r["label"].startswith("ambiguous:")) or float(r["score"]) < FALLBACK_REASON_SCORE:
-                    need_llm = True
-
-        if not need_llm:
-            e["backend"] = "hybrid->embeddings"
-            return e
-
-        l = await self.llm.classify(t)
-        l["backend"] = "hybrid->llm_glm-4.7"
-        return l
-
+        # Convert to dict format (handle both BaseModel and dict)
+        if isinstance(out, dict):
+            s = {"label": out["sentiment"], "score": out["confidence"]}
+            r = {"label": out["reason"], "score": out["reason_confidence"], "meta": {"rationale": out.get("short_rationale")}}
+        else:
+            route: LLMRoute = out  # type: ignore
+            s = {"label": route.sentiment, "score": route.confidence}
+            r = {"label": route.reason, "score": route.reason_confidence, "meta": {"rationale": route.short_rationale}}
+        return {"sentiment": s, "reason": r, "backend": f"llm_{self.chat_model}"}
 
 # =============================================================================
-# Public service
+# Service
 # =============================================================================
 
 class NBFCClassifierService:
     def __init__(self):
-        self.enabled = NBFC_ROUTER_ENABLED
-
-    def _require_key(self, openrouter_api_key: Optional[str]) -> str:
-        key = (openrouter_api_key or os.getenv("OPENROUTER_API_KEY") or "").strip()
-        if not key:
-            raise ValueError("OPENROUTER_API_KEY missing (router requires OpenRouter key)")
-        return key
+        self.emb = EmbeddingsRouter(NBFC_ROUTER_EMBED_MODEL)
+        self.llm = LLMRouter(NBFC_ROUTER_CHAT_MODEL)
 
     async def classify(self, text: str, openrouter_api_key: Optional[str] = None, mode: Optional[str] = None) -> Dict[str, Any]:
-        if not self.enabled:
+        if not NBFC_ROUTER_ENABLED:
             return {"disabled": True, "backend": "disabled"}
+        
+        if not openrouter_api_key:
+            return {"error": "OpenRouter Key required for router"}
 
-        key = self._require_key(openrouter_api_key)
-        mode2 = (mode or NBFC_ROUTER_MODE).strip().lower()
+        t = _norm(text)
+        mode = mode or NBFC_ROUTER_MODE
 
-        emb = EmbeddingsRouter(api_key=key, embed_model=NBFC_ROUTER_EMBED_MODEL)
-        llm = LLMRouter(api_key=key, chat_model=NBFC_ROUTER_CHAT_MODEL)
-        hyb = HybridRouter(emb, llm)
+        # Embeddings First
+        e = await self.emb.classify(t, openrouter_api_key)
+        
+        if mode == "embeddings": return e
+        
+        # Force LLM check
+        force_llm = bool(FORCE_LLM_RE.search(t))
+        
+        # Confidence check
+        s_score = e["sentiment"]["score"]
+        r_score = e["reason"]["score"] if e["reason"] else 1.0
+        
+        low_conf = (s_score < NBFC_ROUTER_FALLBACK_SENTIMENT_SCORE) or (r_score < NBFC_ROUTER_FALLBACK_REASON_SCORE)
+        
+        if mode == "llm" or force_llm or (mode == "hybrid" and low_conf):
+            l = await self.llm.classify(t, openrouter_api_key)
+            l["backend"] = f"hybrid->{l['backend']}" if mode == "hybrid" else l["backend"]
+            return l
 
-        if mode2 == "embeddings":
-            return await emb.classify(text)
-        if mode2 == "llm":
-            return await llm.classify(text)
-        if mode2 == "compare":
-            e = await emb.classify(text)
-            l = await llm.classify(text)
-            return {"backend": "compare", "embeddings": e, "llm": l}
-        # default hybrid
-        return await hyb.classify(text)
+        return e
 
     async def compare(self, text: str, openrouter_api_key: Optional[str] = None) -> Dict[str, Any]:
-        return await self.classify(text, openrouter_api_key=openrouter_api_key, mode="compare")
-
+        if not openrouter_api_key: return {"error": "Key required"}
+        e = await self.emb.classify(text, openrouter_api_key)
+        l = await self.llm.classify(text, openrouter_api_key)
+        return {"embeddings": e, "llm": l}
 
 nbfc_router_service = NBFCClassifierService()
 
@@ -4512,6 +5006,532 @@ nbfc_router_service = NBFCClassifierService()
 
 ===== src/agent_service/features/__init__.py [0 tokens] =====
 
+
+
+===== src/agent_service/core/session_utils.py [1,115 tokens] =====
+"""
+Session Management & Authentication Utilities
+Handles session validation, Redis operations, and authentication checks.
+"""
+import json
+import logging
+from typing import Optional, Dict, Any
+from redis import Redis
+from redis.asyncio import Redis as AsyncRedis
+
+from src.agent_service.core.config import REDIS_URL
+
+log = logging.getLogger(__name__)
+
+
+# Global async Redis client (singleton)
+_async_redis_client: Optional[AsyncRedis] = None
+
+
+async def get_redis() -> AsyncRedis:
+    """
+    Get or create global async Redis client (singleton pattern).
+    
+    Returns:
+        AsyncRedis client instance
+    """
+    global _async_redis_client
+    
+    if _async_redis_client is None:
+        _async_redis_client = AsyncRedis.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            encoding="utf-8"
+        )
+        log.info("Initialized async Redis client")
+    
+    return _async_redis_client
+
+
+async def close_redis() -> None:
+    """Close global Redis connection (cleanup on shutdown)."""
+    global _async_redis_client
+    
+    if _async_redis_client:
+        await _async_redis_client.close()
+        _async_redis_client = None
+        log.info("Closed async Redis client")
+
+
+class SessionUtils:
+    """Centralized session management and authentication utilities."""
+    
+    @staticmethod
+    def validate_session_id(session_id: object) -> str:
+        """Ensures session_id is a valid non-empty string."""
+        sid = str(session_id).strip() if session_id is not None else ""
+        if not sid or sid.lower() in {"null", "none"}:
+            raise ValueError(f"Invalid session_id: {session_id!r}")
+        return sid
+    
+    @staticmethod
+    def is_user_authenticated(session_id: str) -> bool:
+        """Check if user has an active access_token in Redis."""
+        try:
+            client = Redis.from_url(REDIS_URL, decode_responses=True)
+            data_str = client.get(session_id)
+            
+            if not data_str:
+                return False
+            
+            data = json.loads(str(data_str))
+            return bool(data.get("access_token"))
+            
+        except Exception as e:
+            log.warning(f"Auth check failed for session {session_id}: {e}")
+            return False
+    
+    @staticmethod
+    async def get_app_id_for_session(session_id: str) -> Optional[str]:
+        """Retrieve app_id associated with a session from Redis (async)."""
+        try:
+            client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
+            data_str = await client.get(session_id)
+            await client.close()
+            
+            if data_str:
+                data = json.loads(str(data_str))
+                return data.get("app_id")
+        except Exception as e:
+            log.warning(f"Failed to retrieve app_id for session {session_id}: {e}")
+        
+        return None
+    
+    @staticmethod
+    async def get_session_metadata(session_id: str) -> Dict[str, Any]:
+        """Retrieve full session metadata from Redis (async)."""
+        try:
+            client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
+            data_str = await client.get(session_id)
+            await client.close()
+            
+            if data_str:
+                return json.loads(str(data_str))
+        except Exception as e:
+            log.error(f"Failed to retrieve metadata for session {session_id}: {e}")
+        
+        return {}
+    
+    @staticmethod
+    async def save_session_config(
+        session_id: str,
+        config: Dict[str, Any],
+        ttl: int = 30 * 24 * 60 * 60
+    ) -> bool:
+        """Save session configuration to Redis (BYOK storage)."""
+        try:
+            redis = await get_redis()
+            key = f"session:config:{session_id}"
+            await redis.set(key, json.dumps(config), ex=ttl)
+            log.info(f"Saved config for session {session_id}")
+            return True
+        except Exception as e:
+            log.error(f"Failed to save session config: {e}")
+            return False
+    
+    @staticmethod
+    async def get_session_config(session_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve session configuration from Redis."""
+        try:
+            redis = await get_redis()
+            key = f"session:config:{session_id}"
+            config_str = await redis.get(key)
+            return json.loads(config_str) if config_str else None
+        except Exception as e:
+            log.error(f"Failed to get session config: {e}")
+            return None
+    
+    @staticmethod
+    async def delete_session(session_id: str) -> bool:
+        """Delete session configuration from Redis."""
+        try:
+            redis = await get_redis()
+            key = f"session:config:{session_id}"
+            deleted = await redis.delete(key)
+            if deleted > 0:
+                log.info(f"Deleted session config for {session_id}")
+                return True
+            return False
+        except Exception as e:
+            log.error(f"Failed to delete session: {e}")
+            return False
+
+
+# Singleton instance
+session_utils = SessionUtils()
+
+
+# Backward compatibility aliases
+def valid_session_id(session_id: object) -> str:
+    """DEPRECATED: Use session_utils.validate_session_id() instead."""
+    return session_utils.validate_session_id(session_id)
+
+
+def is_user_authenticated(session_id: str) -> bool:
+    """DEPRECATED: Use session_utils.is_user_authenticated() instead."""
+    return session_utils.is_user_authenticated(session_id)
+
+
+===== src/agent_service/core/session_cost.py [2,600 tokens] =====
+"""
+Production-grade session cost tracking with Redis persistence.
+
+Features:
+- Atomic updates with Redis transactions
+- Detailed usage breakdown by model/provider
+- Automatic expiry and cleanup
+- Comprehensive error handling
+- Audit trail
+"""
+import json
+import logging
+from typing import Dict, Any, Optional, List
+from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
+
+log = logging.getLogger(__name__)
+
+
+class SessionCostTracker:
+    """Thread-safe session cost tracking with Redis backend."""
+    
+    # Redis key patterns
+    COST_KEY_PREFIX = "session:cost"
+    HISTORY_KEY_PREFIX = "session:cost:history"
+    
+    # Data retention (days)
+    COST_TTL = 30 * 24 * 60 * 60  # 30 days
+    HISTORY_TTL = 7 * 24 * 60 * 60  # 7 days
+    HISTORY_MAX_ENTRIES = 1000
+    
+    def __init__(self, redis: Optional[Redis] = None):
+        """Initialize with optional Redis connection."""
+        self._redis = redis
+    
+    async def _get_redis(self) -> Redis:
+        """Get Redis connection."""
+        if self._redis:
+            return self._redis
+        
+        from src.agent_service.core.session_utils import get_redis
+        return await get_redis()
+    
+    @staticmethod
+    def _cost_key(session_id: str) -> str:
+        """Redis key for session cost aggregate."""
+        return f"{SessionCostTracker.COST_KEY_PREFIX}:{session_id}"
+    
+    @staticmethod
+    def _history_key(session_id: str) -> str:
+        """Redis key for session cost history (list)."""
+        return f"{SessionCostTracker.HISTORY_KEY_PREFIX}:{session_id}"
+    
+    @staticmethod
+    def _round_cost(value: float) -> float:
+        """Round cost to 8 decimal places (satoshi precision)."""
+        return float(Decimal(str(value)).quantize(Decimal('0.00000001'), rounding=ROUND_HALF_UP))
+    
+    async def add_cost(
+        self,
+        session_id: str,
+        cost: float,
+        usage: Dict[str, int],
+        model: str,
+        provider: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Atomically add cost entry to session totals.
+        
+        Args:
+            session_id: Unique session identifier
+            cost: Cost in USD (can be 0 for free tier)
+            usage: Token usage breakdown
+            model: Model identifier
+            provider: Provider name (groq/openrouter/nvidia)
+            metadata: Optional request metadata (endpoint, latency, etc.)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not session_id:
+            log.error("Cannot track cost: session_id is required")
+            return False
+        
+        try:
+            redis = await self._get_redis()
+            cost_key = self._cost_key(session_id)
+            history_key = self._history_key(session_id)
+            
+            # Current timestamp
+            now = datetime.now(timezone.utc)
+            now_iso = now.isoformat()
+            
+            # Build history entry
+            history_entry = {
+                "timestamp": now_iso,
+                "cost": self._round_cost(cost),
+                "model": model,
+                "provider": provider,
+                "usage": {k: v for k, v in usage.items() if v and v > 0},
+                "metadata": metadata or {}
+            }
+            
+            # Use pipeline for atomic updates
+            async with redis.pipeline(transaction=True) as pipe:
+                # Get existing aggregate
+                existing = await redis.get(cost_key)
+                
+                if existing:
+                    data = json.loads(existing)
+                else:
+                    # Initialize new session cost tracking
+                    data = {
+                        "session_id": session_id,
+                        "total_cost": 0.0,
+                        "total_requests": 0,
+                        "total_tokens": 0,
+                        "total_prompt_tokens": 0,
+                        "total_completion_tokens": 0,
+                        "total_reasoning_tokens": 0,
+                        "total_cached_tokens": 0,
+                        "by_model": {},
+                        "by_provider": {},
+                        "first_request_at": now_iso,
+                        "last_request_at": None,
+                        "version": "1.0"
+                    }
+                
+                # Update aggregate totals
+                data["total_cost"] = self._round_cost(data["total_cost"] + cost)
+                data["total_requests"] += 1
+                data["total_tokens"] += usage.get("total_tokens", 0)
+                data["total_prompt_tokens"] += usage.get("prompt_tokens", 0)
+                data["total_completion_tokens"] += usage.get("completion_tokens", 0)
+                data["total_reasoning_tokens"] += usage.get("reasoning_tokens", 0)
+                data["total_cached_tokens"] += usage.get("cached_tokens", 0)
+                data["last_request_at"] = now_iso
+                
+                # Update model breakdown
+                if model not in data["by_model"]:
+                    data["by_model"][model] = {
+                        "cost": 0.0,
+                        "requests": 0,
+                        "tokens": 0,
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "reasoning_tokens": 0
+                    }
+                model_data = data["by_model"][model]
+                model_data["cost"] = self._round_cost(model_data["cost"] + cost)
+                model_data["requests"] += 1
+                model_data["tokens"] += usage.get("total_tokens", 0)
+                model_data["prompt_tokens"] += usage.get("prompt_tokens", 0)
+                model_data["completion_tokens"] += usage.get("completion_tokens", 0)
+                model_data["reasoning_tokens"] += usage.get("reasoning_tokens", 0)
+                
+                # Update provider breakdown
+                if provider not in data["by_provider"]:
+                    data["by_provider"][provider] = {
+                        "cost": 0.0,
+                        "requests": 0,
+                        "tokens": 0,
+                        "free_tier": cost == 0.0
+                    }
+                provider_data = data["by_provider"][provider]
+                provider_data["cost"] = self._round_cost(provider_data["cost"] + cost)
+                provider_data["requests"] += 1
+                provider_data["tokens"] += usage.get("total_tokens", 0)
+                
+                # Execute atomic updates
+                pipe.set(cost_key, json.dumps(data), ex=self.COST_TTL)
+                pipe.lpush(history_key, json.dumps(history_entry))
+                pipe.ltrim(history_key, 0, self.HISTORY_MAX_ENTRIES - 1)
+                pipe.expire(history_key, self.HISTORY_TTL)
+                
+                await pipe.execute()
+            
+            log.info(
+                f"Session {session_id}: Added ${cost:.6f} ({provider}/{model}), "
+                f"total: ${data['total_cost']:.6f} over {data['total_requests']} requests"
+            )
+            return True
+            
+        except RedisError as e:
+            log.error(f"Redis error tracking session cost: {e}")
+            return False
+        except Exception as e:
+            log.exception(f"Failed to track session cost: {e}")
+            return False
+    
+    async def get_cost(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get aggregate cost data for session.
+        
+        Returns:
+            Cost aggregate dict or None if no data exists
+        """
+        try:
+            redis = await self._get_redis()
+            cost_key = self._cost_key(session_id)
+            
+            existing = await redis.get(cost_key)
+            if not existing:
+                return None
+            
+            data = json.loads(existing)
+            
+            # Add computed fields
+            data["average_cost_per_request"] = (
+                self._round_cost(data["total_cost"] / data["total_requests"])
+                if data["total_requests"] > 0 else 0.0
+            )
+            
+            return data
+            
+        except RedisError as e:
+            log.error(f"Redis error getting session cost: {e}")
+            return None
+        except Exception as e:
+            log.error(f"Failed to get session cost: {e}")
+            return None
+    
+    async def get_history(
+        self,
+        session_id: str,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Get recent cost history for session.
+        
+        Args:
+            session_id: Session identifier
+            limit: Max entries to return (default 100)
+        
+        Returns:
+            List of cost entries, most recent first
+        """
+        try:
+            redis = await self._get_redis()
+            history_key = self._history_key(session_id)
+            
+            # Get entries from list
+            entries = await redis.lrange(history_key, 0, limit - 1)  # type: ignore[misc]
+            
+            return [json.loads(entry) for entry in entries]
+            
+        except RedisError as e:
+            log.error(f"Redis error getting cost history: {e}")
+            return []
+        except Exception as e:
+            log.error(f"Failed to get cost history: {e}")
+            return []
+    
+    async def reset_cost(self, session_id: str) -> bool:
+        """
+        Reset all cost tracking for session.
+        
+        Args:
+            session_id: Session identifier
+        
+        Returns:
+            True if successful
+        """
+        try:
+            redis = await self._get_redis()
+            cost_key = self._cost_key(session_id)
+            history_key = self._history_key(session_id)
+            
+            deleted = await redis.delete(cost_key, history_key)
+            
+            if deleted > 0:
+                log.info(f"Reset cost tracking for session {session_id}")
+                return True
+            else:
+                log.warning(f"No cost data found for session {session_id}")
+                return False
+                
+        except RedisError as e:
+            log.error(f"Redis error resetting session cost: {e}")
+            return False
+        except Exception as e:
+            log.error(f"Failed to reset session cost: {e}")
+            return False
+    
+    async def get_all_sessions_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of all active sessions with cost data.
+        
+        Returns:
+            Summary statistics across all sessions
+        """
+        try:
+            redis = await self._get_redis()
+            
+            # Scan for aggregate cost keys ONLY (exclude history keys)
+            # Pattern: session:cost:{session_id} but NOT session:cost:history:{session_id}
+            pattern = f"{self.COST_KEY_PREFIX}:*"
+            sessions = []
+            total_cost = 0.0
+            total_requests = 0
+            
+            async for key in redis.scan_iter(match=pattern, count=100):
+                # Skip history keys (they are lists, not aggregates)
+                if ":history:" in key:
+                    continue
+                
+                try:
+                    data = await redis.get(key)
+                    if data:
+                        session_data = json.loads(data)
+                        sessions.append({
+                            "session_id": session_data["session_id"],
+                            "total_cost": session_data["total_cost"],
+                            "total_requests": session_data["total_requests"],
+                            "last_request_at": session_data["last_request_at"]
+                        })
+                        total_cost += session_data["total_cost"]
+                        total_requests += session_data["total_requests"]
+                except json.JSONDecodeError:
+                    log.warning(f"Failed to parse JSON from key {key}")
+                    continue
+                except Exception as e:
+                    log.warning(f"Failed to process key {key}: {e}")
+                    continue
+            
+            return {
+                "active_sessions": len(sessions),
+                "total_cost": self._round_cost(total_cost),
+                "total_requests": total_requests,
+                "sessions": sorted(sessions, key=lambda x: x["total_cost"], reverse=True)
+            }
+            
+        except Exception as e:
+            log.error(f"Failed to get sessions summary: {e}")
+            return {
+                "active_sessions": 0,
+                "total_cost": 0.0,
+                "total_requests": 0,
+                "error": str(e)
+            }
+
+# Global singleton
+_session_cost_tracker: Optional[SessionCostTracker] = None
+
+
+def get_session_cost_tracker() -> SessionCostTracker:
+    """Get or create global session cost tracker instance."""
+    global _session_cost_tracker
+    if _session_cost_tracker is None:
+        _session_cost_tracker = SessionCostTracker()
+    return _session_cost_tracker
 
 
 ===== src/agent_service/core/config.py [831 tokens] =====
@@ -4582,7 +5602,48 @@ ENABLE_LLM_JUDGE = os.getenv("ENABLE_LLM_JUDGE", "true").lower() == "true"
 
 
 
-===== src/agent_service/core/schemas.py [684 tokens] =====
+===== src/agent_service/core/graph_utils.py [291 tokens] =====
+"""
+LangGraph-specific Utilities
+Handles state management, message history, and graph reducers.
+"""
+import logging
+from typing import Dict, Any, List
+from langchain_core.messages import RemoveMessage, BaseMessage
+
+from src.agent_service.core.config import KEEP_LAST
+
+log = logging.getLogger(__name__)
+
+
+class GraphUtils:
+    """Utilities for LangGraph state management and message handling."""
+    
+    @staticmethod
+    def keep_only_last_n_messages(state: Dict[str, Any], config: Dict[str, Any], n: int = KEEP_LAST) -> Dict[str, Any]:
+        """LangGraph reducer to keep message history short."""
+        msgs: List[BaseMessage] = list(state.get("messages", []))
+        
+        if len(msgs) <= n:
+            return {}
+        
+        messages_to_remove = [RemoveMessage(id=msgs[i].id) for i in range(len(msgs) - n) if msgs[i].id is not None] # type: ignore
+        log.debug(f"Trimming {len(messages_to_remove)} messages (keeping last {n})")
+        return {"messages": messages_to_remove}
+
+
+# Singleton instance
+graph_utils = GraphUtils()
+
+
+# Backward compatibility function
+def keep_only_last_n_messages(state: dict, config: dict) -> Dict[str, Any]:
+    """DEPRECATED: Use graph_utils.keep_only_last_n_messages() instead."""
+    return graph_utils.keep_only_last_n_messages(state, config)
+
+
+
+===== src/agent_service/core/schemas.py [993 tokens] =====
 from __future__ import annotations
 
 from typing import Optional, Literal, List, Dict, Any
@@ -4590,42 +5651,40 @@ from pydantic import BaseModel, Field
 
 
 # =========================
-# Agent
+# Agent & Session Configuration
 # =========================
 
 class AgentRequest(BaseModel):
-    session_id: str
-    question: str
+    session_id: str = Field(..., description="Unique session identifier")
+    question: str = Field(..., description="User query")
 
-    # Optional overrides
+    # Optional overrides (Session-scope or Request-scope)
     system_prompt: Optional[str] = None
     model_name: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    provider: Optional[Literal["groq", "openrouter", "nvidia"]] = None
+
+    # BYOK Keys (Ephemeral)
     openrouter_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
-
-    # allow "default"/"none" for qwen, and low/medium/high for others
-    reasoning_effort: Optional[str] = None
+    groq_api_key: Optional[str] = None
 
 
-class BaseSessionConfig(BaseModel):
+class SessionConfig(BaseModel):
+    """
+    Unified configuration for a session. 
+    Replaces separate GroqConfig/OpenRouterConfig/NvidiaConfig.
+    """
     session_id: str
     system_prompt: Optional[str] = None
+    model_name: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    provider: Optional[Literal["groq", "openrouter", "nvidia"]] = None
 
+    # Persisted Keys
     openrouter_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
-
-
-class GroqConfig(BaseSessionConfig):
-    model_name: str
-
-
-class OpenRouterConfig(BaseSessionConfig):
-    model_name: str
-
-
-class NvidiaConfig(BaseSessionConfig):
-    model_name: str
+    groq_api_key: Optional[str] = None
 
 
 # =========================
@@ -4638,7 +5697,6 @@ class RouterClassifyRequest(BaseModel):
     session_id: Optional[str] = None
     text: str
     mode: Optional[RouterMode] = None
-
     openrouter_api_key: Optional[str] = None
 
 class RouterResultResponse(BaseModel):
@@ -4651,7 +5709,7 @@ class RouterResultResponse(BaseModel):
 
 
 # =========================
-# FAQ / KB
+# FAQ / Knowledge Base
 # =========================
 
 class FAQItem(BaseModel):
@@ -4680,11 +5738,15 @@ class FAQSemanticDeleteRequest(BaseModel):
 # =========================
 
 class FollowUpResponse(BaseModel):
-    questions: List[str] = Field(description="A list of 5 potential follow-up questions.", min_length=1, max_length=5)
+    questions: List[str] = Field(
+        description="A list of 5 potential follow-up questions.", 
+        min_length=1, 
+        max_length=5
+    )
 
 
 # =========================
-# Judge schemas
+# Judge Schemas
 # =========================
 
 class ScoredQuestion(BaseModel):
@@ -4697,45 +5759,185 @@ class JudgeResponse(BaseModel):
     evaluations: List[ScoredQuestion] = Field(description="List of evaluated questions with their scores.")
 
 
-===== src/agent_service/core/cost.py [321 tokens] =====
+# =========================
+# Cost Tracking
+# =========================
+
+class TokenUsage(BaseModel):
+    """Detailed token usage breakdown."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    
+    # Optional advanced fields
+    reasoning_tokens: Optional[int] = None  # For DeepSeek/O1/Qwen reasoning models
+    cached_tokens: Optional[int] = None     # For Claude/Gemini cache hits
+    audio_tokens: Optional[int] = None      # For multimodal audio
+
+
+class CostBreakdown(BaseModel):
+    """Detailed cost breakdown with pricing."""
+    prompt_cost: float = 0.0
+    completion_cost: float = 0.0
+    reasoning_cost: Optional[float] = None
+    cached_cost: Optional[float] = None
+    total_cost: float = 0.0
+    
+    # Metadata
+    model: str
+    provider: str
+    currency: str = "USD"
+    
+    # Token details
+    usage: TokenUsage
+
+
+
+===== src/agent_service/core/cost.py [1,199 tokens] =====
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple, Any
 from src.agent_service.llm.catalog import model_service
 
 log = logging.getLogger("cost_tracker")
 
-async def calculate_run_cost(model_id: str, usage: Dict[str, int]) -> float:
+
+async def calculate_run_cost_detailed(
+    model_id: str, 
+    usage: Dict[str, int],
+    provider: str
+) -> Tuple[float, Dict[str, Any]]:
     """
-    Calculates the estimated cost of a run based on usage stats and cached pricing.
+    Calculates detailed cost breakdown with per-category pricing.
+    
+    Groq and Nvidia are FREE in BYOK mode.
+    OpenRouter has per-model pricing.
+    
+    Returns:
+        (total_cost, breakdown_dict)
     """
     if not usage or not model_id:
-        return 0.0
+        return 0.0, {}
 
     try:
-        # Standardize model ID (trim spaces)
         target = model_id.strip()
         
-        # 1. Fetch pricing dynamically for ANY provider (OpenAI, Anthropic, DeepSeek, etc.)
+        # Extract token counts (support multiple formats)
+        prompt_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens)
+        
+        # ✅ Reasoning tokens (o1/o3/gpt-oss models)
+        reasoning_tokens = usage.get("reasoning_tokens", 0)
+        
+        # FREE TIER: Groq and Nvidia
+        if provider in ("groq", "nvidia"):
+            breakdown = {
+                "prompt_cost": 0.0,
+                "completion_cost": 0.0,
+                "reasoning_cost": 0.0 if reasoning_tokens > 0 else None,
+                "cached_cost": None,
+                "total_cost": 0.0,
+                "model": model_id,
+                "provider": provider,
+                "currency": "USD",
+                "free_tier": True,
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,  # ✅ Include
+                    "cached_tokens": None,
+                },
+                "pricing_rates": {
+                    "prompt_per_token": 0.0,
+                    "completion_per_token": 0.0,
+                    "prompt_per_1m": 0.0,
+                    "completion_per_1m": 0.0,
+                }
+            }
+            return 0.0, breakdown
+        
+        # PAID TIER: OpenRouter
         pricing = await model_service.get_price(target)
         
         if not pricing:
-            # If explicit lookup fails, try to find a fallback match (e.g. ignoring quantization suffixes)
-            # This logic could be expanded, but for now we fail safe to 0.0
-            return 0.0
+            log.warning(f"No pricing found for {target}, assuming free")
+            return 0.0, {
+                "prompt_cost": 0.0,
+                "completion_cost": 0.0,
+                "total_cost": 0.0,
+                "model": model_id,
+                "provider": provider,
+                "currency": "USD",
+                "free_tier": False,
+                "pricing_unavailable": True,
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,  # ✅ Include
+                }
+            }
 
-        prompt_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
-
+        # Pricing rates (per token)
         p_rate = float(pricing.get("prompt", 0))
         c_rate = float(pricing.get("completion", 0))
+        
+        # Calculate costs
+        prompt_cost = prompt_tokens * p_rate
+        completion_cost = completion_tokens * c_rate
+        
+        # Reasoning cost (same as completion for most models)
+        reasoning_cost = reasoning_tokens * c_rate if reasoning_tokens > 0 else None
+        
+        # Cached tokens
+        cached_tokens = usage.get("cache_read_input_tokens", 0) or usage.get("cached_tokens", 0)
+        cached_cost = cached_tokens * (p_rate * 0.5) if cached_tokens > 0 else None
+        
+        total_cost = prompt_cost + completion_cost
+        if reasoning_cost:
+            total_cost += reasoning_cost
+        if cached_cost:
+            total_cost += cached_cost
 
-        cost = (prompt_tokens * p_rate) + (completion_tokens * c_rate)
-        return cost
+        breakdown = {
+            "prompt_cost": round(prompt_cost, 8),
+            "completion_cost": round(completion_cost, 8),
+            "reasoning_cost": round(reasoning_cost, 8) if reasoning_cost else None,
+            "cached_cost": round(cached_cost, 8) if cached_cost else None,
+            "total_cost": round(total_cost, 8),
+            "model": model_id,
+            "provider": provider,
+            "currency": "USD",
+            "free_tier": False,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+                "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,  # ✅ Include
+                "cached_tokens": cached_tokens if cached_tokens > 0 else None,
+            },
+            "pricing_rates": {
+                "prompt_per_token": p_rate,
+                "completion_per_token": c_rate,
+                "prompt_per_1m": round(p_rate * 1_000_000, 4),
+                "completion_per_1m": round(c_rate * 1_000_000, 4),
+            }
+        }
+
+        return total_cost, breakdown
 
     except Exception as e:
-        log.warning(f"Failed to calculate cost for {model_id}: {e}")
-        return 0.0
+        log.error(f"Failed to calculate detailed cost for {model_id}: {e}")
+        return 0.0, {}
 
+async def calculate_run_cost(model_id: str, usage: Dict[str, int]) -> float:
+    """
+    Legacy function - returns only total cost.
+    Kept for backward compatibility.
+    """
+    total, _ = await calculate_run_cost_detailed(model_id, usage, provider="unknown")
+    return total
 
 
 ===== src/agent_service/core/prompts.py [121 tokens] =====
@@ -4750,30 +5952,421 @@ SYSTEM_PROMPT = """
 
 
 
-===== src/agent_service/core/utils.py [889 tokens] =====
+===== src/agent_service/core/streaming_utils.py [1,917 tokens] =====
+"""
+Streaming Utilities and Tool Output Extraction
+Handles SSE event generation, tool output parsing, and streaming state management.
+"""
 import json
-import redis
-from typing import Any
-from langchain_core.messages import RemoveMessage
-from .config import KEEP_LAST, REDIS_URL
+import logging
+from typing import Dict, Any, Optional
+from dataclasses import dataclass, field
 
-def valid_session_id(session_id: object) -> str:
-    """Ensures session_id is a valid non-empty string."""
-    sid = str(session_id).strip() if session_id is not None else ""
-    if not sid or sid.lower() in {"null", "none"}:
-        raise ValueError(f"Invalid session_id: {session_id!r}")
-    return sid
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class StreamingState:
+    """Tracks streaming session state and cumulative metrics."""
+    total_cost: float = 0.0
+    cumulative_usage: Dict[str, int] = field(default_factory=lambda: {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cached_tokens": 0,
+    })
+
+
+class StreamingUtils:
+    """Utilities for managing streaming state, events, and tool outputs."""
+    
+    @staticmethod
+    def extract_tool_output(output: Any) -> str:
+        """Extract clean content from LangGraph/LangChain tool outputs."""
+        if output is None:
+            return ""
+        
+        # ToolMessage / BaseMessage-like objects
+        if hasattr(output, "content"):
+            content = getattr(output, "content", "")
+            return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+        
+        # Dict wrapper with content key
+        if isinstance(output, dict):
+            if "content" in output:
+                content = output["content"]
+                return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+            
+            # Sometimes wrapped in messages list
+            msgs = output.get("messages")
+            if isinstance(msgs, list):
+                for msg in reversed(msgs):
+                    if hasattr(msg, "content"):
+                        content = getattr(msg, "content", "")
+                        return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                    if isinstance(msg, str):
+                        return msg
+            
+            return json.dumps(output, ensure_ascii=False)
+        
+        # List of messages
+        if isinstance(output, list):
+            for msg in reversed(output):
+                if hasattr(msg, "content"):
+                    content = getattr(msg, "content", "")
+                    return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                if isinstance(msg, str):
+                    return msg
+            return json.dumps(output, ensure_ascii=False)
+        
+        return str(output)
+    
+    @staticmethod
+    def extract_reasoning_tokens(usage_metadata: Any) -> int:
+        """
+        Extract reasoning tokens from various usage metadata formats.
+        
+        Supports:
+        - LangChain UsageMetadata with output_token_details.reasoning
+        - Groq API format with direct reasoning_tokens field
+        - OpenRouter format with reasoning_tokens
+        - Dict format with nested output_token_details
+        """
+        reasoning_tokens = 0
+        
+        try:
+            # LangChain standard: output_token_details.reasoning
+            if hasattr(usage_metadata, 'output_token_details'):
+                details = getattr(usage_metadata, 'output_token_details', None)
+                if isinstance(details, dict):
+                    reasoning_tokens = details.get('reasoning', 0)
+                elif hasattr(details, 'reasoning'):
+                    reasoning_tokens = getattr(details, 'reasoning', 0)
+            
+            # Direct reasoning_tokens field (Groq/OpenRouter)
+            if not reasoning_tokens:
+                if hasattr(usage_metadata, 'reasoning_tokens'):
+                    reasoning_tokens = getattr(usage_metadata, 'reasoning_tokens', 0)
+                elif isinstance(usage_metadata, dict):
+                    reasoning_tokens = usage_metadata.get('reasoning_tokens', 0)
+                    
+                    # Check nested output_token_details in dict
+                    if not reasoning_tokens:
+                        output_details = usage_metadata.get('output_token_details', {})
+                        if isinstance(output_details, dict):
+                            reasoning_tokens = output_details.get('reasoning', 0)
+        except Exception as e:
+            log.debug(f"Could not extract reasoning tokens: {e}")
+        
+        return int(reasoning_tokens) if reasoning_tokens else 0
+    
+    @staticmethod
+    def accumulate_usage(state: StreamingState, usage_metadata: Any) -> None:
+        """
+        Accumulate token usage metrics from LLM responses.
+        
+        Handles multiple formats:
+        - LangChain UsageMetadata objects
+        - Dict format from various providers
+        - Reasoning tokens from o1/o3/gpt-oss models
+        """
+        try:
+            # Convert to dict if it's an object
+            if hasattr(usage_metadata, '__dict__'):
+                usage_dict = usage_metadata.__dict__
+            elif isinstance(usage_metadata, dict):
+                usage_dict = usage_metadata
+            else:
+                log.warning(f"Unknown usage_metadata format: {type(usage_metadata)}")
+                return
+            
+            # Prompt/Input tokens
+            prompt_tokens = (
+                usage_dict.get("input_tokens", 0) or 
+                usage_dict.get("prompt_tokens", 0)
+            )
+            state.cumulative_usage["prompt_tokens"] += prompt_tokens
+            
+            # Completion/Output tokens
+            completion_tokens = (
+                usage_dict.get("output_tokens", 0) or 
+                usage_dict.get("completion_tokens", 0)
+            )
+            state.cumulative_usage["completion_tokens"] += completion_tokens
+            
+            # Total tokens
+            total_tokens = usage_dict.get("total_tokens", 0)
+            if not total_tokens:
+                total_tokens = prompt_tokens + completion_tokens
+            state.cumulative_usage["total_tokens"] += total_tokens
+            
+            # ✅ Reasoning tokens (o1/o3/gpt-oss models)
+            reasoning_tokens = StreamingUtils.extract_reasoning_tokens(usage_metadata)
+            if reasoning_tokens > 0:
+                state.cumulative_usage["reasoning_tokens"] += reasoning_tokens
+                log.debug(f"Accumulated {reasoning_tokens} reasoning tokens")
+            
+            # Cached tokens
+            cached_tokens = (
+                usage_dict.get("cache_read_input_tokens", 0) or 
+                usage_dict.get("cached_tokens", 0)
+            )
+            if cached_tokens > 0:
+                state.cumulative_usage["cached_tokens"] += cached_tokens
+        
+        except Exception as e:
+            log.error(f"Failed to accumulate usage: {e}")
+
+
+class SSEEventFormatter:
+    """Server-Sent Events (SSE) formatter - returns dicts for sse-starlette."""
+    
+    @staticmethod
+    def token_event(content: str) -> Dict[str, Any]:
+        """Return dict - sse-starlette handles formatting."""
+        return {
+            "event": "token",
+            "data": content
+        }
+    
+    @staticmethod
+    def reasoning_token_event(content: str) -> Dict[str, Any]:
+        """Return dict - sse-starlette handles formatting."""
+        return {
+            "event": "reasoning_token",
+            "data": content
+        }
+    
+    @staticmethod
+    def tool_start_event(tool_name: str, tool_input: Any) -> Dict[str, Any]:
+        """Return dict - sse-starlette handles formatting."""
+        return {
+            "event": "tool_start",
+            "data": {
+                "tool": tool_name,
+                "input": tool_input
+            }
+        }
+    
+    @staticmethod
+    def tool_end_event(tool_name: str, output: str, tool_call_id: Optional[str] = None) -> Dict[str, Any]:
+        """Return dict - sse-starlette handles formatting."""
+        return {
+            "event": "tool_end",
+            "data": {
+                "tool": tool_name,
+                "output": output,
+                "tool_call_id": tool_call_id
+            }
+        }
+    
+    @staticmethod
+    def router_event(router_output: Dict[str, Any]) -> Dict[str, Any]:
+        """Return dict - sse-starlette handles formatting."""
+        return {
+            "event": "router",
+            "data": router_output
+        }
+    
+    @staticmethod
+    def cost_event(total_cost: float, usage: Dict[str, int], model: str, provider: str, cached: bool = False) -> Dict[str, Any]:
+        """Format cost event with reasoning tokens if present."""
+        # Clean up zero/None values
+        clean_usage = {k: v for k, v in usage.items() if v and v > 0}
+        
+        cost_data = {
+            "total_cost": round(total_cost, 6),
+            "usage": clean_usage,
+            "model": model,
+            "provider": provider,
+            "currency": "USD"
+        }
+        if cached:
+            cost_data["cached"] = True
+        
+        return {
+            "event": "cost",
+            "data": cost_data
+        }
+    
+    @staticmethod
+    def done_event() -> Dict[str, Any]:
+        """Return dict - sse-starlette handles formatting."""
+        return {
+            "event": "done",
+            "data": {"status": "complete"}
+        }
+    
+    @staticmethod
+    def error_event(error_message: str) -> Dict[str, Any]:
+        """Return dict - sse-starlette handles formatting."""
+        return {
+            "event": "error",
+            "data": {"message": error_message}
+        }
+
+
+# Singleton instances
+streaming_utils = StreamingUtils()
+sse_formatter = SSEEventFormatter()
+
+
+# Backward compatibility alias
+def _extract_tool_output(output: Any) -> str:
+    """DEPRECATED: Use streaming_utils.extract_tool_output() instead."""
+    return streaming_utils.extract_tool_output(output)
+
+
+===== src/agent_service/core/app_factory.py [776 tokens] =====
+"""
+FastAPI Application Factory
+Handles app lifecycle, middleware configuration, and router mounting.
+"""
+import logging
+import asyncio
+from typing import Optional
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from strawberry.fastapi import GraphQLRouter
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+
+from src.agent_service.core.config import REDIS_URL, PORT
+from src.agent_service.tools.mcp_manager import mcp_manager
+from src.agent_service.data.config_manager import config_manager
+from src.agent_service.llm.catalog import model_service
+
+# Import routers
+from src.agent_service.api.graphql import schema
+from src.agent_service.api.eval_ingest import router as eval_router
+from src.agent_service.api.eval_read import router as eval_read_router
+from src.agent_service.api.admin import router as admin_router
+
+log = logging.getLogger(__name__)
+
+
+class AppFactory:
+    """Factory for creating and configuring FastAPI application."""
+    
+    def __init__(self):
+        self.checkpointer: Optional[AsyncRedisSaver] = None
+    
+    @asynccontextmanager
+    async def lifespan(self, app: FastAPI):
+        """
+        Application lifespan manager.
+        Handles startup and shutdown of all services.
+        """
+        log.info(f"🚀 STARTUP: Initializing services...")
+        log.info(f"📦 Redis Checkpointer: {REDIS_URL}")
+        
+        # Start background cache refresh
+        cache_task = asyncio.create_task(model_service.start_background_loop())
+        
+        try:
+            # Initialize Redis checkpointer
+            async with AsyncRedisSaver.from_conn_string(REDIS_URL) as checkpointer:
+                self.checkpointer = checkpointer
+                app.state.checkpointer = checkpointer
+                
+                # Initialize MCP manager
+                await mcp_manager.initialize()
+                log.info("✅ MCP Manager initialized")
+                
+                yield
+                
+                # Cleanup on shutdown
+                log.info("🛑 SHUTDOWN: Cleaning up resources...")
+                cache_task.cancel()
+                await mcp_manager.shutdown()
+                await config_manager.close()
+                log.info("✅ Shutdown complete")
+                
+        except Exception as e:
+            log.critical(f"❌ CRITICAL STARTUP FAILURE: {e}")
+            raise e
+    
+    def create_app(self) -> FastAPI:
+        """
+        Create and configure FastAPI application.
+        
+        Returns:
+            Configured FastAPI instance
+        """
+        app = FastAPI(
+            title="HFCL Agent Service",
+            description="Production-grade AI Agent API with LangGraph",
+            version="2.0.0",
+            lifespan=self.lifespan
+        )
+        
+        # Configure CORS
+        self._configure_cors(app)
+        
+        # Mount routers
+        self._mount_routers(app)
+        
+        log.info("✅ FastAPI application configured")
+        return app
+    
+    @staticmethod
+    def _configure_cors(app: FastAPI) -> None:
+        """Configure CORS middleware."""
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],  # Configure for production
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    
+    @staticmethod
+    def _mount_routers(app: FastAPI) -> None:
+        """Mount all API routers."""
+        # GraphQL
+        graphql_app = GraphQLRouter(schema)
+        app.include_router(graphql_app, prefix="/graphql", tags=["graphql"])
+        
+        # Evaluation endpoints
+        app.include_router(eval_router, prefix="/eval", tags=["evaluation"])
+        app.include_router(eval_read_router, prefix="/eval", tags=["evaluation"])
+        
+        # Admin endpoints
+        app.include_router(admin_router, tags=["admin"])
+        
+        log.info("✅ All routers mounted")
+
+
+# Singleton factory instance
+app_factory = AppFactory()
+
+
+
+===== src/agent_service/core/utils.py [263 tokens] =====
+"""
+Generic Utility Functions
+Contains truly generic helpers that don't fit into specialized modules.
+"""
+import json
+import logging
+from typing import Any
+
+log = logging.getLogger(__name__)
+
 
 def normalize_result(result: Any) -> Any:
-    """Sanitizes output (truncates massive JSONs) for logging/LLM context."""
+    """Sanitize output for logging and LLM context. Truncates massive JSONs."""
     if isinstance(result, list) and result:
         first = result[0]
         text = getattr(first, "text", None)
+        
         if isinstance(text, str):
             try:
                 parsed = json.loads(text)
                 dump = json.dumps(parsed, ensure_ascii=False, indent=2)
-                if len(dump) > 8000: 
+                if len(dump) > 8000:
                     return dump[:8000] + "... [TRUNCATED]"
                 return dump
             except Exception:
@@ -4783,84 +6376,134 @@ def normalize_result(result: Any) -> Any:
         dump = json.dumps(result, ensure_ascii=False)
         if len(dump) > 8000:
             return dump[:8000] + "... [TRUNCATED]"
-        return dump  # Return stringified dict even if small
-            
+        return dump
+    
     return result
 
-def keep_only_last_n_messages(state: dict, config: dict):
-    """LangGraph reducer to keep history short."""
-    msgs = list(state.get("messages", []))
-    if len(msgs) <= KEEP_LAST:
-        return {}
-    return {"messages": [RemoveMessage(id=msgs[i].id) for i in range(len(msgs) - KEEP_LAST)]}
 
-def is_user_authenticated(session_id: str) -> bool:
-    """
-    Directly checks Redis to see if the user has an active access_token.
-    This avoids passing sensitive tool definitions to unauthenticated users.
-    """
-    try:
-        # Use a localized client to ensure thread safety in async contexts if needed,
-        # or rely on the fact that we are just reading a key.
-        client = redis.from_url(REDIS_URL, decode_responses=True)
-        # MCP Session Store saves data directly against the session_id key
-        data_str = client.get(session_id)
-        if not data_str:
-            return False
+# Backward compatibility imports
+from src.agent_service.core.session_utils import valid_session_id, is_user_authenticated
+from src.agent_service.core.streaming_utils import _extract_tool_output
+from src.agent_service.core.graph_utils import keep_only_last_n_messages
+
+
+
+===== src/agent_service/core/resource_resolver.py [847 tokens] =====
+"""
+Agent Resource Resolution
+Handles model, tool, and configuration resolution for agent requests.
+"""
+import logging
+from typing import Optional, List, Any, Tuple
+from dataclasses import dataclass
+
+from src.agent_service.core.config import MODEL_NAME
+from src.agent_service.core.prompts import SYSTEM_PROMPT
+from src.agent_service.core.schemas import AgentRequest
+from src.agent_service.data.config_manager import config_manager
+from src.agent_service.llm.client import get_llm
+from src.agent_service.tools.mcp_manager import mcp_manager
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class ResolvedResources:
+    """Container for resolved agent resources."""
+    model: Any
+    tools: List[Any]
+    system_prompt: str
+    model_name: str
+    provider: str
+    
+    # All three API keys
+    openrouter_api_key: Optional[str] = None
+    nvidia_api_key: Optional[str] = None
+    groq_api_key: Optional[str] = None
+    
+    reasoning_effort: Optional[str] = None
+    
+    # Legacy alias for backward compatibility
+    @property
+    def api_key(self) -> Optional[str]:
+        """Alias for openrouter_api_key for backward compatibility."""
+        return self.openrouter_api_key
+
+
+class ResourceResolver:
+    """Resolves models, tools, and configurations for agent execution."""
+    
+    @staticmethod
+    def infer_provider_from_model_name(model_name: Optional[str]) -> str:
+        """Infer provider from model name prefix."""
+        if not model_name:
+            return "groq"
         
-        data = json.loads(str(data_str))
-        # Check for the presence of the token set by auth_api.py
-        return bool(data.get("access_token"))
-    except Exception:
-        return False
+        mn = model_name.strip().lower()
+        
+        if mn.startswith("nvidia/"):
+            return "nvidia"
+        if mn.startswith("groq/"):
+            return "groq"
+        if "/" in mn:
+            return "openrouter"
+        
+        return "groq"
+    
+    @staticmethod
+    async def resolve_agent_resources(session_id: str, request: AgentRequest) -> ResolvedResources:
+        """Resolve all resources needed for agent execution."""
+        try:
+            saved_config = await config_manager.get_config(session_id)
+            
+            model_name = request.model_name or saved_config.get("model_name") or MODEL_NAME
+            system_prompt = request.system_prompt or saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
+            reasoning_effort = request.reasoning_effort or saved_config.get("reasoning_effort")
+            provider = request.provider or saved_config.get("provider") or ResourceResolver.infer_provider_from_model_name(model_name)
+            
+            openrouter_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
+            nvidia_key = request.nvidia_api_key or saved_config.get("nvidia_api_key")
+            groq_key = request.groq_api_key or saved_config.get("groq_api_key")
+            
+            # Get LLM (returns tuple: model, actual_provider)
+            llm_result = get_llm(
+                model_name=model_name,
+                provider=provider,
+                openrouter_api_key=openrouter_key,
+                nvidia_api_key=nvidia_key,
+                groq_api_key=groq_key,
+                reasoning_effort=reasoning_effort
+            )
+            
+            # Handle both tuple and single return value for backward compatibility
+            if isinstance(llm_result, tuple):
+                model, actual_provider = llm_result
+            else:
+                model = llm_result
+                actual_provider = provider
+            
+            tools = mcp_manager.rebuild_tools_for_user(session_id, openrouter_api_key=openrouter_key)
+            
+            return ResolvedResources(
+                model=model,
+                tools=tools,
+                system_prompt=system_prompt,
+                model_name=model_name,
+                provider=actual_provider,
+                openrouter_api_key=openrouter_key,
+                nvidia_api_key=nvidia_key,
+                groq_api_key=groq_key,
+                reasoning_effort=reasoning_effort
+            )
+            
+        except Exception as e:
+            log.error(f"Resource resolution failed for session {session_id}: {e}")
+            raise ValueError(f"Failed to resolve agent resources: {e}") from e
 
 
-# --- add this helper ---
-def _extract_tool_output(output: Any) -> str:
-    """
-    LangGraph/LangChain tool_end output is often a ToolMessage.
-    DO NOT str() it (that produces content="..." name=... tool_call_id=...).
-    We want the actual content string.
-    """
-    if output is None:
-        return ""
+# Singleton instance
+resource_resolver = ResourceResolver()
 
-    # ToolMessage / BaseMessage-like
-    if hasattr(output, "content"):
-        c = getattr(output, "content", "")
-        return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
-
-    # Sometimes it's a dict wrapper
-    if isinstance(output, dict):
-        if "content" in output:
-            c = output.get("content")
-            return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
-
-        # Sometimes messages list
-        msgs = output.get("messages")
-        if isinstance(msgs, list):
-            for m in reversed(msgs):
-                if hasattr(m, "content"):
-                    c = getattr(m, "content", "")
-                    return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
-                if isinstance(m, str):
-                    return m
-
-        # fallback
-        return json.dumps(output, ensure_ascii=False)
-
-    # Sometimes it's a list
-    if isinstance(output, list):
-        for m in reversed(output):
-            if hasattr(m, "content"):
-                c = getattr(m, "content", "")
-                return c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
-            if isinstance(m, str):
-                return m
-        return json.dumps(output, ensure_ascii=False)
-
-    # final fallback
-    return str(output)
 
 
 ===== src/agent_service/core/__init__.py [0 tokens] =====
@@ -4978,10 +6621,9 @@ if __name__ == "__main__":
         print(f"An error occurred: {e}")
 
 
-===== src/agent_service/data/config_manager.py [550 tokens] =====
+===== src/agent_service/data/config_manager.py [579 tokens] =====
 from redis.asyncio import Redis
 from typing import Optional
-# Updated import path to core
 from src.agent_service.core.config import REDIS_URL
 
 class ConfigManager:
@@ -4995,7 +6637,9 @@ class ConfigManager:
         model_name: Optional[str] = None,
         openrouter_api_key: Optional[str] = None,
         nvidia_api_key: Optional[str] = None,
-        reasoning_effort: Optional[str] = None
+        groq_api_key: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
+        provider: Optional[str] = None
     ) -> None:
         """Saves configuration to Redis hash."""
         key = f"agent:config:{session_id}"
@@ -5008,8 +6652,12 @@ class ConfigManager:
             data["openrouter_api_key"] = openrouter_api_key
         if nvidia_api_key is not None:
             data["nvidia_api_key"] = nvidia_api_key
+        if groq_api_key:
+            data["groq_api_key"] = groq_api_key
         if reasoning_effort:
             data["reasoning_effort"] = reasoning_effort
+        if provider:
+            data["provider"] = provider
         
         if data:
             await self.redis.hset(key, mapping=data) # type: ignore
@@ -5040,11 +6688,9 @@ class ConfigManager:
         1. Removes Agent Configuration (agent:config:{sid})
         2. Removes MCP Auth Data (stored at root {sid})
         """
-        # Keys to target
         config_key = f"agent:config:{session_id}"
         auth_key = session_id 
         
-        # We simply delete the known config and auth keys.
         await self.redis.delete(config_key, auth_key)
 
     async def close(self):
@@ -5057,7 +6703,7 @@ config_manager = ConfigManager()
 
 
 
-===== src/agent_service/eval_store/embedder.py [1,844 tokens] =====
+===== src/agent_service/eval_store/embedder.py [2,040 tokens] =====
 # ===== src/agent_service/eval_store/embedder.py =====
 from __future__ import annotations
 
@@ -5149,10 +6795,18 @@ def _build_eval_doc(ev: Dict[str, Any], evidence_events: List[Dict[str, Any]]) -
     return "\n".join(lines).strip()
 
 class EvalEmbedder:
-    def __init__(self):
-        self.key = OPENROUTER_API_KEY
+    def __init__(self, openrouter_api_key: Optional[str] = None):
+        """
+        Initialize embedder with BYOK support.
+        
+        Args:
+            openrouter_api_key: Session's OpenRouter key (BYOK). Falls back to env if None.
+        """
+        # Priority: Session key > Environment key
+        self.key = openrouter_api_key or OPENROUTER_API_KEY
         self.enabled = bool(self.key)
         self.emb: Optional[OpenAIEmbeddings] = None
+        
         if self.enabled:
             self.emb = OpenAIEmbeddings(
                 model=EMBED_MODEL,
@@ -5160,12 +6814,18 @@ class EvalEmbedder:
                 base_url=OPENROUTER_BASE_URL,
                 check_embedding_ctx_length=False,
             )
+            if openrouter_api_key:
+                log.debug("[eval_embedder] Using session's OpenRouter key (BYOK)")
+            else:
+                log.debug("[eval_embedder] Using environment OpenRouter key (fallback)")
         else:
-            log.warning("[eval_embedder] OPENROUTER_API_KEY missing -> embeddings disabled")
+            log.warning("[eval_embedder] No OpenRouter API key available -> embeddings disabled")
 
     async def embed_trace_if_needed(self, trace: Dict[str, Any], events: List[Dict[str, Any]]) -> None:
         if not self.enabled or not self.emb:
+            log.debug("[eval_embedder] Skipping trace embedding - no API key")
             return
+        
         trace_id = str(trace.get("trace_id") or "")
         if not trace_id:
             return
@@ -5183,6 +6843,7 @@ class EvalEmbedder:
                 trace_id=trace_id
             ).single()
             if existing and existing.get("h") == h:
+                log.debug(f"[eval_embedder] Trace {trace_id} already embedded (hash match)")
                 return
 
         # Generate Embedding
@@ -5213,7 +6874,9 @@ class EvalEmbedder:
 
     async def embed_eval_if_needed(self, trace_id: str, ev: Dict[str, Any]) -> None:
         if not self.enabled or not self.emb:
+            log.debug("[eval_embedder] Skipping eval embedding - no API key")
             return
+        
         eval_id = str(ev.get("eval_id") or "")
         if not eval_id or not trace_id:
             return
@@ -5249,6 +6912,7 @@ class EvalEmbedder:
                 eval_id=eval_id
             ).single()
             if existing and existing.get("h") == h:
+                log.debug(f"[eval_embedder] Eval {eval_id} already embedded (hash match)")
                 return
 
         try:
@@ -5273,9 +6937,11 @@ class EvalEmbedder:
                 vec=vec,
                 m=EMBED_MODEL,
             )
+            log.debug(f"[eval_embedder] Embedded eval {eval_id}")
 
 
-===== src/agent_service/eval_store/judge.py [1,759 tokens] =====
+
+===== src/agent_service/eval_store/judge.py [1,924 tokens] =====
 from __future__ import annotations
 
 import logging
@@ -5356,37 +7022,64 @@ Return JSON format: {{ "winner": "A" | "B" | "Tie", "reasoning": "<string>" }}
 METRICS = {
     "correctness": {
         "desc": "Determine if the answer is factually correct based on the provided Context/Evidence. If no context is provided, rely on general world knowledge but prioritize the context.",
-        "steps": "1. Identify claims in the response.\n2. Verify each claim against the Context.\n3. Penalize hallucinations or contradictions.\n4. Score 5 for fully supported, 1 for complete fabrication."
+        "steps": "1. Identify claims in the response.\\n2. Verify each claim against the Context.\\n3. Penalize hallucinations or contradictions.\\n4. Score 5 for fully supported, 1 for complete fabrication."
     },
     "relevance": {
         "desc": "Determine if the answer directly addresses the User Input without unnecessary fluff or deflection.",
-        "steps": "1. Identify the core intent of the user query.\n2. Check if the response answers that intent.\n3. Penalize redundant info or refusal to answer.\n4. Score 5 for direct/concise answers, 1 for irrelevant responses."
+        "steps": "1. Identify the core intent of the user query.\\n2. Check if the response answers that intent.\\n3. Penalize redundant info or refusal to answer.\\n4. Score 5 for direct/concise answers, 1 for irrelevant responses."
     },
     "faithfulness": {
         "desc": "Evaluate if the response is derived *solely* from the provided Context. This measures hallucination relative to the RAG context.",
-        "steps": "1. Extract all claims in the response.\n2. Check if each claim exists in the Retrieval Context.\n3. Any claim NOT in context = Hallucination (even if true in real life).\n4. Score 5 if 100% grounded, 1 if <20% grounded."
+        "steps": "1. Extract all claims in the response.\\n2. Check if each claim exists in the Retrieval Context.\\n3. Any claim NOT in context = Hallucination (even if true in real life).\\n4. Score 5 if 100% grounded, 1 if <20% grounded."
     },
     "helpfulness": {
         "desc": "Assess how useful, clear, and empathetic the response is to the user.",
-        "steps": "1. Check for clarity and structure (markdown, lists).\n2. Check for tone (professional yet approachable).\n3. Did it solve the user's problem?\n4. Score 5 for perfect assistance, 1 for unhelpful/rude."
+        "steps": "1. Check for clarity and structure (markdown, lists).\\n2. Check for tone (professional yet approachable).\\n3. Did it solve the user's problem?\\n4. Score 5 for perfect assistance, 1 for unhelpful/rude."
     },
     "coherence": {
         "desc": "Evaluate the logical flow, structure, and clarity of the response.",
-        "steps": "1. Check if the response is well-structured and easy to read.\n2. Ensure ideas flow logically from one to the next.\n3. Check for grammatical correctness and professional tone.\n4. Score 5 for perfectly coherent, 1 for disjointed/confusing."
+        "steps": "1. Check if the response is well-structured and easy to read.\\n2. Ensure ideas flow logically from one to the next.\\n3. Check for grammatical correctness and professional tone.\\n4. Score 5 for perfectly coherent, 1 for disjointed/confusing."
     }
 }
 
 class LLMJudge:
-    def __init__(self, model_name: str = JUDGE_MODEL_NAME):
+    def __init__(
+        self, 
+        model_name: str = JUDGE_MODEL_NAME,
+        openrouter_api_key: Optional[str] = None,
+        nvidia_api_key: Optional[str] = None,
+        groq_api_key: Optional[str] = None
+    ):
         self.model_name = model_name
+        self.openrouter_api_key = openrouter_api_key
+        self.nvidia_api_key = nvidia_api_key
+        self.groq_api_key = groq_api_key
         self.pointwise_parser = JsonOutputParser(pydantic_object=PointwiseScore)
         self.pairwise_parser = JsonOutputParser(pydantic_object=PairwiseVerdict)
 
     def _get_model(self) -> BaseChatModel:
-        # Use existing factory; assume Judge uses standard keys configured in environment
-        # We set temperature to 0.0 for deterministic grading
-        return get_llm(model_name=self.model_name)
-
+        """Get LLM with API keys for judge evaluation."""
+        # Infer provider from model name and available keys
+        provider = None
+        mn = (self.model_name or "").lower()
+        
+        # Priority: Explicit key > Model name inference
+        if self.openrouter_api_key:
+            provider = "openrouter"
+        elif self.nvidia_api_key or mn.startswith("nvidia/"):
+            provider = "nvidia"
+        elif self.groq_api_key or (not "/" in mn):
+            provider = "groq"
+        
+        return get_llm(
+            model_name=self.model_name,
+            provider=provider,
+            openrouter_api_key=self.openrouter_api_key,
+            nvidia_api_key=self.nvidia_api_key,
+            groq_api_key=self.groq_api_key,
+            temperature=0.0  # Deterministic grading
+        )
+        
     async def evaluate_pointwise(
         self, 
         metric: str, 
@@ -5399,7 +7092,6 @@ class LLMJudge:
         """
         defn = METRICS.get(metric.lower())
         
-        # FIX: Ensure fallback return includes 'metric_name' to prevent KeyError downstream
         if not defn:
             return {
                 "score": 0, 
@@ -5413,7 +7105,6 @@ class LLMJudge:
             ("human", G_EVAL_POINTWISE_PROMPT)
         ])
 
-        # We instantiate model here to handle potential key rotation or config changes
         llm = self._get_model()
         chain = prompt | llm | self.pointwise_parser
 
@@ -5424,11 +7115,9 @@ class LLMJudge:
                 "scoring_steps": defn["steps"],
                 "question": question,
                 "answer": answer,
-                "context": context[:10000] # Truncate massive contexts
+                "context": context[:10000]
             })
             
-            # Normalize to 0-1 scale or binary pass/fail if needed
-            # Here we define "Passing" as a score of 3 or higher
             passed = result["score"] >= 3
             
             return {
@@ -5479,7 +7168,7 @@ class LLMJudge:
             log.error(f"Pairwise eval failed: {e}")
             return {"winner": "Tie", "reasoning": f"Error: {e}"}
 
-# Singleton instance
+# Default singleton (backward compatibility - uses env vars)
 judge_service = LLMJudge()
 
 
@@ -5744,7 +7433,7 @@ model_service = ModelService()
 
 
 
-===== src/agent_service/llm/client.py [746 tokens] =====
+===== src/agent_service/llm/client.py [912 tokens] =====
 from __future__ import annotations
 
 import logging
@@ -5760,6 +7449,7 @@ log = logging.getLogger("llm_client")
 def get_llm(
     model_name: str,
     *,
+    provider: Optional[str] = None,
     openrouter_api_key: Optional[str] = None,
     nvidia_api_key: Optional[str] = None,
     groq_api_key: Optional[str] = None,
@@ -5768,65 +7458,81 @@ def get_llm(
     max_tokens: Optional[int] = None,
 ) -> BaseChatModel:
     """
-    Unified factory using init_chat_model.
-    Supports OpenRouter, Nvidia, Groq, and standard providers via BYOK.
+    Unified factory with explicit provider selection.
+    Priority: explicit provider > key-based inference
     """
     if not model_name:
         raise ValueError("Model name is required.")
 
-    # Determine provider and key precedence
-    provider = None
     api_key = None
+    actual_provider = None
     
-    # 1. OpenRouter (Explicit or inferred from model name)
-    if openrouter_api_key:
-        provider = "openai" # OpenRouter is OpenAI-compatible
-        api_key = openrouter_api_key
-        # Ensure model has openai/ prefix if using OpenRouter
-        if "/" not in model_name:
-            model_name = f"openai/{model_name}"
-    
-    # 2. NVIDIA
-    elif nvidia_api_key or model_name.startswith("nvidia/"):
-        provider = "nvidia" 
-        api_key = nvidia_api_key
-    
-    # 3. Groq
-    elif groq_api_key or model_name.startswith("groq/"):
-        provider = "groq"
-        api_key = groq_api_key
-
-    if not api_key:
-        # Strict BYOK: Fail if no key is found for the inferred provider
-        raise ValueError(f"No API key provided for model '{model_name}'.")
+    # If provider explicitly specified, use that
+    if provider:
+        if provider == "openrouter":
+            if not openrouter_api_key:
+                raise ValueError("OpenRouter provider requires openrouter_api_key")
+            api_key = openrouter_api_key
+            actual_provider = "openai"  # OpenRouter uses OpenAI compatibility
+        elif provider == "nvidia":
+            if not nvidia_api_key:
+                raise ValueError("Nvidia provider requires nvidia_api_key")
+            api_key = nvidia_api_key
+            actual_provider = "nvidia"
+        elif provider == "groq":
+            if not groq_api_key:
+                raise ValueError("Groq provider requires groq_api_key")
+            api_key = groq_api_key
+            actual_provider = "groq"
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
+    else:
+        # Fallback: Priority-based selection from API keys
+        if openrouter_api_key and openrouter_api_key.startswith("sk-or-"):
+            actual_provider = "openai"
+            api_key = openrouter_api_key
+            log.info("Auto-detected OpenRouter from API key")
+        elif nvidia_api_key and nvidia_api_key.startswith("nvapi-"):
+            actual_provider = "nvidia"
+            api_key = nvidia_api_key
+            log.info("Auto-detected Nvidia from API key")
+        elif groq_api_key and groq_api_key.startswith("gsk_"):
+            actual_provider = "groq"
+            api_key = groq_api_key
+            log.info("Auto-detected Groq from API key")
+        else:
+            raise ValueError(
+                "No valid API key provided. Required formats:\n"
+                "- Groq: gsk_xxx\n"
+                "- OpenRouter: sk-or-xxx\n"
+                "- Nvidia: nvapi-xxx"
+            )
 
     # Configure kwargs
-    kwargs: Dict[str, Any] = {
-        "temperature": temperature,
-    }
+    kwargs: Dict[str, Any] = {"temperature": temperature}
     
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
-
-    # Reasoning effort mapping
     if reasoning_effort and reasoning_effort.lower() not in ("none", "default"):
         kwargs["reasoning_effort"] = reasoning_effort
-
-    # Specific base URLs if needed (using OpenAI compatibility layer for OpenRouter)
-    if openrouter_api_key:
+    
+    # OpenRouter-specific config
+    if actual_provider == "openai" and openrouter_api_key:
         kwargs["base_url"] = "https://openrouter.ai/api/v1"
-        kwargs["model_provider"] = "openai" # Force OpenAI adapter for OpenRouter
+
+    log.info(f"Initializing {actual_provider} with model: {model_name}")
 
     try:
         return init_chat_model(
             model=model_name,
-            model_provider=provider,
+            model_provider=actual_provider,
             api_key=api_key,
             **kwargs
         )
     except Exception as e:
-        log.error(f"Failed to init model {model_name}: {e}")
+        log.error(f"Failed to init model {model_name} with provider {actual_provider}: {e}")
         raise
+
 
 def get_embeddings(
     api_key: str,
@@ -5840,7 +7546,6 @@ def get_embeddings(
     if not api_key:
         raise ValueError("API Key required for embeddings.")
 
-    # Detect provider logic
     provider = "openai" 
     
     return init_embeddings(
@@ -5850,7 +7555,6 @@ def get_embeddings(
         base_url=base_url,
         check_embedding_ctx_length=False
     )
-
 
 
 ===== src/agent_service/tools/mcp_manager.py [1,263 tokens] =====
@@ -7112,3 +8816,85 @@ class RedisImageStore:
     def cleanup_image(self, image_ref: str):
         self.client.delete(image_ref) # type: ignore
 
+
+
+================================================================================
+### TOKEN SUMMARY  (tokenizer: tiktoken/cl100k_base)
+================================================================================
+
+File                                                                  Tokens
+----------------------------------------------------------------------------
+src/agent_service/api/eval_read.py                                     5,129
+src/agent_service/features/shadow_eval.py                              4,526
+src/agent_service/features/nbfc_router.py                              3,410
+src/agent_service/llm/catalog.py                                       2,725
+src/agent_service/core/session_cost.py                                 2,600
+src/agent_service/api/graphql.py                                       2,596
+src/agent_service/tools/knowledge.py                                   2,532
+src/agent_service/api/endpoints/agent_stream.py                        2,235
+src/agent_service/features/follow_up.py                                2,126
+src/agent_service/eval_store/embedder.py                               2,040
+src/agent_service/router/service.py                                    1,974
+src/agent_service/eval_store/judge.py                                  1,924
+src/agent_service/core/streaming_utils.py                              1,917
+src/agent_service/api/eval_ingest.py                                   1,891
+src/mcp_service/auth_api.py                                            1,859
+src/agent_service/api/endpoints/sessions.py                            1,708
+scripts/ingest_faq.py                                                  1,553
+src/agent_service/api/admin.py                                         1,499
+src/mcp_service/core_api.py                                            1,345
+src/mcp_service/tool_descriptions.json                                 1,301
+src/agent_service/tools/mcp_manager.py                                 1,263
+src/agent_service/core/cost.py                                         1,199
+src/mcp_service/server.py                                              1,198
+docker-compose.yml                                                     1,193
+src/mcp_service/utils.py                                               1,185
+src/agent_service/core/session_utils.py                                1,115
+src/agent_service/features/prototypes_nbfc.py                          1,008
+src/agent_service/core/schemas.py                                        993
+src/agent_service/llm/client.py                                          912
+scripts/ingest_grounding.py                                              849
+src/agent_service/core/resource_resolver.py                              847
+src/agent_service/faqs/pdf_parser.py                                     837
+src/agent_service/core/config.py                                         831
+src/main_agent.py                                                        815
+src/agent_service/core/app_factory.py                                    776
+src/agent_service/api/endpoints/follow_up.py                             687
+src/agent_service/api/eval_live.py                                       669
+src/agent_service/data/config_manager.py                                 579
+src/mcp_service/session_store.py                                         577
+src/agent_service/router/worker.py                                       566
+src/agent_service/features/kb_first.py                                   549
+src/agent_service/api/endpoints/agent_query.py                           547
+Makefile                                                                 501
+tests/test_mcp_utils.py                                                  485
+tests/test_agent_utils.py                                                481
+src/agent_service/tools/graph_rag.py                                     477
+src/agent_service/router/prototypes_nbfc.py                              455
+tests/test_session_store.py                                              449
+pyproject.toml                                                           380
+src/mcp_service/description_utils.py                                     313
+src/agent_service/core/graph_utils.py                                    291
+src/agent_service/core/utils.py                                          263
+src/agent_service/api/endpoints/router_endpoints.py                      255
+src/mcp_service/image_store.py                                           251
+gunicorn.conf.py                                                         235
+Dockerfile                                                               196
+start.sh                                                                 177
+src/agent_service/router/schemas.py                                      160
+src/agent_service/api/endpoints/models.py                                143
+src/common/logger.py                                                     141
+src/agent_service/core/prompts.py                                        121
+src/agent_service/router/nbfc_taxonomy.py                                110
+requirements.txt                                                          93
+cloudflared/config.yml                                                    83
+src/agent_service/api/endpoints/health.py                                 66
+src/mcp_service/config.py                                                 66
+src/agent_service/api/endpoints/__init__.py                               43
+src/main_mcp.py                                                           20
+----------------------------------------------------------------------------
+Content tokens (file bodies only)                                     72,340
+Total dump tokens (entire output)*                                    74,840
+Files dumped                                                              68
+
+* Total excludes this summary section itself.

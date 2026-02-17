@@ -17,7 +17,7 @@ from redis.asyncio import Redis
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
 from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
-from src.agent_service.eval_store.judge import judge_service
+from src.agent_service.eval_store.judge import judge_service, LLMJudge
 from src.agent_service.eval_store.embedder import EvalEmbedder
 from src.agent_service.core.config import ENABLE_LLM_JUDGE, JUDGE_MODEL_NAME
 from src.agent_service.llm.client import get_llm
@@ -386,7 +386,12 @@ def compute_non_llm_metrics(
 
 async def compute_llm_metrics(
     trace: Dict[str, Any],
-    collector: ShadowEvalCollector
+    collector: ShadowEvalCollector,
+    openrouter_api_key: Optional[str] = None,
+    nvidia_api_key: Optional[str] = None,
+    groq_api_key: Optional[str] = None,
+    model_name: Optional[str] = None,  # ← ADD THIS
+    provider: Optional[str] = None      # ← ADD THIS
 ) -> List[Dict[str, Any]]:
     
     if not ENABLE_LLM_JUDGE:
@@ -418,6 +423,17 @@ async def compute_llm_metrics(
 
     results = []
     
+    # ✅ Use session's model and keys instead of separate judge model
+    judge_model_name = model_name or trace.get("model") or JUDGE_MODEL_NAME
+    
+    # Create judge instance with session's API keys and model
+    judge = LLMJudge(
+        model_name=judge_model_name,  # ← Use session's model
+        openrouter_api_key=openrouter_api_key,
+        nvidia_api_key=nvidia_api_key,
+        groq_api_key=groq_api_key
+    )
+    
     metrics_to_run = [
         ("relevance", question, answer, context_str),
         ("helpfulness", question, answer, context_str),
@@ -427,13 +443,13 @@ async def compute_llm_metrics(
     ]
 
     tasks = [
-        judge_service.evaluate_pointwise(m, q, a, c) 
+        judge.evaluate_pointwise(m, q, a, c) 
         for m, q, a, c in metrics_to_run
     ]
     
     eval_results = await asyncio.gather(*tasks)
 
-    full_name = judge_service.model_name
+    full_name = judge.model_name
     short_name = full_name.split("/", 1)[-1] if "/" in full_name else full_name
     judge_id = f"llm_judge:{short_name}"
 
@@ -447,7 +463,7 @@ async def compute_llm_metrics(
             "reasoning": res["reasoning"],
             "evaluator_id": judge_id,
             "evidence": [],
-            "meta": {"mode": "pointwise_g_eval"}
+            "meta": {"mode": "pointwise_g_eval", "same_model_as_session": True}
         })
 
     return results
@@ -459,7 +475,14 @@ async def _commit_bundle(trace: Dict[str, Any], events: List[Dict[str, Any]], ev
     if evals:
         await run_in_threadpool(STORE.upsert_evals, trace["trace_id"], evals)
 
-async def maybe_shadow_eval_commit(collector: ShadowEvalCollector) -> None:
+async def maybe_shadow_eval_commit(
+    collector: ShadowEvalCollector,
+    openrouter_api_key: Optional[str] = None,
+    nvidia_api_key: Optional[str] = None,
+    groq_api_key: Optional[str] = None,
+    model_name: Optional[str] = None,  # ← ADD THIS
+    provider: Optional[str] = None      # ← ADD THIS
+) -> None:
     try:
         if not await should_shadow_eval():
             return
@@ -472,20 +495,28 @@ async def maybe_shadow_eval_commit(collector: ShadowEvalCollector) -> None:
             events = collector.events
 
         evals = compute_non_llm_metrics(trace, events, collector.tool_names)
-        llm_evals = await compute_llm_metrics(trace, collector)
+        
+        # Pass session's model to judge
+        llm_evals = await compute_llm_metrics(
+            trace, 
+            collector,
+            openrouter_api_key=openrouter_api_key,
+            nvidia_api_key=nvidia_api_key,
+            groq_api_key=groq_api_key,
+            model_name=model_name,  # ← Pass session model
+            provider=provider        # ← Pass provider
+        )
         evals.extend(llm_evals)
 
         await _commit_bundle(trace, events, evals)
 
-        # Trigger Embeddings for Vector Search
         try:
-            # Fire-and-forget; don't block the main response if embedding is slow
-            # embed_trace_if_needed is async, so we await it here
-            await EMBEDDER.embed_trace_if_needed(trace, events)
+            # Use session's OpenRouter key for embeddings
+            embedder = EvalEmbedder(openrouter_api_key=openrouter_api_key)
             
-            # Optionally embed results too
+            await embedder.embed_trace_if_needed(trace, events)
             for ev in evals:
-                await EMBEDDER.embed_eval_if_needed(trace["trace_id"], ev)
+                await embedder.embed_eval_if_needed(trace["trace_id"], ev)
         except Exception as e:
             log.warning(f"[shadow_eval] Embedding generation failed: {e}")
 

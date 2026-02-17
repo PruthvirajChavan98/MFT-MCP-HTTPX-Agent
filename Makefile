@@ -62,3 +62,9 @@ begin:
 	$(MAKE) docker-build 
 	$(MAKE) docker-up
 	docker compose logs agent --tail 200
+
+down-up:
+	rm -f uv.lock && uv sync
+	docker compose down
+	docker compose build
+	docker compose up -d

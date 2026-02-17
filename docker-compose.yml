@@ -3,13 +3,23 @@ services:
     image: redis/redis-stack-server:latest
     container_name: hfcl_redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - redis_data:/data
+    networks:
+      - hfcl_network
 
   neo4j:
     image: neo4j:5.26.0
     container_name: hfcl_neo4j
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
       NEO4J_AUTH: neo4j/password
       NEO4J_PLUGINS: '["apoc"]'
@@ -20,26 +30,41 @@ services:
     volumes:
       - ./neo4j_data:/data
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   mcp:
     build:
       context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - hfcl_mcp:latest
+    image: hfcl_mcp:latest
     container_name: hfcl_mcp
     command: ["python", "src/main_mcp.py"]
+    ports:
+      - "127.0.0.1:8050:8050"
     env_file:
       - .env
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   agent:
     build:
       context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - hfcl_agent:latest
+    image: hfcl_agent:latest
     container_name: hfcl_agent
     command: [
       "gunicorn", "src.main_agent:app",
@@ -67,8 +92,8 @@ services:
       NEO4J_PASSWORD: "password"
 
       SHADOW_EVAL_ENABLED: "1"
-      SHADOW_EVAL_SAMPLE_RATE: "1.0"
-      SHADOW_EVAL_CAPTURE: "full"
+      SHADOW_EVAL_SAMPLE_RATE: "0.1"
+      SHADOW_EVAL_CAPTURE: "light"
 
       OPENROUTER_SITE_URL: "${OPENROUTER_SITE_URL}"
       OPENROUTER_APP_TITLE: "${OPENROUTER_APP_TITLE}"
@@ -85,6 +110,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -98,10 +125,16 @@ services:
       - agent
       - mcp
     restart: unless-stopped
+    networks:
+      - hfcl_network
 
   router_worker:
     build:
       context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - hfcl_router_worker:latest
+    image: hfcl_router_worker:latest
     container_name: hfcl_router_worker
     command: ["python", "-m", "src.agent_service.router.worker"]
     env_file:
@@ -115,3 +148,12 @@ services:
       - redis
       - neo4j
     restart: unless-stopped
+    networks:
+      - hfcl_network
+
+networks:
+  hfcl_network:
+    driver: bridge
+
+volumes:
+  redis_data:

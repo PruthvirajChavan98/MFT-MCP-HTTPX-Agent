@@ -2,3 +2,4 @@ uv.lock
 *.ipynb
 neo4j*
 neo4j_data
+API_CURL_CALLS.md

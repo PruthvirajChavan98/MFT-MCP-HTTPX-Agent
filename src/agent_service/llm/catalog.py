@@ -14,9 +14,32 @@ from src.agent_service.core.config import (
     GROQ_BASE_URL,
     NVIDIA_BASE_URL,
     REDIS_URL,
+    GROQ_API_KEYS,
 )
 
 log = logging.getLogger("model_service")
+
+# --- STATIC FALLBACK CATALOG (Server-Side Source of Truth) ---
+# Used when live API calls fail so the system remains usable.
+FALLBACK_MODELS = {
+    "groq": [
+        {"id": "groq/llama-3.3-70b-versatile", "context_length": 32768, "name": "Llama 3.3 70B"},
+        {"id": "groq/llama-3.1-8b-instant", "context_length": 128000, "name": "Llama 3.1 8B"},
+        {"id": "groq/deepseek-r1-distill-llama-70b", "context_length": 128000, "name": "DeepSeek R1 Distill 70B", "type": "reasoning"},
+    ],
+    "openrouter": [
+        {"id": "openai/gpt-4o", "context_length": 128000, "name": "GPT-4o"},
+        {"id": "openai/gpt-4o-mini", "context_length": 128000, "name": "GPT-4o Mini"},
+        {"id": "anthropic/claude-3.5-sonnet", "context_length": 200000, "name": "Claude 3.5 Sonnet"},
+        {"id": "deepseek/deepseek-r1", "context_length": 64000, "name": "DeepSeek R1", "type": "reasoning"},
+    ],
+    "nvidia": [
+        {"id": "nvidia/meta/llama-3.1-405b-instruct", "context_length": 128000, "name": "Llama 3.1 405B"},
+        {"id": "nvidia/meta/llama-3.1-70b-instruct", "context_length": 128000, "name": "Llama 3.1 70B"},
+        {"id": "nvidia/meta/llama-3.1-8b-instruct", "context_length": 128000, "name": "Llama 3.1 8B"},
+        {"id": "nvidia/mistralai/mistral-nemo-12b-instruct", "context_length": 128000, "name": "Mistral Nemo 12B"},
+    ]
+}
 
 _PROVIDER_DISPLAY = {
     "openai": "OpenAI", "anthropic": "Anthropic", "google": "Google", "meta": "Meta",
@@ -109,17 +132,38 @@ class ModelService:
             specs.append({"name": "reasoning_format", "type": "enum", "options": ["raw"], "default": "raw"})
         return self._ensure_tool_specs(specs, provider="groq")
 
+    def _hydrate_fallback(self, provider: str) -> List[Dict[str, Any]]:
+        """Hydrates the static fallback list into full model objects."""
+        raw_list = FALLBACK_MODELS.get(provider, [])
+        results = []
+        for m in raw_list:
+            mid = m["id"]
+            specs = self._get_groq_specs(mid) if provider == "groq" else self._std_specs()
+            supported = [s["name"] for s in specs] + ["stream"]
+            
+            results.append({
+                "id": mid,
+                "name": m.get("name") or derive_display_name(mid, provider=provider),
+                "provider": provider,
+                "context_length": m.get("context_length", 32000),
+                "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
+                "supported_parameters": supported,
+                "parameter_specs": specs,
+                "modality": "text",
+                "type": m.get("type", "chat")
+            })
+        return _sort_models(results)
+
     async def fetch_groq_data(self) -> List[Dict[str, Any]]:
-        # In BYOK mode, we don't have a server key to fetch the catalog.
-        # We can try to grab one from env if available, otherwise skip.
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key: return []
+        if not GROQ_API_KEYS: return self._hydrate_fallback("groq")
+        api_key = GROQ_API_KEYS[0] # Use first available owner key
         
         try:
             url = f"{GROQ_BASE_URL}/openai/v1/models"
             async with httpx.AsyncClient(timeout=20.0) as client:
                 resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
-                if resp.status_code != 200: return []
+                if resp.status_code != 200: return self._hydrate_fallback("groq")
+                
                 data = resp.json().get("data", [])
                 results = []
                 for m in data:
@@ -139,7 +183,7 @@ class ModelService:
                 return _sort_models(results)
         except Exception as e:
             log.error(f"Groq Fetch Error: {e}")
-            return []
+            return self._hydrate_fallback("groq")
 
     async def fetch_openrouter_data(self) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, float]]]:
         try:
@@ -155,7 +199,6 @@ class ModelService:
                     mid = (m.get("id") or "").strip()
                     if not mid: continue
                     
-                    # Pricing normalization
                     raw_p = m.get("pricing", {})
                     try:
                         p_float = float(raw_p.get("prompt", "0"))
@@ -164,8 +207,6 @@ class ModelService:
                         p_float = c_float = 0.0
                     
                     pricing_map[mid] = {"prompt": p_float, "completion": c_float}
-
-                    # For UI display, we multiply by 1M
                     ui_p = p_float * 1_000_000
                     ui_c = c_float * 1_000_000
 
@@ -191,17 +232,44 @@ class ModelService:
             return [], {}
 
     async def fetch_nvidia_data(self) -> List[Dict[str, Any]]:
-        # BYOK Check
+        # ✅ FIX: Properly implemented NVIDIA parser
         api_key = os.getenv("NVIDIA_API_KEY")
-        if not api_key: return []
+        if not api_key: return self._hydrate_fallback("nvidia")
         
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(f"{NVIDIA_BASE_URL}/models", headers={"Authorization": f"Bearer {api_key}"})
-                if resp.status_code != 200: return []
-                # Simple implementation for now
-                return [] 
-        except: return []
+                
+                if resp.status_code != 200:
+                    log.warning(f"Nvidia API Status: {resp.status_code}")
+                    return self._hydrate_fallback("nvidia")
+                
+                data = resp.json().get("data", [])
+                results = []
+                for m in data:
+                    mid = (m.get("id") or "").strip()
+                    if not mid: continue
+                    
+                    # NVIDIA NIMs are hosted directly, so we map them as chat models
+                    # They don't typically return context window in the list API, so we default to 32k or use a lookup if needed.
+                    # We map 'owned_by' to vendor for better display.
+                    
+                    results.append({
+                        "id": mid,
+                        "name": derive_display_name(mid, provider="nvidia"),
+                        "provider": "nvidia",
+                        "context_length": 32000, # NVIDIA API doesn't return this in list; safe default
+                        "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
+                        "supported_parameters": ["temperature", "max_tokens", "stream"],
+                        "parameter_specs": self._std_specs(),
+                        "modality": "text",
+                        "type": "chat"
+                    })
+                
+                return _sort_models(results)
+        except Exception as e:
+             log.error(f"Nvidia Fetch Error: {e}")
+             return self._hydrate_fallback("nvidia")
 
     async def refresh_cache(self) -> None:
         log.info("Refreshing model cache...")
@@ -227,13 +295,15 @@ class ModelService:
 
     async def get_cached_data(self) -> List[Dict[str, Any]]:
         raw = await self.redis.get(self.CACHE_KEY)
-        return json.loads(raw) if raw else []
+        if raw:
+             return json.loads(raw)
+        
+        # If cache miss (cold start), force a sync refresh immediately
+        await self.refresh_cache()
+        raw_fresh = await self.redis.get(self.CACHE_KEY)
+        return json.loads(raw_fresh) if raw_fresh else []
 
     async def get_price(self, model_id: str) -> Optional[Dict[str, float]]:
-        """
-        Efficiently looks up pricing for a model ID.
-        Returns dict with 'prompt' and 'completion' rates (per token).
-        """
         raw = await self.redis.get(self.PRICING_KEY)
         if raw:
             data = json.loads(raw)

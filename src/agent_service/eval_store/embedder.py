@@ -89,10 +89,18 @@ def _build_eval_doc(ev: Dict[str, Any], evidence_events: List[Dict[str, Any]]) -
     return "\n".join(lines).strip()
 
 class EvalEmbedder:
-    def __init__(self):
-        self.key = OPENROUTER_API_KEY
+    def __init__(self, openrouter_api_key: Optional[str] = None):
+        """
+        Initialize embedder with BYOK support.
+        
+        Args:
+            openrouter_api_key: Session's OpenRouter key (BYOK). Falls back to env if None.
+        """
+        # Priority: Session key > Environment key
+        self.key = openrouter_api_key or OPENROUTER_API_KEY
         self.enabled = bool(self.key)
         self.emb: Optional[OpenAIEmbeddings] = None
+        
         if self.enabled:
             self.emb = OpenAIEmbeddings(
                 model=EMBED_MODEL,
@@ -100,12 +108,18 @@ class EvalEmbedder:
                 base_url=OPENROUTER_BASE_URL,
                 check_embedding_ctx_length=False,
             )
+            if openrouter_api_key:
+                log.debug("[eval_embedder] Using session's OpenRouter key (BYOK)")
+            else:
+                log.debug("[eval_embedder] Using environment OpenRouter key (fallback)")
         else:
-            log.warning("[eval_embedder] OPENROUTER_API_KEY missing -> embeddings disabled")
+            log.warning("[eval_embedder] No OpenRouter API key available -> embeddings disabled")
 
     async def embed_trace_if_needed(self, trace: Dict[str, Any], events: List[Dict[str, Any]]) -> None:
         if not self.enabled or not self.emb:
+            log.debug("[eval_embedder] Skipping trace embedding - no API key")
             return
+        
         trace_id = str(trace.get("trace_id") or "")
         if not trace_id:
             return
@@ -123,6 +137,7 @@ class EvalEmbedder:
                 trace_id=trace_id
             ).single()
             if existing and existing.get("h") == h:
+                log.debug(f"[eval_embedder] Trace {trace_id} already embedded (hash match)")
                 return
 
         # Generate Embedding
@@ -153,7 +168,9 @@ class EvalEmbedder:
 
     async def embed_eval_if_needed(self, trace_id: str, ev: Dict[str, Any]) -> None:
         if not self.enabled or not self.emb:
+            log.debug("[eval_embedder] Skipping eval embedding - no API key")
             return
+        
         eval_id = str(ev.get("eval_id") or "")
         if not eval_id or not trace_id:
             return
@@ -189,6 +206,7 @@ class EvalEmbedder:
                 eval_id=eval_id
             ).single()
             if existing and existing.get("h") == h:
+                log.debug(f"[eval_embedder] Eval {eval_id} already embedded (hash match)")
                 return
 
         try:
@@ -213,3 +231,4 @@ class EvalEmbedder:
                 vec=vec,
                 m=EMBED_MODEL,
             )
+            log.debug(f"[eval_embedder] Embedded eval {eval_id}")

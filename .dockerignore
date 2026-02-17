@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -6,21 +7,47 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Tests & CI
 .pytest_cache/
 .coverage
 htmlcov/
-.env
-.venv
-venv/
-ENV/
-.git/
-.gitignore
-*.md
-!README.md
-.DS_Store
+.tox/
+
+# Logs
 *.log
-neo4j_data/
-data/
-.cache*/
-*.ipynb
-tests/
+
+# Environment
+.env
+.env.*
+
+# Documentation
+README.md
+docs/
+
+# Large files
+*.db
+*.sqlite
+
+notebook.ipynb
