@@ -8,15 +8,21 @@ import logging
 from typing import Any, Dict, Optional
 
 from redis import Redis
+from redis.asyncio import ConnectionPool
 from redis.asyncio import Redis as AsyncRedis
 
-from src.agent_service.core.config import REDIS_URL
+from src.agent_service.core.config import (
+    REDIS_HEALTH_CHECK_INTERVAL,
+    REDIS_MAX_CONNECTIONS,
+    REDIS_URL,
+)
 
 log = logging.getLogger(__name__)
 
 
 # Global async Redis client (singleton)
 _async_redis_client: Optional[AsyncRedis] = None
+_async_redis_pool: Optional[ConnectionPool] = None
 
 
 async def get_redis() -> AsyncRedis:
@@ -27,12 +33,21 @@ async def get_redis() -> AsyncRedis:
         AsyncRedis client instance
     """
     global _async_redis_client
+    global _async_redis_pool
 
     if _async_redis_client is None:
-        _async_redis_client = AsyncRedis.from_url(
-            REDIS_URL, decode_responses=True, encoding="utf-8"
+        _async_redis_pool = ConnectionPool.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            encoding="utf-8",
+            max_connections=REDIS_MAX_CONNECTIONS,
+            health_check_interval=REDIS_HEALTH_CHECK_INTERVAL,
         )
-        log.info("Initialized async Redis client")
+        _async_redis_client = AsyncRedis(connection_pool=_async_redis_pool)
+        log.info(
+            "Initialized async Redis client with connection pool (max_connections=%s)",
+            REDIS_MAX_CONNECTIONS,
+        )
 
     return _async_redis_client
 
@@ -40,11 +55,17 @@ async def get_redis() -> AsyncRedis:
 async def close_redis() -> None:
     """Close global Redis connection (cleanup on shutdown)."""
     global _async_redis_client
+    global _async_redis_pool
 
     if _async_redis_client:
-        await _async_redis_client.close()
+        await _async_redis_client.aclose()
         _async_redis_client = None
-        log.info("Closed async Redis client")
+
+    if _async_redis_pool:
+        await _async_redis_pool.disconnect()
+        _async_redis_pool = None
+
+    log.info("Closed async Redis client")
 
 
 class SessionUtils:
@@ -79,9 +100,8 @@ class SessionUtils:
     async def get_app_id_for_session(session_id: str) -> Optional[str]:
         """Retrieve app_id associated with a session from Redis (async)."""
         try:
-            client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
-            data_str = await client.get(session_id)
-            await client.close()
+            redis = await get_redis()
+            data_str = await redis.get(session_id)
 
             if data_str:
                 data = json.loads(str(data_str))
@@ -95,9 +115,8 @@ class SessionUtils:
     async def get_session_metadata(session_id: str) -> Dict[str, Any]:
         """Retrieve full session metadata from Redis (async)."""
         try:
-            client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
-            data_str = await client.get(session_id)
-            await client.close()
+            redis = await get_redis()
+            data_str = await redis.get(session_id)
 
             if data_str:
                 return json.loads(str(data_str))

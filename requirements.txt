@@ -14,4 +14,7 @@ redis
 pdfplumber
 gunicorn
 uvicorn[standard]
+prometheus-client
+geoip2
+asyncpg
 https://github.com/toon-format/toon-python.git

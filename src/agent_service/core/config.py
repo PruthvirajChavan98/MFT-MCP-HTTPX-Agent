@@ -8,6 +8,9 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 
 # --- EXTERNAL SERVICES ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+POSTGRES_DSN = os.getenv("POSTGRES_DSN", "").strip()
+POSTGRES_POOL_MIN = int(os.getenv("POSTGRES_POOL_MIN", "10"))
+POSTGRES_POOL_MAX = int(os.getenv("POSTGRES_POOL_MAX", "50"))
 
 # --- LOGIC SETTINGS ---
 # LangGraph history limit
@@ -128,3 +131,56 @@ RATE_LIMIT_KEY_PREFIX = os.getenv("RATE_LIMIT_KEY_PREFIX", "ratelimit")
 # Per-IP rate limiting (in addition to per-user)
 RATE_LIMIT_PER_IP_ENABLED = os.getenv("RATE_LIMIT_PER_IP_ENABLED", "true").lower() == "true"
 RATE_LIMIT_PER_IP_RPS = float(os.getenv("RATE_LIMIT_PER_IP_RPS", "100.0"))
+
+# =============================================================================
+# REDIS CONNECTION POOL
+# =============================================================================
+REDIS_MAX_CONNECTIONS = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
+REDIS_HEALTH_CHECK_INTERVAL = int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30"))
+
+# =============================================================================
+# SECURITY HARDENING & TOR BLOCKING
+# =============================================================================
+SECURITY_ENABLED = os.getenv("SECURITY_ENABLED", "true").lower() in ("1", "true", "yes")
+SECURITY_TRUST_PROXY_HEADERS = os.getenv("SECURITY_TRUST_PROXY_HEADERS", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+SECURITY_PREFER_IP_HEADER = os.getenv("SECURITY_PREFER_IP_HEADER", "").strip().lower() or None
+
+SECURITY_CRITICAL_PATHS = tuple(
+    p.strip()
+    for p in os.getenv("SECURITY_CRITICAL_PATHS", "/agent,/graphql,/eval").split(",")
+    if p.strip()
+)
+SECURITY_MONITORED_PATHS = tuple(
+    p.strip()
+    for p in os.getenv("SECURITY_MONITORED_PATHS", "/health,/metrics").split(",")
+    if p.strip()
+)
+
+TOR_REFRESH_SECONDS = int(os.getenv("TOR_REFRESH_SECONDS", "1800"))
+TOR_STALE_AFTER_SECONDS = int(os.getenv("TOR_STALE_AFTER_SECONDS", "7200"))
+TOR_NEGATIVE_CACHE_TTL_SECONDS = int(os.getenv("TOR_NEGATIVE_CACHE_TTL_SECONDS", "300"))
+TOR_NEGATIVE_CACHE_CLEANUP_INTERVAL = int(os.getenv("TOR_NEGATIVE_CACHE_CLEANUP_INTERVAL", "1000"))
+
+SECURITY_IMPOSSIBLE_TRAVEL_KMH = float(os.getenv("SECURITY_IMPOSSIBLE_TRAVEL_KMH", "900.0"))
+SECURITY_CONCURRENT_IP_WINDOW_SECONDS = int(
+    os.getenv("SECURITY_CONCURRENT_IP_WINDOW_SECONDS", "300")
+)
+SECURITY_CONCURRENT_IP_THRESHOLD = int(os.getenv("SECURITY_CONCURRENT_IP_THRESHOLD", "3"))
+
+SECURITY_RISK_IMPOSSIBLE_TRAVEL = float(os.getenv("SECURITY_RISK_IMPOSSIBLE_TRAVEL", "0.6"))
+SECURITY_RISK_CONCURRENT_IP = float(os.getenv("SECURITY_RISK_CONCURRENT_IP", "0.5"))
+SECURITY_RISK_DEVICE_MISMATCH = float(os.getenv("SECURITY_RISK_DEVICE_MISMATCH", "0.4"))
+SECURITY_RISK_GEO_ANOMALY = float(os.getenv("SECURITY_RISK_GEO_ANOMALY", "0.3"))
+SECURITY_RISK_ALLOW_THRESHOLD = float(os.getenv("SECURITY_RISK_ALLOW_THRESHOLD", "0.4"))
+SECURITY_RISK_STEP_UP_THRESHOLD = float(os.getenv("SECURITY_RISK_STEP_UP_THRESHOLD", "0.7"))
+
+GEOIP_DB_PATH = os.getenv("GEOIP_DB_PATH", "").strip()
+PROMETHEUS_METRICS_ENABLED = os.getenv("PROMETHEUS_METRICS_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)

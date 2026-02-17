@@ -9,7 +9,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from strawberry.fastapi import GraphQLRouter
@@ -18,21 +18,33 @@ from src.agent_service.api.admin import router as admin_router
 from src.agent_service.api.endpoints.agent_query import router as query_router
 from src.agent_service.api.endpoints.agent_stream import router as stream_router
 from src.agent_service.api.endpoints.follow_up import router as follow_up_router
-
-# Import new endpoint routers
 from src.agent_service.api.endpoints.health import router as health_router
 from src.agent_service.api.endpoints.models import router as models_router
+from src.agent_service.api.endpoints.rate_limit_metrics import router as rate_limit_metrics_router
 from src.agent_service.api.endpoints.router_endpoints import router as router_router
 from src.agent_service.api.endpoints.sessions import router as sessions_router
 from src.agent_service.api.eval_ingest import router as eval_router
 from src.agent_service.api.eval_read import router as eval_read_router
-
-# Import existing routers
 from src.agent_service.api.graphql import schema
-from src.agent_service.core.config import PORT, REDIS_URL
-from src.agent_service.core.session_utils import close_redis
+from src.agent_service.core.config import (
+    PORT,
+    POSTGRES_DSN,
+    POSTGRES_POOL_MAX,
+    POSTGRES_POOL_MIN,
+    REDIS_URL,
+    SECURITY_CRITICAL_PATHS,
+    SECURITY_ENABLED,
+    SECURITY_MONITORED_PATHS,
+    SECURITY_PREFER_IP_HEADER,
+    SECURITY_TRUST_PROXY_HEADERS,
+)
+from src.agent_service.core.session_utils import close_redis, get_redis
 from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.catalog import model_service
+from src.agent_service.security.middleware import SessionRiskMiddleware
+from src.agent_service.security.postgres_pool import PostgresPoolManager
+from src.agent_service.security.runtime import build_security_runtime
+from src.agent_service.security.tor_block import BlockTorMiddleware
 from src.agent_service.tools.mcp_manager import mcp_manager
 
 # Configure logging
@@ -47,6 +59,8 @@ async def lifespan(app_instance: FastAPI):
     log.info(f"📦 Redis Checkpointer: {REDIS_URL}")
 
     cache_task = asyncio.create_task(model_service.start_background_loop())
+    security_runtime = None
+    postgres_pool = None
 
     try:
         async with AsyncRedisSaver.from_conn_string(REDIS_URL) as checkpointer:
@@ -55,10 +69,34 @@ async def lifespan(app_instance: FastAPI):
             await mcp_manager.initialize()
             log.info("✅ MCP Manager initialized")
 
+            if POSTGRES_DSN:
+                postgres_pool = PostgresPoolManager(
+                    dsn=POSTGRES_DSN,
+                    min_size=POSTGRES_POOL_MIN,
+                    max_size=POSTGRES_POOL_MAX,
+                )
+                await postgres_pool.start()
+                app_instance.state.postgres_pool = postgres_pool
+                log.info("✅ PostgreSQL pool initialized")
+
+            if SECURITY_ENABLED:
+                redis = await get_redis()
+                security_runtime = build_security_runtime(redis)
+                await security_runtime.start()
+                app_instance.state.security_runtime = security_runtime
+                log.info("✅ Security runtime initialized")
+
             yield
 
             log.info("🛑 SHUTDOWN: Cleaning up resources...")
             cache_task.cancel()
+
+            if security_runtime:
+                await security_runtime.stop()
+
+            if postgres_pool:
+                await postgres_pool.stop()
+
             await mcp_manager.shutdown()
             await config_manager.close()
             await close_redis()
@@ -77,6 +115,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Add baseline security headers; TLS is expected at edge proxy/load balancer."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -85,6 +136,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if SECURITY_ENABLED:
+    app.add_middleware(
+        SessionRiskMiddleware,
+        critical_paths=SECURITY_CRITICAL_PATHS,
+        monitored_paths=SECURITY_MONITORED_PATHS,
+    )
+    app.add_middleware(
+        BlockTorMiddleware,
+        critical_paths=SECURITY_CRITICAL_PATHS,
+        monitored_paths=SECURITY_MONITORED_PATHS,
+        proxies_trusted=SECURITY_TRUST_PROXY_HEADERS,
+        prefer_header=SECURITY_PREFER_IP_HEADER,
+    )
 
 # Mount GraphQL
 graphql_app = GraphQLRouter(schema)
@@ -97,7 +162,7 @@ app.include_router(eval_read_router, prefix="/eval", tags=["evaluation"])
 # Mount admin endpoints
 app.include_router(admin_router, tags=["admin"])
 
-# Mount new modular endpoints
+# Mount modular endpoints
 app.include_router(health_router)
 app.include_router(models_router)
 app.include_router(sessions_router)
@@ -105,6 +170,7 @@ app.include_router(router_router)
 app.include_router(query_router)
 app.include_router(stream_router)
 app.include_router(follow_up_router)
+app.include_router(rate_limit_metrics_router)
 
 log.info("✅ All routers mounted")
 

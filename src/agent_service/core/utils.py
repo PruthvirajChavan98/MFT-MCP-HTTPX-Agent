@@ -35,5 +35,4 @@ def normalize_result(result: Any) -> Any:
     return result
 
 
-
 # Backward compatibility imports

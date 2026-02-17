@@ -11,6 +11,29 @@ services:
       start_period: 5s
     volumes:
       - redis_data:/data
+    mem_limit: 512m
+    cpus: 0.50
+    networks:
+      - hfcl_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hfcl_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hfcl_security
+      POSTGRES_USER: hfcl
+      POSTGRES_PASSWORD: hfcl_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hfcl -d hfcl_security"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/sql/session_security.sql:/docker-entrypoint-initdb.d/01_session_security.sql:ro
+    mem_limit: 1g
+    cpus: 1.00
     networks:
       - hfcl_network
 
@@ -30,6 +53,8 @@ services:
     volumes:
       - ./neo4j_data:/data
     restart: unless-stopped
+    mem_limit: 2g
+    cpus: 2.00
     networks:
       - hfcl_network
 
@@ -55,6 +80,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.00
     networks:
       - hfcl_network
 
@@ -87,6 +114,11 @@ services:
       MCP_SERVER_URL: "http://mcp:8050/sse"
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
+      REDIS_MAX_CONNECTIONS: "50"
+      POSTGRES_DSN: "postgresql://hfcl:hfcl_password@postgres:5432/hfcl_security"
+      POSTGRES_POOL_MIN: "10"
+      POSTGRES_POOL_MAX: "50"
+
       NEO4J_URI: "bolt://neo4j:7687"
       NEO4J_USER: "neo4j"
       NEO4J_PASSWORD: "password"
@@ -103,28 +135,45 @@ services:
       NBFC_ROUTER_CHAT_MODEL: "z-ai/glm-4.7"
       NBFC_ROUTER_EMBED_MODEL: "openai/text-embedding-3-small"
       NBFC_ROUTER_CACHE_DIR: ".cache_nbfc_router"
+
+      SECURITY_ENABLED: "true"
+      SECURITY_TRUST_PROXY_HEADERS: "true"
+      SECURITY_PREFER_IP_HEADER: "x-forwarded-for"
+      SECURITY_CRITICAL_PATHS: "/agent,/graphql,/eval"
+      SECURITY_MONITORED_PATHS: "/health,/metrics"
+      TOR_REFRESH_SECONDS: "1800"
+      TOR_STALE_AFTER_SECONDS: "7200"
+      TOR_NEGATIVE_CACHE_TTL_SECONDS: "300"
+      TOR_NEGATIVE_CACHE_CLEANUP_INTERVAL: "1000"
+
+      SECURITY_IMPOSSIBLE_TRAVEL_KMH: "900"
+      SECURITY_CONCURRENT_IP_WINDOW_SECONDS: "300"
+      SECURITY_CONCURRENT_IP_THRESHOLD: "3"
+      SECURITY_RISK_IMPOSSIBLE_TRAVEL: "0.6"
+      SECURITY_RISK_CONCURRENT_IP: "0.5"
+      SECURITY_RISK_DEVICE_MISMATCH: "0.4"
+      SECURITY_RISK_GEO_ANOMALY: "0.3"
+      SECURITY_RISK_ALLOW_THRESHOLD: "0.4"
+      SECURITY_RISK_STEP_UP_THRESHOLD: "0.7"
+
+      PROMETHEUS_METRICS_ENABLED: "true"
+      GEOIP_DB_PATH: "/app/data/geoip/GeoLite2-City.mmdb"
     depends_on:
-      - mcp
-      - redis
-      - neo4j
+      redis:
+        condition: service_healthy
+      mcp:
+        condition: service_started
+      neo4j:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-    networks:
-      - hfcl_network
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: hfcl_cloudflared
-    env_file:
-      - .env
     volumes:
-      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
-    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
-    depends_on:
-      - agent
-      - mcp
+      - ./data/geoip:/app/data/geoip
     restart: unless-stopped
+    mem_limit: 2g
+    cpus: 2.00
     networks:
       - hfcl_network
 
@@ -145,9 +194,113 @@ services:
       NEO4J_USER: "neo4j"
       NEO4J_PASSWORD: "password"
     depends_on:
-      - redis
-      - neo4j
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
     restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.00
+    networks:
+      - hfcl_network
+
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    container_name: hfcl_prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      agent:
+        condition: service_started
+      alertmanager:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.75
+    networks:
+      - hfcl_network
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    container_name: hfcl_alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.50
+    networks:
+      - hfcl_network
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: hfcl_grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.75
+    networks:
+      - hfcl_network
+
+  geoip_updater:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hfcl_geoip_updater
+    command: ["/bin/bash", "-lc", "while true; do /app/scripts/update_free_geoip.sh; sleep 86400; done"]
+    environment:
+      GEOIP_FREE_ONLY: "true"
+      GEOIP_DATA_DIR: "/app/data/geoip"
+      MAXMIND_ACCOUNT_ID: "${MAXMIND_ACCOUNT_ID}"
+      MAXMIND_LICENSE_KEY: "${MAXMIND_LICENSE_KEY}"
+      IP2PROXY_LITE_URL: "${IP2PROXY_LITE_URL}"
+    volumes:
+      - ./data/geoip:/app/data/geoip
+      - ./scripts/update_free_geoip.sh:/app/scripts/update_free_geoip.sh:ro
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.25
+    networks:
+      - hfcl_network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: hfcl_cloudflared
+    env_file:
+      - .env
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
+    depends_on:
+      - agent
+      - mcp
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.50
     networks:
       - hfcl_network
 
@@ -157,3 +310,6 @@ networks:
 
 volumes:
   redis_data:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

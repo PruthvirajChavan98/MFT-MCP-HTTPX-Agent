@@ -1,0 +1,42 @@
+groups:
+  - name: security-alerts
+    rules:
+      - alert: TorListStale
+        expr: tor_list_staleness_seconds > 7200
+        for: 5m
+        labels:
+          severity: critical
+          service: agent
+        annotations:
+          summary: "Tor exit list is stale"
+          description: "Tor exit list refresh age is above 2 hours."
+
+      - alert: TorBlocksSpike
+        expr: increase(tor_blocks_total[5m]) > 50
+        for: 2m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "Tor blocks spiking"
+          description: "More than 50 Tor-blocked requests in 5 minutes."
+
+      - alert: SessionDenySpike
+        expr: increase(session_decisions_total{decision="deny"}[5m]) > 20
+        for: 2m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "Session risk denies increased"
+          description: "More than 20 deny decisions in 5 minutes."
+
+      - alert: HighStepUpRate
+        expr: increase(session_decisions_total{decision="step_up"}[10m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "High step-up authentication rate"
+          description: "Session security step-up decisions are elevated."
