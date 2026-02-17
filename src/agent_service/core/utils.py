@@ -2,6 +2,7 @@
 Generic Utility Functions
 Contains truly generic helpers that don't fit into specialized modules.
 """
+
 import json
 import logging
 from typing import Any
@@ -14,7 +15,7 @@ def normalize_result(result: Any) -> Any:
     if isinstance(result, list) and result:
         first = result[0]
         text = getattr(first, "text", None)
-        
+
         if isinstance(text, str):
             try:
                 parsed = json.loads(text)
@@ -24,17 +25,15 @@ def normalize_result(result: Any) -> Any:
                 return dump
             except Exception:
                 return text
-    
+
     if isinstance(result, dict):
         dump = json.dumps(result, ensure_ascii=False)
         if len(dump) > 8000:
             return dump[:8000] + "... [TRUNCATED]"
         return dump
-    
+
     return result
 
 
+
 # Backward compatibility imports
-from src.agent_service.core.session_utils import valid_session_id, is_user_authenticated
-from src.agent_service.core.streaming_utils import _extract_tool_output
-from src.agent_service.core.graph_utils import keep_only_last_n_messages

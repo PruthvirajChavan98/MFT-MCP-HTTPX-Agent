@@ -2,21 +2,25 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-from langchain_openai import OpenAIEmbeddings
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import OpenAIEmbeddings
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from src.agent_service.llm.client import get_llm
-from .schemas import RouterResult, LabelScore
-from .prototypes_nbfc import SENTIMENT_PROTOTYPES, REASON_PROTOTYPES
+
+from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
+from .schemas import LabelScore, RouterResult
 
 # Regex Patterns
 _PROFANITY = re.compile(r"\b(wtf|bc|mc|bkl|madarchod|behenchod)\b", re.I)
-_NEG_CUES  = re.compile(r"\b(refund|charged twice|not coming|failed|harass|fraud|unauthorized|penalty)\b", re.I)
-_POS_CUES  = re.compile(r"\b(thanks|thank you|love|great|mast|awesome|super smooth)\b", re.I)
+_NEG_CUES = re.compile(
+    r"\b(refund|charged twice|not coming|failed|harass|fraud|unauthorized|penalty)\b", re.I
+)
+_POS_CUES = re.compile(r"\b(thanks|thank you|love|great|mast|awesome|super smooth)\b", re.I)
+
 
 def _cosine_top(
     qv: List[float],
@@ -25,10 +29,11 @@ def _cosine_top(
     topn: int = 3,
 ) -> Tuple[str, float, List[Tuple[str, float]]]:
     import math
+
     def cos(a, b):
-        dot = sum(x*y for x, y in zip(a, b))
-        na = math.sqrt(sum(x*x for x in a)) or 1e-9
-        nb = math.sqrt(sum(x*x for x in b)) or 1e-9
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
+        na = math.sqrt(sum(x * x for x in a)) or 1e-9
+        nb = math.sqrt(sum(x * x for x in b)) or 1e-9
         return dot / (na * nb)
 
     scored: List[Tuple[str, float]] = []
@@ -39,6 +44,7 @@ def _cosine_top(
     scored.sort(key=lambda x: x[1], reverse=True)
     best_label, best_score = scored[0]
     return best_label, best_score, scored[:topn]
+
 
 class RouterService:
     def __init__(self):
@@ -51,7 +57,7 @@ class RouterService:
         key = api_key or OPENROUTER_API_KEY
         if not key:
             raise ValueError("Router requires an OpenRouter API Key (Server or Request).")
-        
+
         return OpenAIEmbeddings(
             model="openai/text-embedding-3-small",
             api_key=key,
@@ -64,7 +70,7 @@ class RouterService:
             return
 
         emb = self._get_embedder(api_key)
-        
+
         self._sent_proto_vecs = {}
         for k, texts in SENTIMENT_PROTOTYPES.items():
             self._sent_proto_vecs[k] = [await emb.aembed_query(t) for t in texts]
@@ -96,7 +102,7 @@ class RouterService:
 
         # Use the specific key for this query
         emb = self._get_embedder(openrouter_api_key)
-        
+
         t0 = time.perf_counter()
         qv = await emb.aembed_query(text)
 
@@ -129,16 +135,21 @@ class RouterService:
             meta={"latency_ms": round(dt, 2)},
         )
 
-    async def classify_llm_glm47(self, text: str, *, openrouter_api_key: Optional[str] = None) -> RouterResult:
+    async def classify_llm_glm47(
+        self, text: str, *, openrouter_api_key: Optional[str] = None
+    ) -> RouterResult:
         llm = get_llm(
             model_name="z-ai/glm-4.7",
-            openrouter_api_key=openrouter_api_key, 
+            openrouter_api_key=openrouter_api_key,
         )
 
         parser = JsonOutputParser()
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a strict classifier. Return ONLY JSON."),
-            ("human", """
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", "You are a strict classifier. Return ONLY JSON."),
+                (
+                    "human",
+                    """
 Classify this NBFC customer message into:
 - sentiment: positive|neutral|negative
 - reason: one of: application_status_approval, lead_intent_new_loan, disbursal, emi_payment_reflecting, charges_fees_penalty,
@@ -152,8 +163,10 @@ Return JSON:
 }}
 
 Text: {text}
-""")
-        ])
+""",
+                ),
+            ]
+        )
         chain = prompt | llm | parser
         out = await chain.ainvoke({"text": text})
 
@@ -162,34 +175,43 @@ Text: {text}
 
         return RouterResult(
             backend="llm_glm_4.7",
-            sentiment=LabelScore(label=str(sent.get("label","unknown")), score=float(sent.get("score",0.0))),
-            reason=LabelScore(label=str(rea.get("label","unknown")), score=float(rea.get("score",0.0))),
+            sentiment=LabelScore(
+                label=str(sent.get("label", "unknown")), score=float(sent.get("score", 0.0))
+            ),
+            reason=LabelScore(
+                label=str(rea.get("label", "unknown")), score=float(rea.get("score", 0.0))
+            ),
             meta={"rationale": out.get("rationale")},
         )
 
-    async def classify(self, text: str, openrouter_api_key: Optional[str] = None, mode: Optional[str] = None) -> RouterResult:
+    async def classify(
+        self, text: str, openrouter_api_key: Optional[str] = None, mode: Optional[str] = None
+    ) -> RouterResult:
         # Default behavior
         return await self.classify_hybrid(text, openrouter_api_key=openrouter_api_key)
 
-    async def classify_hybrid(self, text: str, *, openrouter_api_key: Optional[str] = None) -> RouterResult:
+    async def classify_hybrid(
+        self, text: str, *, openrouter_api_key: Optional[str] = None
+    ) -> RouterResult:
         emb = await self.classify_embeddings(text, openrouter_api_key=openrouter_api_key)
 
         s = emb.sentiment
-        need_llm = (s.score < 0.55) or (s.label == "neutral" and (emb.reason and emb.reason.label == "unknown"))
+        need_llm = (s.score < 0.55) or (
+            s.label == "neutral" and (emb.reason and emb.reason.label == "unknown")
+        )
 
         if not need_llm:
-            emb.backend = "hybrid" # type: ignore
+            emb.backend = "hybrid"  # type: ignore
             emb.meta["selected"] = "embeddings"
             return emb
 
         llm = await self.classify_llm_glm47(text, openrouter_api_key=openrouter_api_key)
-        llm.backend = "hybrid" # type: ignore
+        llm.backend = "hybrid"  # type: ignore
         llm.meta["selected"] = "llm_glm_4.7"
         return llm
-    
+
     async def compare(self, text: str, openrouter_api_key: Optional[str] = None) -> Any:
         # Debug tool to run both
         e = await self.classify_embeddings(text, openrouter_api_key=openrouter_api_key)
         l = await self.classify_llm_glm47(text, openrouter_api_key=openrouter_api_key)
         return {"embeddings": e, "llm": l}
-

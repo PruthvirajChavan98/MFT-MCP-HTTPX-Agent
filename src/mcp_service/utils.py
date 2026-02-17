@@ -1,17 +1,20 @@
 from __future__ import annotations
+
 import csv
+import inspect
 import io
 import json
-import inspect
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Literal, Union
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
+
 
 @dataclass(frozen=True)
 class ToonOptions:
     delimiter: Literal[",", "\t", "|"] = ","
     indent: int = 2
     length_marker: Literal["", "#"] = ""
+
 
 class JsonConverter:
     def __init__(self, *, sep: str = "."):
@@ -48,19 +51,27 @@ class JsonConverter:
         return [{"value": data}]
 
     @staticmethod
-    def _pick_explode_key(records: List[Dict[str, Any]], explode_key: Optional[Union[str, Sequence[str]]]) -> Optional[str]:
-        if explode_key is None: return None
-        if isinstance(explode_key, str): return explode_key.strip() or None
+    def _pick_explode_key(
+        records: List[Dict[str, Any]], explode_key: Optional[Union[str, Sequence[str]]]
+    ) -> Optional[str]:
+        if explode_key is None:
+            return None
+        if isinstance(explode_key, str):
+            return explode_key.strip() or None
         for k in explode_key:
             kk = (k or "").strip()
-            if not kk: continue
+            if not kk:
+                continue
             for r in records:
                 if isinstance(r, dict) and isinstance(r.get(kk), list):
                     return kk
         return None
 
-    def _explode_records(self, records: List[Dict[str, Any]], explode_key: Optional[str]) -> List[Dict[str, Any]]:
-        if not explode_key: return records
+    def _explode_records(
+        self, records: List[Dict[str, Any]], explode_key: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        if not explode_key:
+            return records
         out: List[Dict[str, Any]] = []
         for r in records:
             val = r.get(explode_key)
@@ -80,12 +91,20 @@ class JsonConverter:
                 out.append(r)
         return out
 
-    def json_to_vsc_text(self, data: Any, *, columns: Optional[Sequence[str]] = None, include_header: bool = False, preserve_key_order: bool = True, explode_key: Optional[Union[str, Sequence[str]]] = None) -> Tuple[str, List[str]]:
+    def json_to_vsc_text(
+        self,
+        data: Any,
+        *,
+        columns: Optional[Sequence[str]] = None,
+        include_header: bool = False,
+        preserve_key_order: bool = True,
+        explode_key: Optional[Union[str, Sequence[str]]] = None,
+    ) -> Tuple[str, List[str]]:
         records = self.guess_records(data)
         chosen = self._pick_explode_key(records, explode_key)
         records = self._explode_records(records, chosen)
         flat_rows = [self.flatten(r) for r in records]
-        
+
         if columns is not None:
             col_list = list(columns)
         else:
@@ -99,7 +118,7 @@ class JsonConverter:
                             col_list.append(k)
             else:
                 col_list = sorted({k for row in flat_rows for k in row.keys()})
-        
+
         buf = io.StringIO()
         writer = csv.writer(buf)
         if include_header:
@@ -113,20 +132,35 @@ class JsonConverter:
         try:
             sig = inspect.signature(encode_fn)
             params = sig.parameters
-            if len(params) <= 1: return encode_fn(data)
-            if "options" in params: return encode_fn(data, options=opts)
+            if len(params) <= 1:
+                return encode_fn(data)
+            if "options" in params:
+                return encode_fn(data, options=opts)
             return encode_fn(data, opts)
         except Exception:
-            try: return encode_fn(data, opts)
-            except TypeError: return encode_fn(data)
+            try:
+                return encode_fn(data, opts)
+            except TypeError:
+                return encode_fn(data)
 
     @staticmethod
     def json_to_toon_text(data: Any, *, options: Optional[ToonOptions] = None) -> str:
-        if options is None: options = ToonOptions()
-        opts = {"delimiter": options.delimiter, "indent": options.indent, "lengthMarker": options.length_marker}
+        if options is None:
+            options = ToonOptions()
+        opts = {
+            "delimiter": options.delimiter,
+            "indent": options.indent,
+            "lengthMarker": options.length_marker,
+        }
         try:
             from toon_format import encode as encode_toon
-            try: return JsonConverter._call_encode(encode_toon, data, opts)
-            except NotImplementedError: pass
-        except ImportError: pass
-        raise RuntimeError("No working TOON encoder found. pip install -U git+https://github.com/toon-format/toon-python.git")
+
+            try:
+                return JsonConverter._call_encode(encode_toon, data, opts)
+            except NotImplementedError:
+                pass
+        except ImportError:
+            pass
+        raise RuntimeError(
+            "No working TOON encoder found. pip install -U git+https://github.com/toon-format/toon-python.git"
+        )

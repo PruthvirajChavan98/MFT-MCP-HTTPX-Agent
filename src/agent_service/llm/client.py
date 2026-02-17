@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
-from langchain_core.language_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
+from langchain_core.language_models import BaseChatModel
 
 log = logging.getLogger("llm_client")
+
 
 def get_llm(
     model_name: str,
@@ -30,7 +31,7 @@ def get_llm(
 
     api_key = None
     actual_provider = None
-    
+
     # If provider explicitly specified, use that
     if provider:
         if provider == "openrouter":
@@ -74,12 +75,12 @@ def get_llm(
 
     # Configure kwargs
     kwargs: Dict[str, Any] = {"temperature": temperature}
-    
+
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
     if reasoning_effort and reasoning_effort.lower() not in ("none", "default"):
         kwargs["reasoning_effort"] = reasoning_effort
-    
+
     # OpenRouter-specific config
     if actual_provider == "openai" and openrouter_api_key:
         kwargs["base_url"] = "https://openrouter.ai/api/v1"
@@ -88,10 +89,7 @@ def get_llm(
 
     try:
         return init_chat_model(
-            model=model_name,
-            model_provider=actual_provider,
-            api_key=api_key,
-            **kwargs
+            model=model_name, model_provider=actual_provider, api_key=api_key, **kwargs
         )
     except Exception as e:
         log.error(f"Failed to init model {model_name} with provider {actual_provider}: {e}")
@@ -101,7 +99,7 @@ def get_llm(
 def get_embeddings(
     api_key: str,
     model: str = "openai/text-embedding-3-small",
-    base_url: str = "https://openrouter.ai/api/v1"
+    base_url: str = "https://openrouter.ai/api/v1",
 ) -> Embeddings:
     """
     Unified embeddings factory using init_embeddings.
@@ -110,12 +108,12 @@ def get_embeddings(
     if not api_key:
         raise ValueError("API Key required for embeddings.")
 
-    provider = "openai" 
-    
+    provider = "openai"
+
     return init_embeddings(
         model=model,
         provider=provider,
         api_key=api_key,
         base_url=base_url,
-        check_embedding_ctx_length=False
+        check_embedding_ctx_length=False,
     )

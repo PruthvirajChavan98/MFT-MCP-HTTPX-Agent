@@ -1,5 +1,7 @@
 import os
+
 from neo4j import GraphDatabase
+
 
 class Neo4jManager:
     _driver = None
@@ -14,7 +16,7 @@ class Neo4jManager:
             uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
             user = os.getenv("NEO4J_USER", "neo4j")
             password = os.getenv("NEO4J_PASSWORD", "password")
-            
+
             try:
                 cls._driver = GraphDatabase.driver(uri, auth=(user, password))
                 cls._driver.verify_connectivity()
@@ -22,7 +24,7 @@ class Neo4jManager:
             except Exception as e:
                 print(f"❌ Failed to connect to Neo4j: {e}")
                 raise e
-        
+
         return cls._driver
 
     @classmethod

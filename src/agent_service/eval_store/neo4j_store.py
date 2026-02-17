@@ -33,17 +33,31 @@ class EvalNeo4jStore:
         driver = Neo4jManager.get_driver()
         with driver.session() as session:
             # constraints (all single-field -> Community safe)
-            session.run("CREATE CONSTRAINT evaltrace_uniq IF NOT EXISTS FOR (t:EvalTrace) REQUIRE t.trace_id IS UNIQUE")
-            session.run("CREATE CONSTRAINT evalresult_uniq IF NOT EXISTS FOR (r:EvalResult) REQUIRE r.eval_id IS UNIQUE")
-            session.run("CREATE CONSTRAINT evalevent_key_uniq IF NOT EXISTS FOR (e:EvalEvent) REQUIRE e.event_key IS UNIQUE")
+            session.run(
+                "CREATE CONSTRAINT evaltrace_uniq IF NOT EXISTS FOR (t:EvalTrace) REQUIRE t.trace_id IS UNIQUE"
+            )
+            session.run(
+                "CREATE CONSTRAINT evalresult_uniq IF NOT EXISTS FOR (r:EvalResult) REQUIRE r.eval_id IS UNIQUE"
+            )
+            session.run(
+                "CREATE CONSTRAINT evalevent_key_uniq IF NOT EXISTS FOR (e:EvalEvent) REQUIRE e.event_key IS UNIQUE"
+            )
 
             # indexes for dashboard filters
-            session.run("CREATE INDEX evaltrace_session IF NOT EXISTS FOR (t:EvalTrace) ON (t.session_id)")
-            session.run("CREATE INDEX evaltrace_status IF NOT EXISTS FOR (t:EvalTrace) ON (t.status)")
+            session.run(
+                "CREATE INDEX evaltrace_session IF NOT EXISTS FOR (t:EvalTrace) ON (t.session_id)"
+            )
+            session.run(
+                "CREATE INDEX evaltrace_status IF NOT EXISTS FOR (t:EvalTrace) ON (t.status)"
+            )
             session.run("CREATE INDEX evaltrace_model IF NOT EXISTS FOR (t:EvalTrace) ON (t.model)")
-            session.run("CREATE INDEX evalevent_trace_id IF NOT EXISTS FOR (e:EvalEvent) ON (e.trace_id)")
+            session.run(
+                "CREATE INDEX evalevent_trace_id IF NOT EXISTS FOR (e:EvalEvent) ON (e.trace_id)"
+            )
             session.run("CREATE INDEX evalevent_seq IF NOT EXISTS FOR (e:EvalEvent) ON (e.seq)")
-            session.run("CREATE INDEX evalresult_metric IF NOT EXISTS FOR (r:EvalResult) ON (r.metric_name)")
+            session.run(
+                "CREATE INDEX evalresult_metric IF NOT EXISTS FOR (r:EvalResult) ON (r.metric_name)"
+            )
 
             # --- ADDED: Composite index for faster metric filtering/sorting ---
             session.run("""
@@ -52,7 +66,9 @@ class EvalNeo4jStore:
             """)
 
             # fulltext search over event text
-            session.run("CREATE FULLTEXT INDEX evalevent_text IF NOT EXISTS FOR (e:EvalEvent) ON EACH [e.text]")
+            session.run(
+                "CREATE FULLTEXT INDEX evalevent_text IF NOT EXISTS FOR (e:EvalEvent) ON EACH [e.text]"
+            )
 
             # vector indexes (safe even if embedding missing for now)
             session.run("""
@@ -126,16 +142,18 @@ class EvalNeo4jStore:
         for e in events:
             seq = int(e.get("seq") or 0)
             ek = str(e.get("event_key") or f"{trace_id}:{seq}")
-            norm.append({
-                "event_key": ek,
-                "seq": seq,
-                "ts": e.get("ts"),
-                "event_type": e.get("event_type"),
-                "name": e.get("name"),
-                "text": e.get("text"),
-                "payload_json": _json(e.get("payload") or {}),
-                "meta_json": _json(e.get("meta") or {}),
-            })
+            norm.append(
+                {
+                    "event_key": ek,
+                    "seq": seq,
+                    "ts": e.get("ts"),
+                    "event_type": e.get("event_type"),
+                    "name": e.get("name"),
+                    "text": e.get("text"),
+                    "payload_json": _json(e.get("payload") or {}),
+                    "meta_json": _json(e.get("meta") or {}),
+                }
+            )
 
         q = """
         MATCH (t:EvalTrace {trace_id: $trace_id})
@@ -164,17 +182,19 @@ class EvalNeo4jStore:
         norm = []
         for r in evals:
             evid_keys = r.get("evidence_event_keys") or []
-            norm.append({
-                "eval_id": r.get("eval_id"),
-                "metric_name": r.get("metric_name"),
-                "score": r.get("score"),
-                "passed": r.get("passed"),
-                "reasoning": r.get("reasoning"),
-                "evaluator_id": r.get("evaluator_id"),
-                "meta_json": _json(r.get("meta") or {}),
-                "evidence_json": _json(r.get("evidence") or []),
-                "evidence_event_keys": evid_keys,
-            })
+            norm.append(
+                {
+                    "eval_id": r.get("eval_id"),
+                    "metric_name": r.get("metric_name"),
+                    "score": r.get("score"),
+                    "passed": r.get("passed"),
+                    "reasoning": r.get("reasoning"),
+                    "evaluator_id": r.get("evaluator_id"),
+                    "meta_json": _json(r.get("meta") or {}),
+                    "evidence_json": _json(r.get("evidence") or []),
+                    "evidence_event_keys": evid_keys,
+                }
+            )
 
         q = """
         MATCH (t:EvalTrace {trace_id: $trace_id})

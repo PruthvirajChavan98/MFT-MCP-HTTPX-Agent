@@ -1,26 +1,27 @@
 """Agent streaming endpoint with SSE."""
-import json
+
 import asyncio
 import logging
 from typing import Any
-from fastapi import APIRouter, HTTPException
-from sse_starlette.sse import EventSourceResponse
-from langchain_core.messages import HumanMessage
-from langchain.agents import create_agent
 
-from src.agent_service.core.schemas import AgentRequest
-from src.agent_service.core.session_utils import session_utils
-from src.agent_service.core.session_cost import get_session_cost_tracker
-from src.agent_service.core.resource_resolver import resource_resolver
-from src.agent_service.core.streaming_utils import (
-    streaming_utils, sse_formatter, StreamingState
-)
+from fastapi import APIRouter, HTTPException, Request
+from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage
+from sse_starlette.sse import EventSourceResponse
+
 from src.agent_service.core.cost import calculate_run_cost_detailed
+from src.agent_service.core.rate_limiter_manager import (
+    enforce_rate_limit,
+    get_rate_limiter_manager,
+)
+from src.agent_service.core.resource_resolver import resource_resolver
+from src.agent_service.core.schemas import AgentRequest
+from src.agent_service.core.session_cost import get_session_cost_tracker
+from src.agent_service.core.session_utils import session_utils
+from src.agent_service.core.streaming_utils import StreamingState, sse_formatter, streaming_utils
 from src.agent_service.features.kb_first import kb_first_payload
 from src.agent_service.features.nbfc_router import nbfc_router_service
-from src.agent_service.features.shadow_eval import (
-    ShadowEvalCollector, maybe_shadow_eval_commit
-)
+from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_shadow_eval_commit
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent-stream"])
@@ -29,57 +30,69 @@ router = APIRouter(prefix="/agent", tags=["agent-stream"])
 def extract_reasoning_tokens(usage_metadata: Any) -> int:
     """
     Extract reasoning tokens from various usage metadata formats.
-    
+
     Supports:
     - LangChain UsageMetadata with output_token_details.reasoning
     - Groq API format
     - OpenRouter format
     """
     reasoning_tokens = 0
-    
+
     # LangChain standard: output_token_details.reasoning
-    if hasattr(usage_metadata, 'output_token_details'):
-        details = getattr(usage_metadata, 'output_token_details', {})
+    if hasattr(usage_metadata, "output_token_details"):
+        details = getattr(usage_metadata, "output_token_details", {})
         if isinstance(details, dict):
-            reasoning_tokens = details.get('reasoning', 0)
-    
+            reasoning_tokens = details.get("reasoning", 0)
+
     # Direct reasoning_tokens field (Groq/OpenRouter)
-    if hasattr(usage_metadata, 'reasoning_tokens'):
-        reasoning_tokens = getattr(usage_metadata, 'reasoning_tokens', 0)
+    if hasattr(usage_metadata, "reasoning_tokens"):
+        reasoning_tokens = getattr(usage_metadata, "reasoning_tokens", 0)
     elif isinstance(usage_metadata, dict):
-        reasoning_tokens = usage_metadata.get('reasoning_tokens', 0)
-        
+        reasoning_tokens = usage_metadata.get("reasoning_tokens", 0)
+
         # Check nested output_token_details
         if not reasoning_tokens:
-            output_details = usage_metadata.get('output_token_details', {})
-            reasoning_tokens = output_details.get('reasoning', 0)
-    
+            output_details = usage_metadata.get("output_token_details", {})
+            reasoning_tokens = output_details.get("reasoning", 0)
+
     return reasoning_tokens
 
 
 @router.post("/stream")
-async def stream_agent(request: AgentRequest):
+async def stream_agent(request: AgentRequest, http_request: Request):
     """
     Streaming agent endpoint with Server-Sent Events.
     Streams tokens, tool calls, and cost information in real-time.
+
+    **Production-Grade Rate Limiting:**
+    - Per-session rate limiting to prevent abuse
+    - Graceful degradation on Redis failure
+    - Returns 429 Too Many Requests if limit exceeded
     """
     try:
+        # Rate limiting (first line of defense)
+        manager = get_rate_limiter_manager()
+        limiter = await manager.get_agent_stream_limiter()
+
+        # Use session ID as identifier for fair per-session limiting
         sid = session_utils.validate_session_id(request.session_id)
-        
+        identifier = f"session:{sid}"
+
+        await enforce_rate_limit(http_request, limiter, identifier)
+
         # Resolve all resources
         resources = await resource_resolver.resolve_agent_resources(sid, request)
-        
+
         # Start router classification in background
         router_task = asyncio.create_task(
             nbfc_router_service.classify(
-                request.question,
-                openrouter_api_key=resources.openrouter_api_key
+                request.question, openrouter_api_key=resources.openrouter_api_key
             )
         )
-        
+
         # Get app_id for shadow eval
         app_id = await session_utils.get_app_id_for_session(sid)
-        
+
         # Initialize shadow eval collector
         collector = ShadowEvalCollector(
             session_id=sid,
@@ -88,38 +101,39 @@ async def stream_agent(request: AgentRequest):
             model=resources.model_name,
             endpoint="/agent/stream",
             system_prompt=resources.system_prompt,
-            tool_definitions=""
+            tool_definitions="",
         )
         collector.case_id = app_id
-        
+
         # KB-first guardrail (cached response)
         kb_payload = await kb_first_payload(request.question, resources.tools)
         if kb_payload:
+
             async def kb_event_generator():
                 try:
                     tool_name = kb_payload.get("tool", "kb")
                     tool_input = kb_payload.get("input", {})
                     output = str(kb_payload.get("output", ""))
-                    
+
                     # Track in collector
                     collector.on_tool_start(tool_name, tool_input)
                     collector.on_tool_end(tool_name, output, tool_call_id="kb_first")
-                    
+
                     # Stream events
                     yield sse_formatter.token_event(output)
-                    
+
                     collector.on_token(output)
                     collector.on_done(final_output=output, error=None)
-                    
+
                     # No cost for cached KB response
                     yield sse_formatter.cost_event(
                         total_cost=0.0,
                         usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                         model=resources.model_name,
                         provider=resources.provider,
-                        cached=True
+                        cached=True,
                     )
-                    
+
                     # Track zero-cost KB hit
                     tracker = get_session_cost_tracker()
                     await tracker.add_cost(
@@ -128,11 +142,11 @@ async def stream_agent(request: AgentRequest):
                         usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                         model=resources.model_name,
                         provider="kb_cache",
-                        metadata={"endpoint": "/agent/stream", "cached": True}
+                        metadata={"endpoint": "/agent/stream", "cached": True},
                     )
-                    
+
                     yield sse_formatter.done_event()
-                    
+
                 except Exception as e:
                     collector.on_done(final_output="", error=str(e))
                     yield sse_formatter.error_event(str(e))
@@ -143,36 +157,36 @@ async def stream_agent(request: AgentRequest):
                             collector.set_router_outcome(r_out)
                     except:
                         pass
-                    asyncio.create_task(maybe_shadow_eval_commit(
-                        collector,
-                        openrouter_api_key=resources.openrouter_api_key,
-                        nvidia_api_key=resources.nvidia_api_key,
-                        groq_api_key=resources.groq_api_key,
-                        model_name=resources.model_name,
-                        provider=resources.provider
-                    ))
-            
-            return EventSourceResponse(
-                kb_event_generator(),
-                headers={"Cache-Control": "no-cache"}
-            )
-        
+                    asyncio.create_task(
+                        maybe_shadow_eval_commit(
+                            collector,
+                            openrouter_api_key=resources.openrouter_api_key,
+                            nvidia_api_key=resources.nvidia_api_key,
+                            groq_api_key=resources.groq_api_key,
+                            model_name=resources.model_name,
+                            provider=resources.provider,
+                        )
+                    )
+
+            return EventSourceResponse(kb_event_generator(), headers={"Cache-Control": "no-cache"})
+
         # Validate tools
         if not resources.tools:
             raise HTTPException(status_code=500, detail="No tools loaded")
-        
+
         # Get checkpointer
         from src.main_agent import app
+
         checkpointer = app.state.checkpointer
-        
+
         # Create agent
         agent = create_agent(
             resources.model,
             resources.tools,
             system_prompt=resources.system_prompt,
-            checkpointer=checkpointer
+            checkpointer=checkpointer,
         )
-        
+
         # Main streaming event generator
         async def event_generator():
             state = StreamingState()
@@ -183,7 +197,7 @@ async def stream_agent(request: AgentRequest):
                 async for event in agent.astream_events(
                     {"messages": [HumanMessage(content=request.question)]},
                     {"configurable": {"thread_id": sid}},
-                    version="v2"
+                    version="v2",
                 ):
                     # Check if router finished and hasn't been sent yet
                     if not router_sent and router_task.done():
@@ -240,7 +254,7 @@ async def stream_agent(request: AgentRequest):
                             usage_meta = out_msg.usage_metadata
 
                             # Convert to dict for manipulation
-                            if hasattr(usage_meta, '__dict__'):
+                            if hasattr(usage_meta, "__dict__"):
                                 usage = dict(usage_meta.__dict__)
                             elif isinstance(usage_meta, dict):
                                 usage = dict(usage_meta)
@@ -250,13 +264,11 @@ async def stream_agent(request: AgentRequest):
                             # Extract reasoning tokens from multiple sources
                             reasoning = extract_reasoning_tokens(usage_meta)
                             if reasoning > 0:
-                                usage['reasoning_tokens'] = reasoning
+                                usage["reasoning_tokens"] = reasoning
 
                             # Calculate detailed cost
                             cost, breakdown = await calculate_run_cost_detailed(
-                                resources.model_name,
-                                usage,
-                                resources.provider
+                                resources.model_name, usage, resources.provider
                             )
                             state.total_cost += cost
 
@@ -272,18 +284,18 @@ async def stream_agent(request: AgentRequest):
                             yield sse_formatter.router_event(router_out)
                     except Exception as e:
                         log.warning(f"Router classification failed: {e}")
-                
+
                 # Mark completion
                 collector.on_done(final_output="", error=None)
-                
+
                 # Final cost event with reasoning tokens
                 yield sse_formatter.cost_event(
                     total_cost=state.total_cost,
                     usage=state.cumulative_usage,
                     model=resources.model_name,
-                    provider=resources.provider
+                    provider=resources.provider,
                 )
-                
+
                 # Track session cost in Redis
                 tracker = get_session_cost_tracker()
                 await tracker.add_cost(
@@ -292,42 +304,43 @@ async def stream_agent(request: AgentRequest):
                     usage=state.cumulative_usage,
                     model=resources.model_name,
                     provider=resources.provider,
-                    metadata={"endpoint": "/agent/stream"}
+                    metadata={"endpoint": "/agent/stream"},
                 )
-                
+
                 yield sse_formatter.done_event()
-                
+
                 # Commit shadow eval with all keys + model info
-                asyncio.create_task(maybe_shadow_eval_commit(
-                    collector,
-                    openrouter_api_key=resources.openrouter_api_key,
-                    nvidia_api_key=resources.nvidia_api_key,
-                    groq_api_key=resources.groq_api_key,
-                    model_name=resources.model_name,
-                    provider=resources.provider
-                ))
-                
+                asyncio.create_task(
+                    maybe_shadow_eval_commit(
+                        collector,
+                        openrouter_api_key=resources.openrouter_api_key,
+                        nvidia_api_key=resources.nvidia_api_key,
+                        groq_api_key=resources.groq_api_key,
+                        model_name=resources.model_name,
+                        provider=resources.provider,
+                    )
+                )
+
             except Exception as e:
                 err = str(e)
                 log.error(f"Stream error: {err}")
                 collector.on_done(final_output="", error=err)
                 yield sse_formatter.error_event(err)
-                
+
                 # Pass all keys even on error
-                asyncio.create_task(maybe_shadow_eval_commit(
-                    collector,
-                    openrouter_api_key=resources.openrouter_api_key,
-                    nvidia_api_key=resources.nvidia_api_key,
-                    groq_api_key=resources.groq_api_key,
-                    model_name=resources.model_name,
-                    provider=resources.provider
-                ))
-        
-        return EventSourceResponse(
-            event_generator(),
-            headers={"Cache-Control": "no-cache"}
-        )
-        
+                asyncio.create_task(
+                    maybe_shadow_eval_commit(
+                        collector,
+                        openrouter_api_key=resources.openrouter_api_key,
+                        nvidia_api_key=resources.nvidia_api_key,
+                        groq_api_key=resources.groq_api_key,
+                        model_name=resources.model_name,
+                        provider=resources.provider,
+                    )
+                )
+
+        return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

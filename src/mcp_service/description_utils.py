@@ -1,8 +1,9 @@
 import json
-from pathlib import Path
 import logging
+from pathlib import Path
 
 log = logging.getLogger(name="tool_descriptions")
+
 
 def _load_tool_descriptions() -> dict[str, str]:
     """

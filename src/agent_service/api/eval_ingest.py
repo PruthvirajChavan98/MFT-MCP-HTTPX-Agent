@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 from src.agent_service.core.config import REDIS_URL
-from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
 from src.agent_service.eval_store.embedder import EvalEmbedder
+from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
 
 log = logging.getLogger("eval_ingest")
 
@@ -62,29 +62,29 @@ def _safe_str(v: Any) -> str:
 
 async def _publish_live(summary: Dict[str, Any]) -> None:
     """
-    Push a small “new trace ingested” event to Redis Streams for live dashboards.
+        Push a small “new trace ingested” event to Redis Streams for live dashboards.
 
 
-async def _publish_router_job(trace_id: str, text: str) -> None:
-    \"\"\"Push a router classification job for router_worker (async).\"\"\"
-    try:
-        if not trace_id or not text:
-            return
-        r = Redis.from_url(REDIS_URL, decode_responses=True)
+    async def _publish_router_job(trace_id: str, text: str) -> None:
+        \"\"\"Push a router classification job for router_worker (async).\"\"\"
+        try:
+            if not trace_id or not text:
+                return
+            r = Redis.from_url(REDIS_URL, decode_responses=True)
 
-        # XADD appends to stream; approximate trimming keeps memory bounded.
-        await r.xadd(
-            ROUTER_JOBS_STREAM_KEY,
-            {"trace_id": str(trace_id), "text": str(text)},
-            maxlen=ROUTER_JOBS_STREAM_MAXLEN,
-            approximate=True,
-        )
-        await r.close()
-    except Exception as e:
-        log.warning("[eval_ingest] router job publish failed: %s", e)
+            # XADD appends to stream; approximate trimming keeps memory bounded.
+            await r.xadd(
+                ROUTER_JOBS_STREAM_KEY,
+                {"trace_id": str(trace_id), "text": str(text)},
+                maxlen=ROUTER_JOBS_STREAM_MAXLEN,
+                approximate=True,
+            )
+            await r.close()
+        except Exception as e:
+            log.warning("[eval_ingest] router job publish failed: %s", e)
 
-    Redis Streams: XADD appends, XREAD BLOCK tail-follows.
-    XREAD docs: use '$' only for first call; resume from last ID to avoid gaps. :contentReference[oaicite:2]{index=2}
+        Redis Streams: XADD appends, XREAD BLOCK tail-follows.
+        XREAD docs: use '$' only for first call; resume from last ID to avoid gaps. :contentReference[oaicite:2]{index=2}
     """
     try:
         r = Redis.from_url(REDIS_URL, decode_responses=True)
@@ -95,7 +95,7 @@ async def _publish_router_job(trace_id: str, text: str) -> None:
         # approximate trimming keeps memory bounded
         await r.xadd(
             EVAL_LIVE_STREAM_KEY,
-            fields, # type: ignore
+            fields,  # type: ignore
             maxlen=EVAL_LIVE_STREAM_MAXLEN,
             approximate=True,
         )
@@ -140,7 +140,11 @@ async def ingest(
                     "event_type": e.get("event_type"),
                     "name": e.get("name"),
                     "text": e.get("text"),
-                    "payload": e.get("payload") if isinstance(e.get("payload"), dict) else {"value": e.get("payload")},
+                    "payload": (
+                        e.get("payload")
+                        if isinstance(e.get("payload"), dict)
+                        else {"value": e.get("payload")}
+                    ),
                     "meta": e.get("meta") if isinstance(e.get("meta"), dict) else {},
                 }
             )
@@ -156,9 +160,9 @@ async def ingest(
         try:
             evidence = r.get("evidence") if isinstance(r.get("evidence"), list) else []
             ev_keys: List[str] = []
-            for item in evidence: # type: ignore
+            for item in evidence:  # type: ignore
                 if isinstance(item, dict) and item.get("seq") is not None:
-                    ev_keys.append(f"{trace_id}:{int(item.get('seq'))}") # type: ignore
+                    ev_keys.append(f"{trace_id}:{int(item.get('seq'))}")  # type: ignore
 
             norm_evals.append(
                 {
@@ -227,4 +231,9 @@ async def ingest(
         )
     )
 
-    return {"status": "ok", "trace_id": trace_id, "events": len(norm_events), "evals": len(norm_evals)}
+    return {
+        "status": "ok",
+        "trace_id": trace_id,
+        "events": len(norm_events),
+        "evals": len(norm_evals),
+    }

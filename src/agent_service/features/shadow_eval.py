@@ -12,22 +12,20 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set
 
+from langchain_core.messages import BaseMessage, HumanMessage
 from starlette.concurrency import run_in_threadpool
-from redis.asyncio import Redis
-from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
-from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
-from src.agent_service.eval_store.judge import judge_service, LLMJudge
-from src.agent_service.eval_store.embedder import EvalEmbedder
 from src.agent_service.core.config import ENABLE_LLM_JUDGE, JUDGE_MODEL_NAME
-from src.agent_service.llm.client import get_llm
+from src.agent_service.eval_store.embedder import EvalEmbedder
+from src.agent_service.eval_store.judge import LLMJudge
+from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
 
 log = logging.getLogger("shadow_eval")
 STORE = EvalNeo4jStore()
 EMBEDDER = EvalEmbedder()
 
-ROUTER_JOBS_STREAM_KEY = (os.getenv('ROUTER_JOBS_STREAM_KEY') or 'router:jobs').strip()
-ROUTER_JOBS_STREAM_MAXLEN = int(os.getenv('ROUTER_JOBS_STREAM_MAXLEN') or '50000')
+ROUTER_JOBS_STREAM_KEY = (os.getenv("ROUTER_JOBS_STREAM_KEY") or "router:jobs").strip()
+ROUTER_JOBS_STREAM_MAXLEN = int(os.getenv("ROUTER_JOBS_STREAM_MAXLEN") or "50000")
 
 __all__ = [
     "ShadowEvalCollector",
@@ -67,14 +65,14 @@ DEFAULT_RULES = [
 # Prompts
 # -----------------------------
 JUDGE_SYSTEM_PROMPT = """
-You are an impartial AI Judge for a FinTech assistant. 
+You are an impartial AI Judge for a FinTech assistant.
 Evaluate the "Assistant Answer" based on the provided Context.
 
 ### Metrics to Score (1-5 Scale):
 1. **Faithfulness**: Is the answer derived *only* from the Tool Outputs? (Score 1 if hallucinated, 5 if fully grounded).
 2. **Relevance**: Does the answer directly address the User Question? (Score 1 if evasive, 5 if direct).
-3. **Correctness**: 
-   - Did the assistant follow the **System Instructions** (e.g. refusal rules)? 
+3. **Correctness**:
+   - Did the assistant follow the **System Instructions** (e.g. refusal rules)?
    - Is the answer factually consistent with the **Tool Outputs**?
 4. **Coherence**: Is the answer clear and professional?
 
@@ -88,17 +86,22 @@ Evaluate the "Assistant Answer" based on the provided Context.
 Output JSON only.
 """
 
+
 def _utc_iso(dt: Optional[datetime] = None) -> str:
     d = dt or datetime.now(timezone.utc)
     return d.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
+
 def _clip(s: Optional[str], n: int) -> str:
-    if not s: return ""
+    if not s:
+        return ""
     s = str(s)
     return s if len(s) <= n else s[:n] + f"…(truncated {len(s)-n} chars)"
 
+
 def _strip_html(s: str) -> str:
     return re.sub(r"<[^>]+>", " ", s or "")
+
 
 def _normalize_text(s: str) -> str:
     s = _strip_html(s or "")
@@ -106,8 +109,10 @@ def _normalize_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+
 def _load_rules() -> List[dict]:
-    if not RULES_JSON: return DEFAULT_RULES
+    if not RULES_JSON:
+        return DEFAULT_RULES
     try:
         obj = json.loads(RULES_JSON)
         if isinstance(obj, list) and obj:
@@ -116,12 +121,14 @@ def _load_rules() -> List[dict]:
         pass
     return DEFAULT_RULES
 
+
 # -----------------------------
 # Per-process throttle
 # -----------------------------
 _window_minute: int = 0
 _window_count: int = 0
 _throttle_lock = asyncio.Lock()
+
 
 async def _throttle_ok() -> bool:
     global _window_minute, _window_count
@@ -135,11 +142,16 @@ async def _throttle_ok() -> bool:
         _window_count += 1
         return True
 
+
 async def should_shadow_eval() -> bool:
-    if not SHADOW_EVAL_ENABLED: return False
-    if SHADOW_EVAL_SAMPLE_RATE <= 0: return False
-    if random.random() > SHADOW_EVAL_SAMPLE_RATE: return False
+    if not SHADOW_EVAL_ENABLED:
+        return False
+    if SHADOW_EVAL_SAMPLE_RATE <= 0:
+        return False
+    if random.random() > SHADOW_EVAL_SAMPLE_RATE:
+        return False
     return await _throttle_ok()
+
 
 # -----------------------------
 # Collector
@@ -154,7 +166,7 @@ class ShadowEvalCollector:
     endpoint: str
     started_at: datetime
     tool_names: Set[str]
-    
+
     # Context Data for Judge
     retrieved_context: List[str]
     system_prompt: str
@@ -167,7 +179,7 @@ class ShadowEvalCollector:
     final_parts: List[str] = field(default_factory=list)
     error: Optional[str] = None
     status: str = "success"
-    
+
     # Optional fields
     case_id: Optional[str] = None
     _router_outcome: Optional[Dict[str, Any]] = None
@@ -180,12 +192,12 @@ class ShadowEvalCollector:
         model: Optional[str],
         endpoint: str,
         system_prompt: str = "",
-        chat_history: List[BaseMessage] = None, # type: ignore
-        tool_definitions: str = ""
+        chat_history: List[BaseMessage] = None,  # type: ignore
+        tool_definitions: str = "",
     ):
         self.trace_id = uuid.uuid4().hex
         self.session_id = session_id
-        self.case_id = None 
+        self.case_id = None
         self.question = question
         self.provider = provider
         self.model = model
@@ -193,10 +205,10 @@ class ShadowEvalCollector:
         self.started_at = datetime.now(timezone.utc)
         self.tool_names = set()
         self.retrieved_context = []
-        
+
         self.system_prompt = system_prompt
         self.tool_definitions = tool_definitions
-        
+
         self.chat_history = []
         if chat_history:
             recent = chat_history[-5:]
@@ -227,24 +239,29 @@ class ShadowEvalCollector:
         payload: Optional[dict] = None,
         meta: Optional[dict] = None,
     ) -> None:
-        if len(self.events) >= MAX_EVENTS: return
+        if len(self.events) >= MAX_EVENTS:
+            return
         seq = self._next_seq()
-        self.events.append({
-            "trace_id": self.trace_id,
-            "seq": seq,
-            "event_key": f"{self.trace_id}:{seq}",
-            "ts": _utc_iso(),
-            "event_type": event_type,
-            "name": name,
-            "text": _clip(text, MAX_TEXT),
-            "payload": payload or {},
-            "meta": meta or {},
-        })
+        self.events.append(
+            {
+                "trace_id": self.trace_id,
+                "seq": seq,
+                "event_key": f"{self.trace_id}:{seq}",
+                "ts": _utc_iso(),
+                "event_type": event_type,
+                "name": name,
+                "text": _clip(text, MAX_TEXT),
+                "payload": payload or {},
+                "meta": meta or {},
+            }
+        )
 
     def _append_final(self, text: str) -> None:
-        if not text: return
+        if not text:
+            return
         cur_len = sum(len(x) for x in self.final_parts)
-        if cur_len >= MAX_FINAL: return
+        if cur_len >= MAX_FINAL:
+            return
         self.final_parts.append(text[: max(0, MAX_FINAL - cur_len)])
 
     # ---------- event helpers ----------
@@ -260,7 +277,9 @@ class ShadowEvalCollector:
     def on_tool_start(self, tool: str, tool_input: Any) -> None:
         self.tool_names.add(str(tool))
         payload = tool_input if isinstance(tool_input, dict) else {"value": tool_input}
-        self._add_event("tool_start", "tool_start", text=str(tool), payload={"tool": tool, "input": payload})
+        self._add_event(
+            "tool_start", "tool_start", text=str(tool), payload={"tool": tool, "input": payload}
+        )
 
     def on_tool_end(self, tool: str, output: Any, tool_call_id: Any = None) -> None:
         self.tool_names.add(str(tool))
@@ -300,7 +319,7 @@ class ShadowEvalCollector:
             "tags": {"shadow_eval": True, "capture": SHADOW_EVAL_CAPTURE},
             "meta": {
                 "system_prompt": self.system_prompt[:500],
-                "history_len": len(self.chat_history)
+                "history_len": len(self.chat_history),
             },
         }
 
@@ -308,19 +327,20 @@ class ShadowEvalCollector:
         if self._router_outcome:
             r = self._router_outcome
             trace_data["router_backend"] = r.get("backend")
-            
+
             # Sentiment
             s = r.get("sentiment") or {}
             trace_data["router_sentiment"] = s.get("label")
             trace_data["router_sentiment_score"] = s.get("score")
             trace_data["router_override"] = s.get("overridden")
-            
+
             # Reason
             rs = r.get("reason") or {}
             trace_data["router_reason"] = rs.get("label")
             trace_data["router_reason_score"] = rs.get("score")
 
         return trace_data
+
 
 def _metric(
     trace_id: str,
@@ -343,6 +363,7 @@ def _metric(
         "meta": meta or {},
     }
 
+
 def compute_non_llm_metrics(
     trace: Dict[str, Any],
     events: Sequence[Dict[str, Any]],
@@ -355,10 +376,26 @@ def compute_non_llm_metrics(
     out: List[Dict[str, Any]] = []
 
     ok_out = bool(str(final_output).strip())
-    out.append(_metric(trace_id, "AnswerNonEmpty", ok_out, 1.0 if ok_out else 0.0, "final_output is non-empty" if ok_out else "final_output empty"))
+    out.append(
+        _metric(
+            trace_id,
+            "AnswerNonEmpty",
+            ok_out,
+            1.0 if ok_out else 0.0,
+            "final_output is non-empty" if ok_out else "final_output empty",
+        )
+    )
 
     ok_status = (trace.get("status") == "success") and not trace.get("error")
-    out.append(_metric(trace_id, "StreamOk", ok_status, 1.0 if ok_status else 0.0, "status=success" if ok_status else f"error={trace.get('error')}"))
+    out.append(
+        _metric(
+            trace_id,
+            "StreamOk",
+            ok_status,
+            1.0 if ok_status else 0.0,
+            "status=success" if ok_status else f"error={trace.get('error')}",
+        )
+    )
 
     rules = _load_rules()
     for r in rules:
@@ -366,23 +403,44 @@ def compute_non_llm_metrics(
         when = r.get("when")
         if when:
             try:
-                if not re.search(when, question, flags=re.I): continue
-            except: continue
+                if not re.search(when, question, flags=re.I):
+                    continue
+            except:
+                continue
 
         req_tool = str(r.get("require_tool") or "").strip()
         if req_tool:
             has = req_tool in tool_names
-            out.append(_metric(trace_id, f"ToolMatch({req_tool})", has, 1.0 if has else 0.0, f"Tool {req_tool} called" if has else "Missing tool call", meta={"rule": name}))
+            out.append(
+                _metric(
+                    trace_id,
+                    f"ToolMatch({req_tool})",
+                    has,
+                    1.0 if has else 0.0,
+                    f"Tool {req_tool} called" if has else "Missing tool call",
+                    meta={"rule": name},
+                )
+            )
 
         pat = r.get("answer_pattern")
         if pat:
             try:
                 m = re.search(pat, norm_out, flags=re.I)
                 ok = m is not None
-                out.append(_metric(trace_id, "NormalizedRegexMatch", ok, 1.0 if ok else 0.0, f"Matched pattern '{pat}'" if ok else f"Failed pattern", meta={"rule": name}))
+                out.append(
+                    _metric(
+                        trace_id,
+                        "NormalizedRegexMatch",
+                        ok,
+                        1.0 if ok else 0.0,
+                        f"Matched pattern '{pat}'" if ok else "Failed pattern",
+                        meta={"rule": name},
+                    )
+                )
             except Exception as e:
                 out.append(_metric(trace_id, "RegexError", False, 0.0, str(e)))
     return out
+
 
 async def compute_llm_metrics(
     trace: Dict[str, Any],
@@ -391,19 +449,23 @@ async def compute_llm_metrics(
     nvidia_api_key: Optional[str] = None,
     groq_api_key: Optional[str] = None,
     model_name: Optional[str] = None,  # ← ADD THIS
-    provider: Optional[str] = None      # ← ADD THIS
+    provider: Optional[str] = None,  # ← ADD THIS
 ) -> List[Dict[str, Any]]:
-    
+
     if not ENABLE_LLM_JUDGE:
         return []
 
     trace_id = trace["trace_id"]
     question = trace.get("inputs", {}).get("question", "")
     answer = trace.get("final_output", "")
-    
-    tool_outputs = "\n\n".join(collector.retrieved_context) if collector.retrieved_context else "No tool outputs."
+
+    tool_outputs = (
+        "\n\n".join(collector.retrieved_context)
+        if collector.retrieved_context
+        else "No tool outputs."
+    )
     history_str = "\n".join(collector.chat_history) if collector.chat_history else "No history."
-    
+
     context_str = f"""
 [SYSTEM INSTRUCTIONS]
 {collector.system_prompt}
@@ -422,18 +484,18 @@ async def compute_llm_metrics(
         return []
 
     results = []
-    
+
     # ✅ Use session's model and keys instead of separate judge model
     judge_model_name = model_name or trace.get("model") or JUDGE_MODEL_NAME
-    
+
     # Create judge instance with session's API keys and model
     judge = LLMJudge(
         model_name=judge_model_name,  # ← Use session's model
         openrouter_api_key=openrouter_api_key,
         nvidia_api_key=nvidia_api_key,
-        groq_api_key=groq_api_key
+        groq_api_key=groq_api_key,
     )
-    
+
     metrics_to_run = [
         ("relevance", question, answer, context_str),
         ("helpfulness", question, answer, context_str),
@@ -442,11 +504,8 @@ async def compute_llm_metrics(
         ("coherence", question, answer, context_str),
     ]
 
-    tasks = [
-        judge.evaluate_pointwise(m, q, a, c) 
-        for m, q, a, c in metrics_to_run
-    ]
-    
+    tasks = [judge.evaluate_pointwise(m, q, a, c) for m, q, a, c in metrics_to_run]
+
     eval_results = await asyncio.gather(*tasks)
 
     full_name = judge.model_name
@@ -454,26 +513,32 @@ async def compute_llm_metrics(
     judge_id = f"llm_judge:{short_name}"
 
     for res in eval_results:
-        results.append({
-            "eval_id": uuid.uuid4().hex,
-            "trace_id": trace_id,
-            "metric_name": res["metric_name"],
-            "score": float(res["score"]),
-            "passed": res["passed"],
-            "reasoning": res["reasoning"],
-            "evaluator_id": judge_id,
-            "evidence": [],
-            "meta": {"mode": "pointwise_g_eval", "same_model_as_session": True}
-        })
+        results.append(
+            {
+                "eval_id": uuid.uuid4().hex,
+                "trace_id": trace_id,
+                "metric_name": res["metric_name"],
+                "score": float(res["score"]),
+                "passed": res["passed"],
+                "reasoning": res["reasoning"],
+                "evaluator_id": judge_id,
+                "evidence": [],
+                "meta": {"mode": "pointwise_g_eval", "same_model_as_session": True},
+            }
+        )
 
     return results
 
-async def _commit_bundle(trace: Dict[str, Any], events: List[Dict[str, Any]], evals: List[Dict[str, Any]]) -> None:
+
+async def _commit_bundle(
+    trace: Dict[str, Any], events: List[Dict[str, Any]], evals: List[Dict[str, Any]]
+) -> None:
     await run_in_threadpool(STORE.upsert_trace, trace)
     if events:
         await run_in_threadpool(STORE.upsert_events, trace["trace_id"], events)
     if evals:
         await run_in_threadpool(STORE.upsert_evals, trace["trace_id"], evals)
+
 
 async def maybe_shadow_eval_commit(
     collector: ShadowEvalCollector,
@@ -481,7 +546,7 @@ async def maybe_shadow_eval_commit(
     nvidia_api_key: Optional[str] = None,
     groq_api_key: Optional[str] = None,
     model_name: Optional[str] = None,  # ← ADD THIS
-    provider: Optional[str] = None      # ← ADD THIS
+    provider: Optional[str] = None,  # ← ADD THIS
 ) -> None:
     try:
         if not await should_shadow_eval():
@@ -490,21 +555,25 @@ async def maybe_shadow_eval_commit(
         trace = collector.build_trace_dict()
 
         if SHADOW_EVAL_CAPTURE != "full":
-            events = [e for e in collector.events if e.get("event_type") in ("tool_start", "tool_end", "error", "done")]
+            events = [
+                e
+                for e in collector.events
+                if e.get("event_type") in ("tool_start", "tool_end", "error", "done")
+            ]
         else:
             events = collector.events
 
         evals = compute_non_llm_metrics(trace, events, collector.tool_names)
-        
+
         # Pass session's model to judge
         llm_evals = await compute_llm_metrics(
-            trace, 
+            trace,
             collector,
             openrouter_api_key=openrouter_api_key,
             nvidia_api_key=nvidia_api_key,
             groq_api_key=groq_api_key,
             model_name=model_name,  # ← Pass session model
-            provider=provider        # ← Pass provider
+            provider=provider,  # ← Pass provider
         )
         evals.extend(llm_evals)
 
@@ -513,13 +582,15 @@ async def maybe_shadow_eval_commit(
         try:
             # Use session's OpenRouter key for embeddings
             embedder = EvalEmbedder(openrouter_api_key=openrouter_api_key)
-            
+
             await embedder.embed_trace_if_needed(trace, events)
             for ev in evals:
                 await embedder.embed_eval_if_needed(trace["trace_id"], ev)
         except Exception as e:
             log.warning(f"[shadow_eval] Embedding generation failed: {e}")
 
-        log.info(f"[shadow_eval] committed trace_id={collector.trace_id} events={len(events)} evals={len(evals)}")
+        log.info(
+            f"[shadow_eval] committed trace_id={collector.trace_id} events={len(events)} evals={len(evals)}"
+        )
     except Exception as e:
         log.exception(f"[shadow_eval] commit failed: {e}")

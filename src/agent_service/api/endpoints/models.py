@@ -1,5 +1,7 @@
 """Model catalog and listing endpoints."""
+
 import logging
+
 from fastapi import APIRouter, HTTPException
 
 from src.agent_service.llm.catalog import model_service

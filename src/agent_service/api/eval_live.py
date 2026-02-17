@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict
 
 from fastapi import APIRouter, Query, Request
-from sse_starlette.sse import EventSourceResponse
 from redis.asyncio import Redis
+from sse_starlette.sse import EventSourceResponse
 
 from src.agent_service.core.config import REDIS_URL
 
@@ -15,16 +15,20 @@ router = APIRouter()
 
 STREAM_KEY = "eval:live"
 
+
 def _safe_json(obj: Any) -> str:
     try:
         return json.dumps(obj, ensure_ascii=False)
     except Exception:
         return json.dumps({"_str": str(obj)}, ensure_ascii=False)
 
+
 @router.get("/live")
 async def eval_live(
     request: Request,
-    cursor: str = Query("$", description="Redis stream cursor. Use '$' for only-new. Use '0-0' to replay."),
+    cursor: str = Query(
+        "$", description="Redis stream cursor. Use '$' for only-new. Use '0-0' to replay."
+    ),
 ):
     """
     SSE live feed of new eval ingests.

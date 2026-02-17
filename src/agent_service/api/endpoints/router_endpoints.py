@@ -1,5 +1,7 @@
 """NBFC router classification endpoints."""
+
 import logging
+
 from fastapi import APIRouter, HTTPException
 
 from src.agent_service.core.schemas import RouterClassifyRequest
@@ -29,8 +31,7 @@ async def router_compare(req: RouterClassifyRequest):
     """Compare router classifications."""
     try:
         result = await nbfc_router_service.compare(
-            req.text,
-            openrouter_api_key=req.openrouter_api_key
+            req.text, openrouter_api_key=req.openrouter_api_key
         )
         return result
     except Exception as e:

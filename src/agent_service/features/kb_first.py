@@ -19,6 +19,7 @@ _FALLBACK = (
     "You are requested to continue paying your EMIs to maintain a healthy credit record."
 )
 
+
 def _as_text(out: Any) -> str:
     if out is None:
         return ""
@@ -28,6 +29,7 @@ def _as_text(out: Any) -> str:
     if isinstance(out, str):
         return out
     return str(out)
+
 
 async def kb_first_payload(question: str, tools: List[StructuredTool]) -> Optional[Dict[str, Any]]:
     q = (question or "").strip()
@@ -43,8 +45,16 @@ async def kb_first_payload(question: str, tools: List[StructuredTool]) -> Option
         out = await kb.ainvoke({"query": q})
         txt = _as_text(out).strip()
         if not txt or "No relevant information found" in txt:
-            return {"tool": "mock_fintech_knowledge_base", "input": {"query": q}, "output": _FALLBACK}
+            return {
+                "tool": "mock_fintech_knowledge_base",
+                "input": {"query": q},
+                "output": _FALLBACK,
+            }
         return {"tool": "mock_fintech_knowledge_base", "input": {"query": q}, "output": txt}
     except Exception as e:
         # still return correct answer; include KB error signal for traceability
-        return {"tool": "mock_fintech_knowledge_base", "input": {"query": q}, "output": f"Knowledge Base Error: {e}. {_FALLBACK}"}
+        return {
+            "tool": "mock_fintech_knowledge_base",
+            "input": {"query": q},
+            "output": f"Knowledge Base Error: {e}. {_FALLBACK}",
+        }

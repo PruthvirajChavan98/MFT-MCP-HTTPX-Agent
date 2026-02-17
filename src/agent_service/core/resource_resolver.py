@@ -2,9 +2,10 @@
 Agent Resource Resolution
 Handles model, tool, and configuration resolution for agent requests.
 """
+
 import logging
-from typing import Optional, List, Any, Tuple
 from dataclasses import dataclass
+from typing import Any, List, Optional
 
 from src.agent_service.core.config import MODEL_NAME
 from src.agent_service.core.prompts import SYSTEM_PROMPT
@@ -19,19 +20,20 @@ log = logging.getLogger(__name__)
 @dataclass
 class ResolvedResources:
     """Container for resolved agent resources."""
+
     model: Any
     tools: List[Any]
     system_prompt: str
     model_name: str
     provider: str
-    
+
     # All three API keys
     openrouter_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
-    
+
     reasoning_effort: Optional[str] = None
-    
+
     # Legacy alias for backward compatibility
     @property
     def api_key(self) -> Optional[str]:
@@ -41,39 +43,41 @@ class ResolvedResources:
 
 class ResourceResolver:
     """Resolves models, tools, and configurations for agent execution."""
-    
+
     @staticmethod
     def infer_provider_from_model_name(model_name: Optional[str]) -> str:
         """Infer provider from model name prefix."""
         if not model_name:
             return "groq"
-        
+
         mn = model_name.strip().lower()
-        
+
         if mn.startswith("nvidia/"):
             return "nvidia"
         if mn.startswith("groq/"):
             return "groq"
         if "/" in mn:
             return "openrouter"
-        
+
         return "groq"
-    
+
     @staticmethod
     async def resolve_agent_resources(session_id: str, request: AgentRequest) -> ResolvedResources:
         """Resolve all resources needed for agent execution."""
         try:
             saved_config = await config_manager.get_config(session_id)
-            
+
             model_name = saved_config.get("model_name") or MODEL_NAME
             system_prompt = saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
             reasoning_effort = saved_config.get("reasoning_effort")
-            provider = saved_config.get("provider") or ResourceResolver.infer_provider_from_model_name(model_name)
-            
+            provider = saved_config.get(
+                "provider"
+            ) or ResourceResolver.infer_provider_from_model_name(model_name)
+
             openrouter_key = saved_config.get("openrouter_api_key")
             nvidia_key = saved_config.get("nvidia_api_key")
             groq_key = saved_config.get("groq_api_key")
-            
+
             # Get LLM (returns tuple: model, actual_provider)
             llm_result = get_llm(
                 model_name=model_name,
@@ -81,18 +85,20 @@ class ResourceResolver:
                 openrouter_api_key=openrouter_key,
                 nvidia_api_key=nvidia_key,
                 groq_api_key=groq_key,
-                reasoning_effort=reasoning_effort
+                reasoning_effort=reasoning_effort,
             )
-            
+
             # Handle both tuple and single return value for backward compatibility
             if isinstance(llm_result, tuple):
                 model, actual_provider = llm_result
             else:
                 model = llm_result
                 actual_provider = provider
-            
-            tools = mcp_manager.rebuild_tools_for_user(session_id, openrouter_api_key=openrouter_key)
-            
+
+            tools = mcp_manager.rebuild_tools_for_user(
+                session_id, openrouter_api_key=openrouter_key
+            )
+
             return ResolvedResources(
                 model=model,
                 tools=tools,
@@ -102,9 +108,9 @@ class ResourceResolver:
                 openrouter_api_key=openrouter_key,
                 nvidia_api_key=nvidia_key,
                 groq_api_key=groq_key,
-                reasoning_effort=reasoning_effort
+                reasoning_effort=reasoning_effort,
             )
-            
+
         except Exception as e:
             log.error(f"Resource resolution failed for session {session_id}: {e}")
             raise ValueError(f"Failed to resolve agent resources: {e}") from e

@@ -2,9 +2,11 @@
 Session Management & Authentication Utilities
 Handles session validation, Redis operations, and authentication checks.
 """
+
 import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 
@@ -20,27 +22,25 @@ _async_redis_client: Optional[AsyncRedis] = None
 async def get_redis() -> AsyncRedis:
     """
     Get or create global async Redis client (singleton pattern).
-    
+
     Returns:
         AsyncRedis client instance
     """
     global _async_redis_client
-    
+
     if _async_redis_client is None:
         _async_redis_client = AsyncRedis.from_url(
-            REDIS_URL,
-            decode_responses=True,
-            encoding="utf-8"
+            REDIS_URL, decode_responses=True, encoding="utf-8"
         )
         log.info("Initialized async Redis client")
-    
+
     return _async_redis_client
 
 
 async def close_redis() -> None:
     """Close global Redis connection (cleanup on shutdown)."""
     global _async_redis_client
-    
+
     if _async_redis_client:
         await _async_redis_client.close()
         _async_redis_client = None
@@ -49,7 +49,7 @@ async def close_redis() -> None:
 
 class SessionUtils:
     """Centralized session management and authentication utilities."""
-    
+
     @staticmethod
     def validate_session_id(session_id: object) -> str:
         """Ensures session_id is a valid non-empty string."""
@@ -57,24 +57,24 @@ class SessionUtils:
         if not sid or sid.lower() in {"null", "none"}:
             raise ValueError(f"Invalid session_id: {session_id!r}")
         return sid
-    
+
     @staticmethod
     def is_user_authenticated(session_id: str) -> bool:
         """Check if user has an active access_token in Redis."""
         try:
             client = Redis.from_url(REDIS_URL, decode_responses=True)
             data_str = client.get(session_id)
-            
+
             if not data_str:
                 return False
-            
+
             data = json.loads(str(data_str))
             return bool(data.get("access_token"))
-            
+
         except Exception as e:
             log.warning(f"Auth check failed for session {session_id}: {e}")
             return False
-    
+
     @staticmethod
     async def get_app_id_for_session(session_id: str) -> Optional[str]:
         """Retrieve app_id associated with a session from Redis (async)."""
@@ -82,15 +82,15 @@ class SessionUtils:
             client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
             data_str = await client.get(session_id)
             await client.close()
-            
+
             if data_str:
                 data = json.loads(str(data_str))
                 return data.get("app_id")
         except Exception as e:
             log.warning(f"Failed to retrieve app_id for session {session_id}: {e}")
-        
+
         return None
-    
+
     @staticmethod
     async def get_session_metadata(session_id: str) -> Dict[str, Any]:
         """Retrieve full session metadata from Redis (async)."""
@@ -98,19 +98,17 @@ class SessionUtils:
             client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
             data_str = await client.get(session_id)
             await client.close()
-            
+
             if data_str:
                 return json.loads(str(data_str))
         except Exception as e:
             log.error(f"Failed to retrieve metadata for session {session_id}: {e}")
-        
+
         return {}
-    
+
     @staticmethod
     async def save_session_config(
-        session_id: str,
-        config: Dict[str, Any],
-        ttl: int = 30 * 24 * 60 * 60
+        session_id: str, config: Dict[str, Any], ttl: int = 30 * 24 * 60 * 60
     ) -> bool:
         """Save session configuration to Redis (BYOK storage)."""
         try:
@@ -122,7 +120,7 @@ class SessionUtils:
         except Exception as e:
             log.error(f"Failed to save session config: {e}")
             return False
-    
+
     @staticmethod
     async def get_session_config(session_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve session configuration from Redis."""
@@ -134,7 +132,7 @@ class SessionUtils:
         except Exception as e:
             log.error(f"Failed to get session config: {e}")
             return None
-    
+
     @staticmethod
     async def delete_session(session_id: str) -> bool:
         """Delete session configuration from Redis."""

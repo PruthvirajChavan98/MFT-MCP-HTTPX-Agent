@@ -1,11 +1,13 @@
-import logging
 import json
+import logging
 from typing import Optional, cast
+
 import redis
 
 from .config import REDIS_URL
 
 log = logging.getLogger(name="redis_session_store")
+
 
 def _redact_uri(uri: str) -> str:
     try:
@@ -15,8 +17,10 @@ def _redact_uri(uri: str) -> str:
             if ":" in creds:
                 user = creds.split(":", 1)[0]
                 return f"{scheme}://{user}:***@{hostpart}"
-    except Exception: pass
+    except Exception:
+        pass
     return uri
+
 
 class RedisSessionStore:
     def __init__(self, redis_uri: Optional[str] = None):
@@ -32,21 +36,25 @@ class RedisSessionStore:
             raise RuntimeError(f"Could not connect to Redis: {e}")
 
     def _valid_session_id(self, session_id: object) -> Optional[str]:
-        if session_id is None: return None
+        if session_id is None:
+            return None
         sid = str(session_id).strip()
-        if not sid or sid.lower() in {"null", "none"}: return None
+        if not sid or sid.lower() in {"null", "none"}:
+            return None
         return sid
 
     def set(self, session_id: str, data: dict):
         sid = self._valid_session_id(session_id)
-        if not sid: return
-        self.client.set(sid, json.dumps(data, ensure_ascii=False)) # type: ignore
+        if not sid:
+            return
+        self.client.set(sid, json.dumps(data, ensure_ascii=False))  # type: ignore
         log.info(f"[Redis] SET {sid} | Keys: {list(data.keys())}")
 
     def get(self, session_id: str) -> Optional[dict]:
         sid = self._valid_session_id(session_id)
-        if not sid: return None
-        data = cast(Optional[str], self.client.get(sid)) # type: ignore
+        if not sid:
+            return None
+        data = cast(Optional[str], self.client.get(sid))  # type: ignore
         if not data:
             log.warning(f"[Redis] MISS {sid}")
             return None
@@ -55,13 +63,15 @@ class RedisSessionStore:
 
     def update(self, session_id: str, updates: dict):
         sid = self._valid_session_id(session_id)
-        if not sid: return
+        if not sid:
+            return
         current = self.get(sid) or {}
         current.update(updates)
         self.set(sid, current)
 
     def delete(self, session_id: str):
         sid = self._valid_session_id(session_id)
-        if not sid: return
-        self.client.delete(sid) # type: ignore
+        if not sid:
+            return
+        self.client.delete(sid)  # type: ignore
         log.info(f"[Redis] DEL {sid}")

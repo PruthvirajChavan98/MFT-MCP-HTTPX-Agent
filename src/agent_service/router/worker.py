@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from typing import Any, Dict
 
 from redis.asyncio import Redis
 
 from src.agent_service.core.config import REDIS_URL
 from src.common.neo4j_mgr import Neo4jManager
+
 from .service import RouterService
 
 log = logging.getLogger("router_worker")
@@ -17,11 +16,13 @@ JOBS_STREAM = "router:jobs"
 GROUP = "router_group"
 CONSUMER = "router_1"
 
+
 async def ensure_group(r: Redis):
     try:
         await r.xgroup_create(JOBS_STREAM, GROUP, id="0-0", mkstream=True)
     except Exception:
         pass
+
 
 async def run_worker():
     r = Redis.from_url(REDIS_URL, decode_responses=True)
@@ -67,7 +68,9 @@ async def run_worker():
                                 "sentiment": result.sentiment.label,
                                 "sent_score": float(result.sentiment.score),
                                 "reason": (result.reason.label if result.reason else None),
-                                "reason_score": (float(result.reason.score) if result.reason else None),
+                                "reason_score": (
+                                    float(result.reason.score) if result.reason else None
+                                ),
                                 "override": result.override,
                             },
                         )
@@ -79,6 +82,7 @@ async def run_worker():
         except Exception as e:
             log.error("worker loop error: %s", e)
             await asyncio.sleep(1)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

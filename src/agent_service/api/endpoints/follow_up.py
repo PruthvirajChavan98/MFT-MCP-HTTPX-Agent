@@ -1,12 +1,14 @@
 """Follow-up question generation endpoints."""
-import logging
-from fastapi import APIRouter, HTTPException
-from sse_starlette.sse import EventSourceResponse
-from langchain.agents import create_agent
 
+import logging
+
+from fastapi import APIRouter, HTTPException
+from langchain.agents import create_agent
+from sse_starlette.sse import EventSourceResponse
+
+from src.agent_service.core.resource_resolver import resource_resolver
 from src.agent_service.core.schemas import AgentRequest
 from src.agent_service.core.session_utils import session_utils
-from src.agent_service.core.resource_resolver import resource_resolver
 from src.agent_service.features.follow_up import follow_up_service
 
 log = logging.getLogger(__name__)
@@ -21,38 +23,32 @@ async def generate_follow_up(request: AgentRequest):
     """
     try:
         sid = session_utils.validate_session_id(request.session_id)
-        
+
         # Resolve resources
         resources = await resource_resolver.resolve_agent_resources(sid, request)
-        
+
         # Get checkpointer
         from src.main_agent import app
+
         checkpointer = app.state.checkpointer
-        
+
         # Create temporary agent to access state
-        temp_agent = create_agent(
-            resources.model,
-            resources.tools,
-            checkpointer=checkpointer
-        )
-        
+        temp_agent = create_agent(resources.model, resources.tools, checkpointer=checkpointer)
+
         # Get conversation state
         state = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
         messages = state.values.get("messages", []) if state else []
-        
+
         # Generate questions
         questions = await follow_up_service.generate_questions(
             messages=messages,
             llm=resources.model,
             tools=resources.tools,
-            openrouter_key=resources.api_key
+            openrouter_key=resources.api_key,
         )
-        
-        return {
-            "questions": questions,
-            "provider": resources.provider
-        }
-        
+
+        return {"questions": questions, "provider": resources.provider}
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -68,25 +64,22 @@ async def generate_follow_up_stream(request: AgentRequest):
     """
     try:
         sid = session_utils.validate_session_id(request.session_id)
-        
+
         # Resolve resources
         resources = await resource_resolver.resolve_agent_resources(sid, request)
-        
+
         # Get checkpointer
         from src.main_agent import app
+
         checkpointer = app.state.checkpointer
-        
+
         # Create temporary agent
-        temp_agent = create_agent(
-            resources.model,
-            resources.tools,
-            checkpointer=checkpointer
-        )
-        
+        temp_agent = create_agent(resources.model, resources.tools, checkpointer=checkpointer)
+
         # Get conversation state
         state = await temp_agent.aget_state({"configurable": {"thread_id": sid}})
         messages = state.values.get("messages", []) if state else []
-        
+
         # Stream events generator
         async def event_generator():
             try:
@@ -94,14 +87,14 @@ async def generate_follow_up_stream(request: AgentRequest):
                     messages=messages,
                     llm=resources.model,
                     tools=resources.tools,
-                    openrouter_key=resources.api_key
+                    openrouter_key=resources.api_key,
                 ):
                     yield event
             except Exception as e:
                 yield {"event": "error", "data": str(e)}
-        
+
         return EventSourceResponse(event_generator())
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

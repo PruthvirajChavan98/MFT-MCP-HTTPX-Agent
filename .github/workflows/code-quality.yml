@@ -1,0 +1,77 @@
+name: Code Quality Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    name: Code Quality (Black, isort, Ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system black isort ruff
+
+      - name: Check code formatting with Black
+        run: |
+          black --check --config pyproject.toml .
+
+      - name: Check import sorting with isort
+        run: |
+          isort --check --settings-path pyproject.toml .
+
+      - name: Lint with Ruff
+        run: |
+          ruff check --config pyproject.toml .
+
+      - name: Summary
+        if: failure()
+        run: |
+          echo "❌ Code quality checks failed!"
+          echo "Run the following commands locally to fix:"
+          echo "  black ."
+          echo "  isort ."
+          echo "  ruff check --fix ."
+
+  pre-commit:
+    name: Pre-commit Hooks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit on all files
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      - name: Summary
+        if: failure()
+        run: |
+          echo "❌ Pre-commit checks failed!"
+          echo "Run 'pre-commit run --all-files' locally to fix issues"

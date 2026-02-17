@@ -51,7 +51,7 @@ SENTIMENT_PROTOTYPES: Dict[str, List[str]] = {
         "payment not reflecting",
         "login issue",
         "otp not coming",
-    ]
+    ],
 }
 
 # =============================================================================
@@ -163,5 +163,5 @@ REASON_PROTOTYPES: Dict[str, List[str]] = {
         "chat with agent",
         "support team email",
         "raise a ticket",
-    ]
+    ],
 }
