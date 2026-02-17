@@ -15,18 +15,15 @@ curl -X GET "http://localhost:8000/health"
 
 ### 2. Agent Interaction (Chat)
 
+**Note:** First, configure your session using the `/agent/config` endpoint. Then, use the following endpoints for queries.
+
 ```bash
 # Non-Streaming Query (Standard Chat)
 curl -X POST "http://localhost:8000/agent/query" \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "sess_12345",
-    "question": "What are the foreclosure charges for my loan?",
-    "model_name": "openai/gpt-4o",
-    "provider": "openrouter",
-    "system_prompt": "You are a helpful banking assistant.",
-    "reasoning_effort": "medium",
-    "openrouter_api_key": "sk-or-..."
+    "question": "What are the foreclosure charges for my loan?"
   }'
 
 # Streaming Query (Server-Sent Events)
@@ -34,9 +31,7 @@ curl -N -X POST "http://localhost:8000/agent/stream" \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "sess_12345",
-    "question": "Generate an OTP for 9000000001",
-    "provider": "groq",
-    "model_name": "groq/llama-3.3-70b-versatile"
+    "question": "Generate an OTP for 9000000001"
   }'
 
 ```

@@ -65,14 +65,14 @@ class ResourceResolver:
         try:
             saved_config = await config_manager.get_config(session_id)
             
-            model_name = request.model_name or saved_config.get("model_name") or MODEL_NAME
-            system_prompt = request.system_prompt or saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
-            reasoning_effort = request.reasoning_effort or saved_config.get("reasoning_effort")
-            provider = request.provider or saved_config.get("provider") or ResourceResolver.infer_provider_from_model_name(model_name)
+            model_name = saved_config.get("model_name") or MODEL_NAME
+            system_prompt = saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
+            reasoning_effort = saved_config.get("reasoning_effort")
+            provider = saved_config.get("provider") or ResourceResolver.infer_provider_from_model_name(model_name)
             
-            openrouter_key = request.openrouter_api_key or saved_config.get("openrouter_api_key")
-            nvidia_key = request.nvidia_api_key or saved_config.get("nvidia_api_key")
-            groq_key = request.groq_api_key or saved_config.get("groq_api_key")
+            openrouter_key = saved_config.get("openrouter_api_key")
+            nvidia_key = saved_config.get("nvidia_api_key")
+            groq_key = saved_config.get("groq_api_key")
             
             # Get LLM (returns tuple: model, actual_provider)
             llm_result = get_llm(

@@ -176,50 +176,54 @@ async def stream_agent(request: AgentRequest):
         # Main streaming event generator
         async def event_generator():
             state = StreamingState()
-            
+            router_sent = False
+
             try:
-                # Wait for router result and stream it
-                try:
-                    router_out = await router_task
-                    if router_out:
-                        collector.set_router_outcome(router_out)
-                        yield sse_formatter.router_event(router_out)
-                except Exception as e:
-                    log.warning(f"Router failed: {e}")
-                
-                # Stream agent events
+                # Stream agent events immediately (don't wait for router)
                 async for event in agent.astream_events(
                     {"messages": [HumanMessage(content=request.question)]},
                     {"configurable": {"thread_id": sid}},
                     version="v2"
                 ):
+                    # Check if router finished and hasn't been sent yet
+                    if not router_sent and router_task.done():
+                        try:
+                            router_out = router_task.result()
+                            if router_out:
+                                collector.set_router_outcome(router_out)
+                                yield sse_formatter.router_event(router_out)
+                                router_sent = True
+                        except Exception as e:
+                            log.warning(f"Router classification failed: {e}")
+                            router_sent = True
+
                     kind = event["event"]
                     data = event["data"]
-                    
+
                     # Token streaming
                     if kind == "on_chat_model_stream":
                         chunk = data["chunk"]
-                        
+
                         # Reasoning tokens streaming (Groq parsed format)
                         if hasattr(chunk, "additional_kwargs"):
                             r_content = chunk.additional_kwargs.get("reasoning_content")
                             if r_content:
                                 collector.on_reasoning(str(r_content))
                                 yield sse_formatter.reasoning_token_event(str(r_content))
-                        
+
                         # Regular tokens
                         if chunk.content:
                             txt = str(chunk.content)
                             collector.on_token(txt)
                             yield sse_formatter.token_event(txt)
-                    
+
                     # Tool execution start
                     elif kind == "on_tool_start":
                         t_name = event["name"]
                         t_input = data.get("input")
                         collector.on_tool_start(t_name, t_input)
                         yield sse_formatter.tool_start_event(t_name, t_input)
-                    
+
                     # Tool execution end
                     elif kind == "on_tool_end":
                         t_name = event["name"]
@@ -228,13 +232,13 @@ async def stream_agent(request: AgentRequest):
                         run_id = event.get("run_id")
                         collector.on_tool_end(t_name, output, tool_call_id=run_id)
                         yield sse_formatter.tool_end_event(t_name, output, run_id)
-                    
+
                     # Cost tracking with reasoning tokens
                     elif kind == "on_chat_model_end":
                         out_msg = data.get("output")
                         if hasattr(out_msg, "usage_metadata") and out_msg.usage_metadata:
                             usage_meta = out_msg.usage_metadata
-                            
+
                             # Convert to dict for manipulation
                             if hasattr(usage_meta, '__dict__'):
                                 usage = dict(usage_meta.__dict__)
@@ -242,12 +246,12 @@ async def stream_agent(request: AgentRequest):
                                 usage = dict(usage_meta)
                             else:
                                 usage = {}
-                            
+
                             # Extract reasoning tokens from multiple sources
                             reasoning = extract_reasoning_tokens(usage_meta)
                             if reasoning > 0:
                                 usage['reasoning_tokens'] = reasoning
-                            
+
                             # Calculate detailed cost
                             cost, breakdown = await calculate_run_cost_detailed(
                                 resources.model_name,
@@ -255,9 +259,19 @@ async def stream_agent(request: AgentRequest):
                                 resources.provider
                             )
                             state.total_cost += cost
-                            
+
                             # Accumulate usage
                             streaming_utils.accumulate_usage(state, usage)
+
+                # After agent streaming completes, ensure router result is captured
+                if not router_sent:
+                    try:
+                        router_out = await router_task
+                        if router_out:
+                            collector.set_router_outcome(router_out)
+                            yield sse_formatter.router_event(router_out)
+                    except Exception as e:
+                        log.warning(f"Router classification failed: {e}")
                 
                 # Mark completion
                 collector.on_done(final_output="", error=None)

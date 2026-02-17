@@ -12,17 +12,6 @@ class AgentRequest(BaseModel):
     session_id: str = Field(..., description="Unique session identifier")
     question: str = Field(..., description="User query")
 
-    # Optional overrides (Session-scope or Request-scope)
-    system_prompt: Optional[str] = None
-    model_name: Optional[str] = None
-    reasoning_effort: Optional[str] = None
-    provider: Optional[Literal["groq", "openrouter", "nvidia"]] = None
-
-    # BYOK Keys (Ephemeral)
-    openrouter_api_key: Optional[str] = None
-    nvidia_api_key: Optional[str] = None
-    groq_api_key: Optional[str] = None
-
 
 class SessionConfig(BaseModel):
     """
