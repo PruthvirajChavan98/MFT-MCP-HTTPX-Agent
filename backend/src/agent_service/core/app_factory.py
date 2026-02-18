@@ -16,6 +16,7 @@ from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from strawberry.fastapi import GraphQLRouter
 
 from src.agent_service.api.admin import router as admin_router
+from src.agent_service.api.admin_analytics import router as admin_analytics_router
 from src.agent_service.api.endpoints.agent_query import router as query_router
 from src.agent_service.api.endpoints.agent_stream import router as stream_router
 from src.agent_service.api.endpoints.follow_up import router as follow_up_router
@@ -26,6 +27,7 @@ from src.agent_service.api.endpoints.router_endpoints import router as router_ro
 from src.agent_service.api.endpoints.sessions import router as sessions_router
 from src.agent_service.api.eval_ingest import router as eval_router
 from src.agent_service.api.eval_read import router as eval_read_router
+from src.agent_service.api.feedback import router as feedback_router
 from src.agent_service.api.graphql import schema
 from src.agent_service.core.config import (
     POSTGRES_DSN,
@@ -181,6 +183,8 @@ class AppFactory:
         app.include_router(eval_read_router, prefix="/eval", tags=["evaluation"])
 
         app.include_router(admin_router, tags=["admin"])
+        app.include_router(admin_analytics_router)
+        app.include_router(feedback_router)
 
         app.include_router(health_router)
         app.include_router(models_router)

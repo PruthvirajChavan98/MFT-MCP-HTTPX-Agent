@@ -27,6 +27,7 @@ NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 # We define them here so imports in other modules do not crash.
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+ADMIN_API_KEY = (os.getenv("ADMIN_API_KEY") or "").strip() or None
 
 # Groq support for multiple keys (Load Balancing)
 _groq_env = os.getenv("GROQ_API_KEYS", os.getenv("GROQ_API_KEY", ""))

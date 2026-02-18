@@ -9,21 +9,21 @@ repos:
     hooks:
       - id: black
         language_version: python3.11
-        args: ['--config', 'pyproject.toml']
+        args: ['--config', 'backend/pyproject.toml']
 
   # Import Sorting
   - repo: https://github.com/pycqa/isort
     rev: 7.0.0
     hooks:
       - id: isort
-        args: ['--settings-path', 'pyproject.toml']
+        args: ['--settings-path', 'backend/pyproject.toml']
 
   # Linting with Ruff (fast alternative to flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.10.0
     hooks:
       - id: ruff
-        args: ['--fix', '--config', 'pyproject.toml']
+        args: ['--fix', '--config', 'backend/pyproject.toml']
 
   # General code quality checks
   - repo: https://github.com/pre-commit/pre-commit-hooks

@@ -7,7 +7,12 @@ import logging
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
-from src.agent_service.core.config import MODEL_NAME
+from src.agent_service.core.config import (
+    GROQ_API_KEYS,
+    MODEL_NAME,
+    NVIDIA_API_KEY,
+    OPENROUTER_API_KEY,
+)
 from src.agent_service.core.prompts import SYSTEM_PROMPT
 from src.agent_service.core.schemas import AgentRequest
 from src.agent_service.data.config_manager import config_manager
@@ -74,9 +79,12 @@ class ResourceResolver:
                 "provider"
             ) or ResourceResolver.infer_provider_from_model_name(model_name)
 
-            openrouter_key = saved_config.get("openrouter_api_key")
-            nvidia_key = saved_config.get("nvidia_api_key")
-            groq_key = saved_config.get("groq_api_key")
+            # Prefer per-session BYOK values, then fall back to server-managed keys.
+            openrouter_key = saved_config.get("openrouter_api_key") or OPENROUTER_API_KEY
+            nvidia_key = saved_config.get("nvidia_api_key") or NVIDIA_API_KEY
+            groq_key = saved_config.get("groq_api_key") or (
+                GROQ_API_KEYS[0] if GROQ_API_KEYS else None
+            )
 
             # Get LLM (returns tuple: model, actual_provider)
             llm_result = get_llm(

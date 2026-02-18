@@ -5,8 +5,10 @@ import shutil
 import tempfile
 from typing import Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from sse_starlette.sse import EventSourceResponse
+
+from src.agent_service.api.admin_auth import require_admin_key
 
 # Enterprise Modules
 from src.agent_service.core.schemas import (
@@ -22,9 +24,7 @@ from src.agent_service.tools.knowledge import kb_service
 log = logging.getLogger("admin_api")
 
 # Initialize Router
-# We will mount this with prefix="" or "/agent" in main_agent.py
-# For now, we keep full paths to ensure exact match with previous logic.
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin_key)])
 
 
 def _classify_kb_error(message: str) -> tuple[int, str]:
@@ -60,7 +60,7 @@ async def get_stored_followups():
         return {"count": len(results), "data": results}
     except Exception as e:
         log.error(f"Admin Fetch Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # --- Knowledge Base Management ---
@@ -69,7 +69,6 @@ async def get_stored_followups():
 @router.post("/agent/admin/faqs/batch-json")
 async def update_faqs_json_stream(
     request: Request,
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
     x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"),
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
@@ -90,13 +89,12 @@ async def update_faqs_json_stream(
             headers={"Cache-Control": "no-cache"},
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/agent/admin/faqs/upload-pdf")
 async def update_faqs_pdf_stream(
     file: UploadFile = File(...),
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
     x_groq_key: Optional[str] = Header(None, alias="X-Groq-Key"),
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
@@ -162,7 +160,6 @@ async def get_faqs(limit: int = Query(100, ge=1, le=1000), skip: int = Query(0, 
 @router.put("/agent/admin/faqs")
 async def edit_faq(
     request: FAQEditRequest,
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
     result = await kb_service.edit_faq(
@@ -179,7 +176,6 @@ async def edit_faq(
 @router.delete("/agent/admin/faqs")
 async def delete_faq_endpoint(
     question: str = Query(..., description="The exact question text to delete"),
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
 ):
     result = await kb_service.delete_faq(question)
     if result.get("status") == "error":
@@ -188,7 +184,7 @@ async def delete_faq_endpoint(
 
 
 @router.delete("/agent/admin/faqs/all")
-async def clear_all_faqs_endpoint(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
+async def clear_all_faqs_endpoint():
     result = await kb_service.clear_all_faqs()
     if result.get("status") == "error":
         _raise_kb_http_error("clear_all_faqs", result.get("message", "Unknown FAQ clear error"))
@@ -212,7 +208,6 @@ async def semantic_search_endpoint(
 @router.post("/agent/admin/faqs/semantic-delete")
 async def semantic_delete_endpoint(
     request: FAQSemanticDeleteRequest,
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
     result = await kb_service.delete_faq_by_vector(

@@ -403,12 +403,41 @@ services:
     networks:
       - mft_local
 
+  frontend_nbfc:
+    image: node:20-alpine
+    container_name: mft_frontend_nbfc_local
+    working_dir: /app
+    command: ["sh", "-lc", "npm install && npm run dev -- --host 0.0.0.0 --port 5173"]
+    environment:
+      VITE_API_PROXY_TARGET: "http://agent:8000"
+      VITE_API_BASE_URL: "/api"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./NBFC_Chatbot_UI:/app
+      - frontend_nbfc_node_modules_local:/app/node_modules
+    ports:
+      - "127.0.0.1:${LOCAL_FRONTEND_NBFC_PORT:-15174}:5173"
+    depends_on:
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173 >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.00
+    networks:
+      - mft_local
+
   ngrok:
     image: ngrok/ngrok:latest
     container_name: mft_ngrok_local
     restart: unless-stopped
     # We point ngrok at the internal docker service name and port
-    command: "http frontend_uat:5173"
+    command: "http frontend_nbfc:5173"
     environment:
       # Add this variable to your .env file
       NGROK_AUTHTOKEN: "${NGROK_AUTHTOKEN_LOCAL}"
@@ -417,7 +446,7 @@ services:
     networks:
       - mft_local
     depends_on:
-      frontend_uat:
+      frontend_nbfc:
         condition: service_healthy
 
   cloudflared:
@@ -430,7 +459,7 @@ services:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
     depends_on:
-      - frontend_uat
+      - frontend_nbfc
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.50
@@ -448,3 +477,4 @@ volumes:
   prometheus_data_local:
   grafana_data_local:
   frontend_uat_node_modules_local:
+  frontend_nbfc_node_modules_local:
