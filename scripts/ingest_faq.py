@@ -65,7 +65,7 @@ async def extract_metadata(text: str, api_key: str, model_name: str) -> FAQMetad
 
 
 async def ingest_data_async(api_key: str, extraction_model: str):
-    json_path = os.path.join("data", "hfcl_faq_data.json")
+    json_path = os.path.join("data", "mft_faq_data.json")
     if not os.path.exists(json_path):
         log.error(f"❌ File not found: {json_path}")
         return

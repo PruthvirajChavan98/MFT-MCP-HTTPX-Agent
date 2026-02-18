@@ -13,6 +13,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel
 
 from src.agent_service.core.config import (  # Thresholds
+    NBFC_ROUTER_ANSWERABILITY_ENABLED,
     NBFC_ROUTER_CACHE_DIR,
     NBFC_ROUTER_CHAT_MODEL,
     NBFC_ROUTER_EMBED_MODEL,
@@ -24,6 +25,7 @@ from src.agent_service.core.config import (  # Thresholds
     NBFC_ROUTER_SENTIMENT_MARGIN,
     NBFC_ROUTER_SENTIMENT_THRESHOLD,
 )
+from src.agent_service.features.answerability import QueryAnswerabilityClassifier
 
 # Enterprise Imports (Use Factory, not raw classes)
 from src.agent_service.llm.client import get_embeddings, get_llm
@@ -51,6 +53,25 @@ ReasonLabel = Literal[
     "customer_support",
     "unknown",
 ]
+VALID_SENTIMENT_LABELS: set[str] = {"positive", "neutral", "negative", "mixed", "unknown"}
+VALID_REASON_LABELS: set[str] = {
+    "lead_intent_new_loan",
+    "eligibility_offer",
+    "loan_terms_rates",
+    "kyc_verification",
+    "otp_login_app_tech",
+    "application_status_approval",
+    "disbursal",
+    "emi_payment_reflecting",
+    "nach_autodebit_bounce",
+    "charges_fees_penalty",
+    "foreclosure_partpayment",
+    "statement_receipt",
+    "collections_harassment",
+    "fraud_security",
+    "customer_support",
+    "unknown",
+}
 
 FORCE_LLM_RE = re.compile(r"\b(fraud|unauthorized|harass|harassment|threat|abuse)\b", re.I)
 PROFANITY_RE = re.compile(
@@ -214,20 +235,27 @@ class EmbeddingsRouter:
             self._reason_bank = await self._build_bank(REASON_PROTOTYPES, "reason_v1", api_key)
             self._ready = True
 
-    async def _score(self, bank: _ProtoBank, text: str, api_key: str) -> List[Tuple[str, float]]:
+    async def _embed_query(self, text: str, api_key: str) -> np.ndarray:
         emb = get_embeddings(api_key=api_key, model=self.embed_model)
-        v = np.asarray(await emb.aembed_query(_norm(text)), dtype=np.float32)
+        return np.asarray(await emb.aembed_query(_norm(text)), dtype=np.float32)
+
+    @staticmethod
+    def _score_vector(bank: _ProtoBank, vector: np.ndarray) -> List[Tuple[str, float]]:
         scored = []
         for label, vecs in bank.vectors.items():
-            scored.append((label, max(_cosine(v, pv) for pv in vecs)))
+            scored.append((label, max(_cosine(vector, pv) for pv in vecs)))
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored
 
-    async def classify(self, text: str, api_key: str) -> Dict[str, Any]:
+    async def classify_with_query_vector(
+        self, text: str, api_key: str
+    ) -> tuple[Dict[str, Any], np.ndarray]:
         await self.ensure_ready(api_key)
 
+        query_vector = await self._embed_query(text, api_key)
+
         # Sentiment
-        scored_s = await self._score(self._sent_bank, text, api_key)  # type: ignore
+        scored_s = self._score_vector(self._sent_bank, query_vector)  # type: ignore
         best_s, score_s = scored_s[0]
 
         label_s = best_s
@@ -245,7 +273,7 @@ class EmbeddingsRouter:
         reason_res = None
 
         if need_reason:
-            scored_r = await self._score(self._reason_bank, text, api_key)  # type: ignore
+            scored_r = self._score_vector(self._reason_bank, query_vector)  # type: ignore
             # Boosts
             bumps = {}
             for lab, pat, bump in REASON_BOOSTS:
@@ -267,11 +295,18 @@ class EmbeddingsRouter:
                 "topk": [(l, float(s)) for l, s in scored_r[:3]],
             }
 
-        return {
-            "sentiment": {"label": label_s, "score": float(score_s)},
-            "reason": reason_res,
-            "backend": "embeddings",
-        }
+        return (
+            {
+                "sentiment": {"label": label_s, "score": float(score_s)},
+                "reason": reason_res,
+                "backend": "embeddings",
+            },
+            query_vector,
+        )
+
+    async def classify(self, text: str, api_key: str) -> Dict[str, Any]:
+        result, _ = await self.classify_with_query_vector(text, api_key)
+        return result
 
 
 # =============================================================================
@@ -304,26 +339,63 @@ class LLMRouter:
             structured = llm.with_structured_output(LLMRoute)
             out = await structured.ainvoke([("system", self.system), ("human", text)])
         except Exception:
-            # Fallback
-            chain = llm | JsonOutputParser(pydantic_object=LLMRoute)
-            out = await chain.ainvoke([("system", self.system), ("human", text)])
+            try:
+                # Fallback
+                chain = llm | JsonOutputParser(pydantic_object=LLMRoute)
+                out = await chain.ainvoke([("system", self.system), ("human", text)])
+            except Exception as exc:
+                return {
+                    "sentiment": {"label": "unknown", "score": 0.0},
+                    "reason": {
+                        "label": "unknown",
+                        "score": 0.0,
+                        "meta": {"rationale": None, "error": str(exc)},
+                    },
+                    "backend": f"llm_{self.chat_model}",
+                }
 
-        # Convert to dict format (handle both BaseModel and dict)
-        if isinstance(out, dict):
-            s = {"label": out["sentiment"], "score": out["confidence"]}
-            r = {
-                "label": out["reason"],
-                "score": out["reason_confidence"],
-                "meta": {"rationale": out.get("short_rationale")},
+        def _as_float(value: Any) -> float:
+            try:
+                return float(value)
+            except Exception:
+                return 0.0
+
+        # Convert to dict format (handle both BaseModel and dict) with safe defaults.
+        try:
+            if isinstance(out, dict):
+                sentiment_label = str(out.get("sentiment", "unknown")).strip().lower()
+                if sentiment_label not in VALID_SENTIMENT_LABELS:
+                    sentiment_label = "unknown"
+
+                reason_label = str(out.get("reason", "unknown")).strip().lower()
+                if reason_label not in VALID_REASON_LABELS:
+                    reason_label = "unknown"
+
+                s = {"label": sentiment_label, "score": _as_float(out.get("confidence", 0.0))}
+                r = {
+                    "label": reason_label,
+                    "score": _as_float(out.get("reason_confidence", 0.0)),
+                    "meta": {"rationale": out.get("short_rationale")},
+                }
+            else:
+                route: LLMRoute = out  # type: ignore
+                s = {"label": route.sentiment, "score": float(route.confidence)}
+                r = {
+                    "label": route.reason,
+                    "score": float(route.reason_confidence),
+                    "meta": {"rationale": route.short_rationale},
+                }
+        except Exception as exc:
+            return {
+                "sentiment": {"label": "unknown", "score": 0.0},
+                "reason": {
+                    "label": "unknown",
+                    "score": 0.0,
+                    "meta": {"rationale": None, "error": str(exc)},
+                },
+                "backend": f"llm_{self.chat_model}",
             }
-        else:
-            route: LLMRoute = out  # type: ignore
-            s = {"label": route.sentiment, "score": route.confidence}
-            r = {
-                "label": route.reason,
-                "score": route.reason_confidence,
-                "meta": {"rationale": route.short_rationale},
-            }
+
         return {"sentiment": s, "reason": r, "backend": f"llm_{self.chat_model}"}
 
 
@@ -336,23 +408,75 @@ class NBFCClassifierService:
     def __init__(self):
         self.emb = EmbeddingsRouter(NBFC_ROUTER_EMBED_MODEL)
         self.llm = LLMRouter(NBFC_ROUTER_CHAT_MODEL)
+        self.answerability = QueryAnswerabilityClassifier(embed_model=NBFC_ROUTER_EMBED_MODEL)
+
+    async def _safe_answerability(
+        self,
+        text: str,
+        *,
+        tools: Optional[List[Any]],
+        openrouter_api_key: Optional[str],
+        query_vector: Optional[np.ndarray] = None,
+    ) -> Dict[str, Any]:
+        if not NBFC_ROUTER_ANSWERABILITY_ENABLED:
+            return {
+                "disabled": True,
+                "label": "disabled",
+                "answerable": False,
+                "confidence": 0.0,
+                "recommended_path": "llm",
+            }
+        try:
+            return await self.answerability.classify(
+                text,
+                tools or [],
+                api_key=openrouter_api_key,
+                query_vector=query_vector,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "label": "unknown",
+                "answerable": False,
+                "confidence": 0.0,
+                "recommended_path": "llm",
+                "error": str(exc),
+            }
 
     async def classify(
-        self, text: str, openrouter_api_key: Optional[str] = None, mode: Optional[str] = None
+        self,
+        text: str,
+        openrouter_api_key: Optional[str] = None,
+        mode: Optional[str] = None,
+        tools: Optional[List[Any]] = None,
     ) -> Dict[str, Any]:
         if not NBFC_ROUTER_ENABLED:
             return {"disabled": True, "backend": "disabled"}
 
-        if not openrouter_api_key:
-            return {"error": "OpenRouter Key required for router"}
-
         t = _norm(text)
         mode = mode or NBFC_ROUTER_MODE
 
+        if not openrouter_api_key:
+            answerability = await self._safe_answerability(
+                t,
+                tools=tools,
+                openrouter_api_key=None,
+            )
+            return {
+                "error": "OpenRouter Key required for router",
+                "backend": "router_unavailable",
+                "answerability": answerability,
+            }
+
         # Embeddings First
-        e = await self.emb.classify(t, openrouter_api_key)
+        e, query_vector = await self.emb.classify_with_query_vector(t, openrouter_api_key)
 
         if mode == "embeddings":
+            e["answerability"] = await self._safe_answerability(
+                t,
+                tools=tools,
+                openrouter_api_key=openrouter_api_key,
+                query_vector=query_vector,
+            )
             return e
 
         # Force LLM check
@@ -369,16 +493,72 @@ class NBFCClassifierService:
         if mode == "llm" or force_llm or (mode == "hybrid" and low_conf):
             l = await self.llm.classify(t, openrouter_api_key)
             l["backend"] = f"hybrid->{l['backend']}" if mode == "hybrid" else l["backend"]
-            return l
+            result = l
+        else:
+            result = e
 
-        return e
+        result["answerability"] = await self._safe_answerability(
+            t,
+            tools=tools,
+            openrouter_api_key=openrouter_api_key,
+            query_vector=query_vector,
+        )
+        return result
 
-    async def compare(self, text: str, openrouter_api_key: Optional[str] = None) -> Dict[str, Any]:
+    async def compare(
+        self,
+        text: str,
+        openrouter_api_key: Optional[str] = None,
+        tools: Optional[List[Any]] = None,
+    ) -> Dict[str, Any]:
+        t = _norm(text)
         if not openrouter_api_key:
-            return {"error": "Key required"}
-        e = await self.emb.classify(text, openrouter_api_key)
-        l = await self.llm.classify(text, openrouter_api_key)
-        return {"embeddings": e, "llm": l}
+            return {
+                "error": "Key required",
+                "answerability": await self._safe_answerability(
+                    t,
+                    tools=tools,
+                    openrouter_api_key=None,
+                ),
+            }
+        errors: Dict[str, str] = {}
+        query_vector: Optional[np.ndarray] = None
+
+        try:
+            e, query_vector = await self.emb.classify_with_query_vector(t, openrouter_api_key)
+        except Exception as exc:
+            errors["embeddings"] = str(exc)
+            e = {
+                "sentiment": {"label": "unknown", "score": 0.0},
+                "reason": {"label": "unknown", "score": 0.0},
+                "backend": "embeddings",
+                "error": str(exc),
+            }
+
+        try:
+            l = await self.llm.classify(t, openrouter_api_key)
+        except Exception as exc:
+            errors["llm"] = str(exc)
+            l = {
+                "sentiment": {"label": "unknown", "score": 0.0},
+                "reason": {"label": "unknown", "score": 0.0},
+                "backend": f"llm_{self.llm.chat_model}",
+                "error": str(exc),
+            }
+
+        result = {
+            "embeddings": e,
+            "llm": l,
+            "answerability": await self._safe_answerability(
+                t,
+                tools=tools,
+                openrouter_api_key=openrouter_api_key,
+                query_vector=query_vector,
+            ),
+        }
+        if errors:
+            result["errors"] = errors
+        return result
 
 
 nbfc_router_service = NBFCClassifierService()

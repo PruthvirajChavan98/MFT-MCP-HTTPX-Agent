@@ -1,4 +1,4 @@
-Here are the plain cURL calls for the **HFCL Agent Service** (Port 8000).
+Here are the plain cURL calls for the **MFT Agent Service** (Port 8000).
 
 **Note:**
 

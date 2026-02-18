@@ -12,7 +12,7 @@ fi
 PORT=${PORT:-8015}
 WORKERS=${GUNICORN_WORKERS:-2}
 
-echo "Starting HFCL Agent with Gunicorn..."
+echo "Starting MFT Agent with Gunicorn..."
 echo "Port: $PORT"
 echo "Workers: $WORKERS"
 

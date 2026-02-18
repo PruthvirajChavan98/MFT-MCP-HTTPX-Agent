@@ -13,6 +13,7 @@ dependencies = [
     "langchain-core>=0.3.0",
     # -- Providers --
     "langchain-openai>=0.2.0",
+    "langchain-openrouter>=0.0.2",
     "langchain-anthropic>=0.2.0",
     "langchain-groq>=0.2.0",
     "langchain-nvidia-ai-endpoints>=0.3.0",

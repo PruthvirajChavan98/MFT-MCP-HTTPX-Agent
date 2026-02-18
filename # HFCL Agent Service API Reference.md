@@ -1,8 +1,8 @@
-# HFCL Agent Service API Reference
+# MFT Agent Service API Reference
 
 ## Introduction
 
-This document provides a reference for the HFCL Agent Service API. The service provides a comprehensive set of endpoints for agent interaction, session management, and system evaluation.
+This document provides a reference for the MFT Agent Service API. The service provides a comprehensive set of endpoints for agent interaction, session management, and system evaluation.
 
 **Base URLs:**
 - Development: `http://localhost:8000`

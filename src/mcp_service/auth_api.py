@@ -9,7 +9,7 @@ from .session_store import RedisSessionStore
 from .utils import JsonConverter
 
 conv = JsonConverter(sep=".")
-log = logging.getLogger(name="hfcl_auth")
+log = logging.getLogger(name="mft_auth")
 
 
 def _valid_session_id(session_id: object) -> str:

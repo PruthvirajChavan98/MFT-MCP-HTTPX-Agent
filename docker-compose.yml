@@ -1,7 +1,7 @@
 services:
   redis:
     image: redis/redis-stack-server:latest
-    container_name: hfcl_redis
+    container_name: mft_redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -14,18 +14,18 @@ services:
     mem_limit: 512m
     cpus: 0.50
     networks:
-      - hfcl_network
+      - mft_network
 
   postgres:
     image: postgres:16-alpine
-    container_name: hfcl_postgres
+    container_name: mft_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: hfcl_security
-      POSTGRES_USER: hfcl
-      POSTGRES_PASSWORD: hfcl_password
+      POSTGRES_DB: mft_security
+      POSTGRES_USER: mft
+      POSTGRES_PASSWORD: mft_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hfcl -d hfcl_security"]
+      test: ["CMD-SHELL", "pg_isready -U mft -d mft_security"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -35,11 +35,11 @@ services:
     mem_limit: 1g
     cpus: 1.00
     networks:
-      - hfcl_network
+      - mft_network
 
   neo4j:
     image: neo4j:5.26.0
-    container_name: hfcl_neo4j
+    container_name: mft_neo4j
     ports:
       - "127.0.0.1:7474:7474"
       - "127.0.0.1:7687:7687"
@@ -50,22 +50,35 @@ services:
       NEO4J_server_default__listen__address: 0.0.0.0
       NEO4J_server_bolt_advertised__address: neo4j:7687
       NEO4J_server_http_advertised__address: neo4j:7474
+      NEO4J_server_memory_heap_initial__size: "${NEO4J_HEAP_INITIAL_SIZE:-512m}"
+      NEO4J_server_memory_heap_max__size: "${NEO4J_HEAP_MAX_SIZE:-512m}"
+      NEO4J_server_memory_pagecache_size: "${NEO4J_PAGECACHE_SIZE:-512m}"
     volumes:
       - ./neo4j_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -a bolt://localhost:7687 -u neo4j -p password 'RETURN 1;' >/dev/null",
+        ]
+      interval: 20s
+      timeout: 15s
+      retries: 12
+      start_period: 90s
     restart: unless-stopped
     mem_limit: 2g
     cpus: 2.00
     networks:
-      - hfcl_network
+      - mft_network
 
   mcp:
     build:
       context: .
       dockerfile: Dockerfile
       cache_from:
-        - hfcl_mcp:latest
-    image: hfcl_mcp:latest
-    container_name: hfcl_mcp
+        - mft_mcp:latest
+    image: mft_mcp:latest
+    container_name: mft_mcp
     command: ["python", "src/main_mcp.py"]
     ports:
       - "127.0.0.1:8050:8050"
@@ -83,16 +96,16 @@ services:
     mem_limit: 768m
     cpus: 1.00
     networks:
-      - hfcl_network
+      - mft_network
 
   agent:
     build:
       context: .
       dockerfile: Dockerfile
       cache_from:
-        - hfcl_agent:latest
-    image: hfcl_agent:latest
-    container_name: hfcl_agent
+        - mft_agent:latest
+    image: mft_agent:latest
+    container_name: mft_agent
     command: [
       "gunicorn", "src.main_agent:app",
       "--config", "gunicorn.conf.py",
@@ -115,7 +128,7 @@ services:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
       REDIS_MAX_CONNECTIONS: "50"
-      POSTGRES_DSN: "postgresql://hfcl:hfcl_password@postgres:5432/hfcl_security"
+      POSTGRES_DSN: "postgresql://mft:mft_password@postgres:5432/mft_security"
       POSTGRES_POOL_MIN: "10"
       POSTGRES_POOL_MAX: "50"
 
@@ -135,6 +148,17 @@ services:
       NBFC_ROUTER_CHAT_MODEL: "z-ai/glm-4.7"
       NBFC_ROUTER_EMBED_MODEL: "openai/text-embedding-3-small"
       NBFC_ROUTER_CACHE_DIR: ".cache_nbfc_router"
+      NBFC_ROUTER_ANSWERABILITY_ENABLED: "true"
+      NBFC_ROUTER_ANSWERABILITY_KB_THRESHOLD: "0.58"
+      NBFC_ROUTER_ANSWERABILITY_KB_HEURISTIC_THRESHOLD: "0.38"
+      NBFC_ROUTER_ANSWERABILITY_MCP_THRESHOLD: "0.52"
+      NBFC_ROUTER_ANSWERABILITY_MARGIN: "0.04"
+      NBFC_ROUTER_ANSWERABILITY_MAX_TOOLS: "60"
+      NBFC_ROUTER_ANSWERABILITY_VECTOR_CACHE_SIZE: "64"
+      AGENT_INLINE_ROUTER_ENABLED: "false"
+      AGENT_INLINE_ROUTER_EXPOSE: "false"
+      AGENT_STREAM_EXPOSE_INTERNAL_EVENTS: "false"
+      AGENT_STREAM_EXPOSE_REASONING: "true"
 
       SECURITY_ENABLED: "true"
       SECURITY_TRUST_PROXY_HEADERS: "true"
@@ -164,7 +188,7 @@ services:
       mcp:
         condition: service_started
       neo4j:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     extra_hosts:
@@ -175,16 +199,16 @@ services:
     mem_limit: 2g
     cpus: 2.00
     networks:
-      - hfcl_network
+      - mft_network
 
   router_worker:
     build:
       context: .
       dockerfile: Dockerfile
       cache_from:
-        - hfcl_router_worker:latest
-    image: hfcl_router_worker:latest
-    container_name: hfcl_router_worker
+        - mft_router_worker:latest
+    image: mft_router_worker:latest
+    container_name: mft_router_worker
     command: ["python", "-m", "src.agent_service.router.worker"]
     env_file:
       - .env
@@ -197,16 +221,16 @@ services:
       redis:
         condition: service_healthy
       neo4j:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.00
     networks:
-      - hfcl_network
+      - mft_network
 
   prometheus:
     image: prom/prometheus:v2.53.1
-    container_name: hfcl_prometheus
+    container_name: mft_prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -226,11 +250,11 @@ services:
     mem_limit: 512m
     cpus: 0.75
     networks:
-      - hfcl_network
+      - mft_network
 
   alertmanager:
     image: prom/alertmanager:v0.28.0
-    container_name: hfcl_alertmanager
+    container_name: mft_alertmanager
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
     ports:
@@ -241,11 +265,11 @@ services:
     mem_limit: 256m
     cpus: 0.50
     networks:
-      - hfcl_network
+      - mft_network
 
   grafana:
     image: grafana/grafana:11.1.4
-    container_name: hfcl_grafana
+    container_name: mft_grafana
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -264,13 +288,13 @@ services:
     mem_limit: 512m
     cpus: 0.75
     networks:
-      - hfcl_network
+      - mft_network
 
   geoip_updater:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: hfcl_geoip_updater
+    container_name: mft_geoip_updater
     command: ["/bin/bash", "-lc", "while true; do /app/scripts/update_free_geoip.sh; sleep 86400; done"]
     environment:
       GEOIP_FREE_ONLY: "true"
@@ -285,11 +309,11 @@ services:
     mem_limit: 256m
     cpus: 0.25
     networks:
-      - hfcl_network
+      - mft_network
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: hfcl_cloudflared
+    container_name: mft_cloudflared
     env_file:
       - .env
     volumes:
@@ -302,10 +326,10 @@ services:
     mem_limit: 256m
     cpus: 0.50
     networks:
-      - hfcl_network
+      - mft_network
 
 networks:
-  hfcl_network:
+  mft_network:
     driver: bridge
 
 volumes:

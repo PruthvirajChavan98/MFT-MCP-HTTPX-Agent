@@ -1,7 +1,7 @@
 # src/main_agent.py
 
 """
-HFCL Agent Service - Main Application Entry Point
+MFT Agent Service - Main Application Entry Point
 Production-grade AI agent API with LangGraph integration.
 """
 
@@ -109,7 +109,7 @@ async def lifespan(app_instance: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="HFCL Agent Service",
+    title="MFT Agent Service",
     description="Production-grade AI Agent API with LangGraph",
     version="2.0.0",
     lifespan=lifespan,
@@ -178,5 +178,5 @@ log.info("✅ All routers mounted")
 if __name__ == "__main__":
     import uvicorn
 
-    log.info(f"🚀 Starting HFCL Agent Service on port {PORT}")
+    log.info(f"🚀 Starting MFT Agent Service on port {PORT}")
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

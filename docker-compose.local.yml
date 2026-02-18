@@ -1,9 +1,14 @@
+# docker-compose.local.yml
+
+name: mft-local
+
 services:
   redis:
     image: redis/redis-stack-server:latest
-    container_name: hfcl_redis_local
+    container_name: mft_redis_local
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${LOCAL_REDIS_PORT:-16379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -12,15 +17,41 @@ services:
       start_period: 5s
     volumes:
       - redis_data_local:/data
+    mem_limit: 512m
+    cpus: 0.50
     networks:
-      - hfcl_local
+      - mft_local
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: mft_postgres_local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LOCAL_POSTGRES_PORT:-15432}:5432"
+    environment:
+      POSTGRES_DB: mft_security
+      POSTGRES_USER: mft
+      POSTGRES_PASSWORD: mft_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mft -d mft_security"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - postgres_data_local:/var/lib/postgresql/data
+      - ./infra/sql/session_security.sql:/docker-entrypoint-initdb.d/01_session_security.sql:ro
+    mem_limit: 1g
+    cpus: 1.00
+    networks:
+      - mft_local
 
   neo4j:
     image: neo4j:5.26.0
-    container_name: hfcl_neo4j_local
+    container_name: mft_neo4j_local
+    restart: unless-stopped
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:${LOCAL_NEO4J_HTTP_PORT:-17474}:7474"
+      - "127.0.0.1:${LOCAL_NEO4J_BOLT_PORT:-17687}:7687"
     environment:
       NEO4J_AUTH: neo4j/password
       NEO4J_PLUGINS: '["apoc"]'
@@ -28,20 +59,26 @@ services:
       NEO4J_server_default__listen__address: 0.0.0.0
       NEO4J_server_bolt_advertised__address: neo4j:7687
       NEO4J_server_http_advertised__address: neo4j:7474
+      NEO4J_server_memory_heap_initial__size: "${LOCAL_NEO4J_HEAP_INITIAL:-512m}"
+      NEO4J_server_memory_heap_max__size: "${LOCAL_NEO4J_HEAP_MAX:-512m}"
+      NEO4J_server_memory_pagecache_size: "${LOCAL_NEO4J_PAGECACHE:-512m}"
     volumes:
       - neo4j_data_local:/data
+    mem_limit: 2g
+    cpus: 2.00
     networks:
-      - hfcl_local
+      - mft_local
 
   mcp:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hfcl_mcp:local
-    container_name: hfcl_mcp_local
+    image: mft_mcp:local
+    container_name: mft_mcp_local
     command: ["uv", "run", "python", "src/main_mcp.py"]
+    restart: unless-stopped
     ports:
-      - "8050:8050"
+      - "127.0.0.1:${LOCAL_MCP_PORT:-18050}:8050"
     env_file:
       - .env
     environment:
@@ -52,17 +89,29 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import socket; s=socket.create_connection(('127.0.0.1', 8050), 2); s.close()\"",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    mem_limit: 768m
+    cpus: 1.00
     networks:
-      - hfcl_local
+      - mft_local
 
   agent:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hfcl_agent:local
-    container_name: hfcl_agent_local
+    image: mft_agent:local
+    container_name: mft_agent_local
     command:
       [
         "uv",
@@ -75,43 +124,138 @@ services:
         "8000",
         "--reload",
       ]
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${LOCAL_AGENT_PORT:-18000}:8000"
     env_file:
       - .env
     environment:
       PORT: "8000"
       PYTHONUNBUFFERED: "1"
-      REDIS_URL: "redis://redis:6379/0"
       MCP_SERVER_URL: "http://mcp:8050/sse"
+
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_MAX_CONNECTIONS: "50"
+
+      POSTGRES_DSN: "postgresql://mft:mft_password@postgres:5432/mft_security"
+      POSTGRES_POOL_MIN: "10"
+      POSTGRES_POOL_MAX: "50"
+
       NEO4J_URI: "bolt://neo4j:7687"
       NEO4J_USER: "neo4j"
       NEO4J_PASSWORD: "password"
+
+      SHADOW_EVAL_ENABLED: "1"
+      SHADOW_EVAL_SAMPLE_RATE: "0.1"
+      SHADOW_EVAL_CAPTURE: "light"
+
       OPENROUTER_SITE_URL: "${OPENROUTER_SITE_URL}"
       OPENROUTER_APP_TITLE: "${OPENROUTER_APP_TITLE}"
+
+      NBFC_ROUTER_ENABLED: "true"
+      NBFC_ROUTER_MODE: "hybrid"
+      NBFC_ROUTER_CHAT_MODEL: "z-ai/glm-4.7"
+      NBFC_ROUTER_EMBED_MODEL: "openai/text-embedding-3-small"
       NBFC_ROUTER_CACHE_DIR: ".cache_nbfc_router"
+      NBFC_ROUTER_ANSWERABILITY_ENABLED: "true"
+      NBFC_ROUTER_ANSWERABILITY_KB_THRESHOLD: "0.58"
+      NBFC_ROUTER_ANSWERABILITY_KB_HEURISTIC_THRESHOLD: "0.38"
+      NBFC_ROUTER_ANSWERABILITY_MCP_THRESHOLD: "0.52"
+      NBFC_ROUTER_ANSWERABILITY_MARGIN: "0.04"
+      NBFC_ROUTER_ANSWERABILITY_MAX_TOOLS: "60"
+      NBFC_ROUTER_ANSWERABILITY_VECTOR_CACHE_SIZE: "64"
+      AGENT_INLINE_ROUTER_ENABLED: "false"
+      AGENT_INLINE_ROUTER_EXPOSE: "false"
+      AGENT_STREAM_EXPOSE_INTERNAL_EVENTS: "false"
+      AGENT_STREAM_EXPOSE_REASONING: "true"
+
+      SECURITY_ENABLED: "true"
+      SECURITY_TRUST_PROXY_HEADERS: "true"
+      SECURITY_PREFER_IP_HEADER: "x-forwarded-for"
+      SECURITY_CRITICAL_PATHS: "/agent,/graphql,/eval"
+      SECURITY_MONITORED_PATHS: "/health,/metrics"
+      TOR_REFRESH_SECONDS: "1800"
+      TOR_STALE_AFTER_SECONDS: "7200"
+      TOR_NEGATIVE_CACHE_TTL_SECONDS: "300"
+      TOR_NEGATIVE_CACHE_CLEANUP_INTERVAL: "1000"
+
+      SECURITY_IMPOSSIBLE_TRAVEL_KMH: "900"
+      SECURITY_CONCURRENT_IP_WINDOW_SECONDS: "300"
+      SECURITY_CONCURRENT_IP_THRESHOLD: "3"
+      SECURITY_RISK_IMPOSSIBLE_TRAVEL: "0.6"
+      SECURITY_RISK_CONCURRENT_IP: "0.5"
+      SECURITY_RISK_DEVICE_MISMATCH: "0.4"
+      SECURITY_RISK_GEO_ANOMALY: "0.3"
+      SECURITY_RISK_ALLOW_THRESHOLD: "0.4"
+      SECURITY_RISK_STEP_UP_THRESHOLD: "0.7"
+
+      PROMETHEUS_METRICS_ENABLED: "true"
+      GEOIP_DB_PATH: "/app/data/geoip/GeoLite2-City.mmdb"
     volumes:
       - .:/app
+      - ./data/geoip:/app/data/geoip
     depends_on:
       redis:
         condition: service_healthy
       mcp:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health/ready >/dev/null"]
+      interval: 15s
+      timeout: 4s
+      retries: 8
+      start_period: 20s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 2g
+    cpus: 2.00
+    networks:
+      - mft_local
+
+  localsetup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mft_localsetup:local
+    container_name: mft_localsetup
+    command:
+      [
+        "/bin/bash",
+        "/app/scripts/localsetup.sh",
+      ]
+    profiles: ["setup"]
+    restart: "no"
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
         condition: service_started
       neo4j:
         condition: service_started
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      mcp:
+        condition: service_started
+      agent:
+        condition: service_started
+    mem_limit: 256m
+    cpus: 0.25
     networks:
-      - hfcl_local
+      - mft_local
 
   router_worker:
     profiles: ["router"]
     build:
       context: .
       dockerfile: Dockerfile
-    image: hfcl_router_worker:local
-    container_name: hfcl_router_worker_local
+    image: mft_router_worker:local
+    container_name: mft_router_worker_local
     command: ["uv", "run", "python", "-m", "src.agent_service.router.worker"]
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -126,13 +270,124 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_started
+    mem_limit: 768m
+    cpus: 1.00
     networks:
-      - hfcl_local
+      - mft_local
+
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v2.53.1
+    container_name: mft_prometheus_local
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "127.0.0.1:${LOCAL_PROMETHEUS_PORT:-19090}:9090"
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data_local:/prometheus
+    depends_on:
+      agent:
+        condition: service_started
+      alertmanager:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.75
+    networks:
+      - mft_local
+
+  alertmanager:
+    profiles: ["monitoring"]
+    image: prom/alertmanager:v0.28.0
+    container_name: mft_alertmanager_local
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    ports:
+      - "127.0.0.1:${LOCAL_ALERTMANAGER_PORT:-19093}:9093"
+    volumes:
+      - ./infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.50
+    networks:
+      - mft_local
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:11.1.4
+    container_name: mft_grafana_local
+    ports:
+      - "127.0.0.1:${LOCAL_GRAFANA_PORT:-13000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data_local:/var/lib/grafana
+      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.75
+    networks:
+      - mft_local
+
+  geoip_updater:
+    profiles: ["geoip"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mft_geoip_updater:local
+    container_name: mft_geoip_updater_local
+    command: ["/bin/bash", "-lc", "while true; do /app/scripts/update_free_geoip.sh; sleep 86400; done"]
+    environment:
+      GEOIP_FREE_ONLY: "true"
+      GEOIP_DATA_DIR: "/app/data/geoip"
+      MAXMIND_ACCOUNT_ID: "${MAXMIND_ACCOUNT_ID}"
+      MAXMIND_LICENSE_KEY: "${MAXMIND_LICENSE_KEY}"
+      IP2PROXY_LITE_URL: "${IP2PROXY_LITE_URL}"
+    volumes:
+      - ./data/geoip:/app/data/geoip
+      - ./scripts/update_free_geoip.sh:/app/scripts/update_free_geoip.sh:ro
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.25
+    networks:
+      - mft_local
+
+  cloudflared:
+    profiles: ["edge"]
+    image: cloudflare/cloudflared:latest
+    container_name: mft_cloudflared_local
+    env_file:
+      - .env
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
+    depends_on:
+      - agent
+      - mcp
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.50
+    networks:
+      - mft_local
 
 networks:
-  hfcl_local:
+  mft_local:
     driver: bridge
 
 volumes:
   redis_data_local:
+  postgres_data_local:
   neo4j_data_local:
+  prometheus_data_local:
+  grafana_data_local:

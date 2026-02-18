@@ -101,7 +101,7 @@ if __name__ == "__main__":
         print(json.dumps(qa_data[:2], indent=2))
 
         # 3. Or save to a JSON file
-        parser.save_to_json("hfcl_faq_data.json")
+        parser.save_to_json("mft_faq_data.json")
 
     except Exception as e:
         print(f"An error occurred: {e}")

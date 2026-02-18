@@ -12,7 +12,7 @@ from .session_store import RedisSessionStore
 
 log = logging.getLogger(name="mcp_server")
 
-mcp = FastMCP(name="HFCL MCP Server")
+mcp = FastMCP(name="MFT MCP Server")
 session_store = RedisSessionStore()
 
 

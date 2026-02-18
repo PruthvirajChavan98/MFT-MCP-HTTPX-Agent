@@ -27,6 +27,32 @@ log = logging.getLogger("admin_api")
 router = APIRouter()
 
 
+def _classify_kb_error(message: str) -> tuple[int, str]:
+    msg = (message or "").lower()
+    if "openrouter key required" in msg or msg.strip() == "key required":
+        return 400, "missing_openrouter_key"
+    if "neo4j" in msg and (
+        "connection refused" in msg
+        or "couldn't connect" in msg
+        or "serviceunavailable" in msg
+        or "failed after" in msg
+    ):
+        return 503, "neo4j_unavailable"
+    return 500, "kb_operation_failed"
+
+
+def _raise_kb_http_error(operation: str, message: str) -> None:
+    status_code, code = _classify_kb_error(message)
+    raise HTTPException(
+        status_code=status_code,
+        detail={
+            "code": code,
+            "operation": operation,
+            "message": message,
+        },
+    )
+
+
 @router.get("/agent/all-follow-ups")
 async def get_stored_followups():
     try:
@@ -130,7 +156,7 @@ async def get_faqs(limit: int = Query(100, ge=1, le=1000), skip: int = Query(0, 
             "items": data,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_kb_http_error("get_faqs", str(e))
 
 
 @router.put("/agent/admin/faqs")
@@ -146,7 +172,7 @@ async def edit_faq(
         openrouter_key=x_openrouter_key or "",
     )
     if result.get("status") == "error":
-        raise HTTPException(status_code=400, detail=result.get("message"))
+        _raise_kb_http_error("edit_faq", result.get("message", "Unknown FAQ edit error"))
     return result
 
 
@@ -157,7 +183,7 @@ async def delete_faq_endpoint(
 ):
     result = await kb_service.delete_faq(question)
     if result.get("status") == "error":
-        raise HTTPException(status_code=500, detail=result.get("message"))
+        _raise_kb_http_error("delete_faq", result.get("message", "Unknown FAQ delete error"))
     return result
 
 
@@ -165,7 +191,7 @@ async def delete_faq_endpoint(
 async def clear_all_faqs_endpoint(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
     result = await kb_service.clear_all_faqs()
     if result.get("status") == "error":
-        raise HTTPException(status_code=500, detail=result.get("message"))
+        _raise_kb_http_error("clear_all_faqs", result.get("message", "Unknown FAQ clear error"))
     return result
 
 
@@ -180,7 +206,7 @@ async def semantic_search_endpoint(
         )
         return {"status": "success", "results": results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_kb_http_error("semantic_search", str(e))
 
 
 @router.post("/agent/admin/faqs/semantic-delete")
@@ -193,5 +219,8 @@ async def semantic_delete_endpoint(
         request.query, request.threshold, x_openrouter_key or ""
     )
     if result.get("status") == "error":
-        raise HTTPException(status_code=500, detail=result.get("message"))
+        _raise_kb_http_error(
+            "semantic_delete",
+            result.get("message", "Unknown FAQ semantic delete error"),
+        )
     return result

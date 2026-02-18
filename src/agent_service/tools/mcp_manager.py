@@ -9,7 +9,8 @@ from langchain_mcp_adapters.tools import load_mcp_tools
 from pydantic import create_model
 
 from src.agent_service.core.config import SERVER_NAME, SERVER_URL
-from src.agent_service.core.utils import is_user_authenticated, normalize_result, valid_session_id
+from src.agent_service.core.session_utils import is_user_authenticated, valid_session_id
+from src.agent_service.core.utils import normalize_result
 
 # Local Imports (Updated paths)
 from .graph_rag import create_graph_tool

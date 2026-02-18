@@ -8,7 +8,7 @@ from .session_store import RedisSessionStore
 from .utils import JsonConverter, ToonOptions
 
 conv = JsonConverter(sep=".")
-log = logging.getLogger(name="hfcl_api")
+log = logging.getLogger(name="mft_api")
 
 
 def _valid_session_id(session_id: object) -> str:

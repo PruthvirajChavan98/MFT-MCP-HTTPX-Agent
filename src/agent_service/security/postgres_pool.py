@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 log = logging.getLogger("security.postgres")
 
@@ -13,9 +14,7 @@ class PostgresPoolManager:
     dsn: str
     min_size: int = 10
     max_size: int = 50
-
-    def __post_init__(self) -> None:
-        self._pool = None
+    _pool: Any = field(init=False, default=None, repr=False)
 
     @property
     def pool(self):

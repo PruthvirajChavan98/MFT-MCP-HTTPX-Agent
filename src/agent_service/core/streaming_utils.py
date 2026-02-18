@@ -184,7 +184,12 @@ class SSEEventFormatter:
     @staticmethod
     def reasoning_token_event(content: str) -> Dict[str, Any]:
         """Return dict - sse-starlette handles formatting."""
-        return {"event": "reasoning_token", "data": content}
+        return {"event": "reasoning", "data": content}
+
+    @staticmethod
+    def thinking_event(content: str) -> Dict[str, Any]:
+        """Backward compatible alias for reasoning stream event."""
+        return {"event": "reasoning", "data": content}
 
     @staticmethod
     def tool_start_event(tool_name: str, tool_input: Any) -> Dict[str, Any]:
@@ -199,6 +204,16 @@ class SSEEventFormatter:
         return {
             "event": "tool_end",
             "data": {"tool": tool_name, "output": output, "tool_call_id": tool_call_id},
+        }
+
+    @staticmethod
+    def tool_call_event(
+        tool_name: str, output: str, tool_call_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Public-facing tool execution event."""
+        return {
+            "event": "tool_call",
+            "data": {"name": tool_name, "output": output, "tool_call_id": tool_call_id},
         }
 
     @staticmethod

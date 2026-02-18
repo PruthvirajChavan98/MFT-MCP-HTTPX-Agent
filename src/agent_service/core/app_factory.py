@@ -119,7 +119,7 @@ class AppFactory:
             Configured FastAPI instance
         """
         app = FastAPI(
-            title="HFCL Agent Service",
+            title="MFT Agent Service",
             description="Production-grade AI Agent API with LangGraph",
             version="2.0.0",
             lifespan=self.lifespan,

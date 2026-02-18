@@ -8,6 +8,11 @@ from langchain.embeddings import init_embeddings
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 
+try:
+    from langchain_openrouter import ChatOpenRouter
+except Exception:  # pragma: no cover - optional dependency fallback
+    ChatOpenRouter = None
+
 log = logging.getLogger("llm_client")
 
 
@@ -29,8 +34,8 @@ def get_llm(
     if not model_name:
         raise ValueError("Model name is required.")
 
-    api_key = None
-    actual_provider = None
+    api_key: Optional[str] = None
+    actual_provider: Optional[str] = None
 
     # If provider explicitly specified, use that
     if provider:
@@ -38,7 +43,7 @@ def get_llm(
             if not openrouter_api_key:
                 raise ValueError("OpenRouter provider requires openrouter_api_key")
             api_key = openrouter_api_key
-            actual_provider = "openai"  # OpenRouter uses OpenAI compatibility
+            actual_provider = "openrouter"
         elif provider == "nvidia":
             if not nvidia_api_key:
                 raise ValueError("Nvidia provider requires nvidia_api_key")
@@ -54,7 +59,7 @@ def get_llm(
     else:
         # Fallback: Priority-based selection from API keys
         if openrouter_api_key and openrouter_api_key.startswith("sk-or-"):
-            actual_provider = "openai"
+            actual_provider = "openrouter"
             api_key = openrouter_api_key
             log.info("Auto-detected OpenRouter from API key")
         elif nvidia_api_key and nvidia_api_key.startswith("nvapi-"):
@@ -78,12 +83,38 @@ def get_llm(
 
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
-    if reasoning_effort and reasoning_effort.lower() not in ("none", "default"):
-        kwargs["reasoning_effort"] = reasoning_effort
 
-    # OpenRouter-specific config
-    if actual_provider == "openai" and openrouter_api_key:
+    normalized_reasoning_effort = None
+    if reasoning_effort:
+        normalized_reasoning_effort = reasoning_effort.strip().lower()
+
+    has_reasoning = bool(
+        normalized_reasoning_effort and normalized_reasoning_effort not in ("none", "default")
+    )
+
+    # OpenRouter path: prefer ChatOpenRouter when available.
+    if actual_provider == "openrouter":
+        if ChatOpenRouter is not None:
+            openrouter_kwargs: Dict[str, Any] = dict(kwargs)
+            if has_reasoning:
+                openrouter_kwargs["reasoning"] = {"effort": normalized_reasoning_effort}
+
+            log.info(f"Initializing openrouter with model: {model_name} (ChatOpenRouter)")
+            return ChatOpenRouter(model=model_name, api_key=api_key, **openrouter_kwargs)
+
+        # Compatibility fallback for environments missing langchain-openrouter.
+        log.warning(
+            "langchain-openrouter not available; falling back to OpenAI-compatible adapter."
+        )
+        actual_provider = "openai"
         kwargs["base_url"] = "https://openrouter.ai/api/v1"
+        if has_reasoning:
+            model_kwargs: Dict[str, Any] = dict(kwargs.get("model_kwargs") or {})
+            model_kwargs.setdefault("reasoning", {"effort": normalized_reasoning_effort})
+            kwargs["model_kwargs"] = model_kwargs
+
+    if has_reasoning and actual_provider != "openai":
+        kwargs["reasoning_effort"] = normalized_reasoning_effort
 
     log.info(f"Initializing {actual_provider} with model: {model_name}")
 

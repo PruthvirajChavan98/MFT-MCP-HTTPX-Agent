@@ -7,14 +7,17 @@ from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from langchain_openai import OpenAIEmbeddings
+from neo4j.exceptions import DriverError, Neo4jError, ServiceUnavailable, SessionExpired
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
 from src.common.neo4j_mgr import Neo4jManager
 
 log = logging.getLogger("eval_read_api")
 router = APIRouter()
+_EVAL_STORE = EvalNeo4jStore()
 
 # -----------------------------
 # Helpers
@@ -46,6 +49,83 @@ def _one(q: str, params: dict) -> Optional[dict]:
     with driver.session() as session:
         r = session.run(q, **params).single()  # type: ignore
         return dict(r) if r else None
+
+
+def _error_detail(code: str, message: str, *, operation: str, hint: Optional[str] = None) -> dict:
+    detail = {
+        "code": code,
+        "operation": operation,
+        "message": message,
+    }
+    if hint:
+        detail["hint"] = hint
+    return detail
+
+
+def _raise_eval_http_error(exc: Exception, operation: str) -> None:
+    msg = str(exc)
+    low = msg.lower()
+
+    if isinstance(exc, (ServiceUnavailable, SessionExpired, DriverError)) or (
+        "couldn't connect" in low
+        or "connection refused" in low
+        or "neo4j" in low
+        and "failed after" in low
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail=_error_detail(
+                "neo4j_unavailable",
+                msg,
+                operation=operation,
+                hint="Verify Neo4j container health and bolt connectivity on neo4j:7687.",
+            ),
+        ) from exc
+
+    if "index" in low and ("does not exist" in low or "no such index" in low):
+        raise HTTPException(
+            status_code=503,
+            detail=_error_detail(
+                "neo4j_index_missing",
+                msg,
+                operation=operation,
+                hint="Ensure eval Neo4j schema/indexes are initialized via /eval/ingest or startup migration.",
+            ),
+        ) from exc
+
+    if isinstance(exc, Neo4jError):
+        raise HTTPException(
+            status_code=500,
+            detail=_error_detail("neo4j_query_error", msg, operation=operation),
+        ) from exc
+
+    raise HTTPException(
+        status_code=500,
+        detail=_error_detail("eval_internal_error", msg, operation=operation),
+    ) from exc
+
+
+async def _run_rows_query(q: str, params: dict, operation: str) -> List[dict]:
+    try:
+        return await run_in_threadpool(_rows, q, params)
+    except Exception as exc:
+        _raise_eval_http_error(exc, operation)
+        raise  # pragma: no cover
+
+
+async def _run_one_query(q: str, params: dict, operation: str) -> Optional[dict]:
+    try:
+        return await run_in_threadpool(_one, q, params)
+    except Exception as exc:
+        _raise_eval_http_error(exc, operation)
+        raise  # pragma: no cover
+
+
+def _ensure_eval_schema(operation: str) -> None:
+    try:
+        _EVAL_STORE.ensure_schema()
+    except Exception as exc:
+        _raise_eval_http_error(exc, f"{operation}_ensure_schema")
 
 
 def _compress_events(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -127,6 +207,7 @@ async def eval_search(
     max_score: Optional[float] = None,
     order: Literal["desc", "asc"] = "desc",
 ):
+    _ensure_eval_schema("eval_search")
     order_dir = "DESC" if order.lower() == "desc" else "ASC"
     if metric_name:
         metric_name = metric_name.strip()
@@ -181,9 +262,9 @@ async def eval_search(
     ORDER BY t.started_at {order_dir} SKIP $offset LIMIT $limit
     """
 
-    total_row = await run_in_threadpool(_one, q_count, params)
+    total_row = await _run_one_query(q_count, params, "eval_search_count")
     total = int((total_row or {}).get("total") or 0)
-    items = await run_in_threadpool(_rows, q_items, params)
+    items = await _run_rows_query(q_items, params, "eval_search_items")
     return {"total": total, "limit": limit, "offset": offset, "items": items}
 
 
@@ -194,6 +275,7 @@ async def eval_search(
 async def eval_sessions(
     limit: int = Query(25), offset: int = Query(0), app_id: Optional[str] = None
 ):
+    _ensure_eval_schema("eval_sessions")
     where_clause = ""
     params = {"limit": limit, "offset": offset}
     if app_id and app_id.strip():
@@ -223,10 +305,10 @@ async def eval_sessions(
     SKIP $offset LIMIT $limit
     """
 
-    total_row = await run_in_threadpool(_one, q_count, params)
+    total_row = await _run_one_query(q_count, params, "eval_sessions_count")
     total = int((total_row or {}).get("total") or 0)
 
-    items = await run_in_threadpool(_rows, q_items, params)
+    items = await _run_rows_query(q_items, params, "eval_sessions_items")
     return {"total": total, "limit": limit, "offset": offset, "items": items}
 
 
@@ -235,8 +317,9 @@ async def eval_sessions(
 # -----------------------------
 @router.get("/trace/{trace_id}")
 async def eval_trace(trace_id: str):
+    _ensure_eval_schema("eval_trace")
     q = "MATCH (t:EvalTrace {trace_id: $trace_id}) OPTIONAL MATCH (t)-[:HAS_EVENT]->(e:EvalEvent) WITH t, e ORDER BY e.seq ASC WITH t, [x IN collect(CASE WHEN e IS NULL THEN null ELSE {event_key: e.event_key, trace_id: e.trace_id, seq: e.seq, ts: e.ts, event_type: e.event_type, name: e.name, text: e.text, payload_json: e.payload_json, meta_json: e.meta_json} END) WHERE x IS NOT NULL] AS events OPTIONAL MATCH (t)-[:HAS_EVAL]->(r:EvalResult) OPTIONAL MATCH (r)-[:EVIDENCE]->(ev:EvalEvent) WITH t, events, r, collect(ev.event_key) AS evidence_event_keys WITH t, events, [x IN collect(CASE WHEN r IS NULL THEN null ELSE {eval_id: r.eval_id, trace_id: r.trace_id, metric_name: r.metric_name, score: r.score, passed: r.passed, reasoning: r.reasoning, evaluator_id: r.evaluator_id, meta_json: r.meta_json, evidence_json: r.evidence_json, evidence_event_keys: evidence_event_keys} END) WHERE x IS NOT NULL] AS evals RETURN {trace_id: t.trace_id, case_id: t.case_id, session_id: t.session_id, provider: t.provider, model: t.model, endpoint: t.endpoint, started_at: t.started_at, ended_at: t.ended_at, latency_ms: t.latency_ms, status: t.status, error: t.error, inputs_json: t.inputs_json, final_output: t.final_output, tags_json: t.tags_json, meta_json: t.meta_json} AS trace, events AS events, evals AS evals"
-    row = await run_in_threadpool(_one, q, {"trace_id": trace_id})
+    row = await _run_one_query(q, {"trace_id": trace_id}, "eval_trace")
     if not row:
         raise HTTPException(status_code=404, detail="Trace not found")
     trace_obj = row["trace"]
@@ -265,14 +348,15 @@ async def eval_fulltext(
     offset: int = 0,
     trace_id: Optional[str] = None,
 ):
+    _ensure_eval_schema("eval_fulltext")
     index = {"event": "evalevent_text", "trace": "evaltrace_text", "result": "evalresult_text"}[
         kind
     ]
     cypher = "CALL db.index.fulltext.queryNodes($index, $q, {skip: $offset, limit: $limit}) YIELD node, score WHERE ($trace_id IS NULL OR node.trace_id = $trace_id) RETURN labels(node) AS labels, score AS score, node.trace_id AS trace_id, node.event_key AS event_key, node.seq AS seq, node.eval_id AS eval_id, node.metric_name AS metric_name, coalesce(node.text, node.final_output, node.reasoning) AS preview ORDER BY score DESC"
-    rows = await run_in_threadpool(
-        _rows,
+    rows = await _run_rows_query(
         cypher,
         {"index": index, "q": q, "limit": limit, "offset": offset, "trace_id": trace_id},
+        "eval_fulltext",
     )
     return {"index": index, "q": q, "limit": limit, "offset": offset, "items": rows}
 
@@ -285,6 +369,7 @@ async def eval_vector_search(
     req: VectorSearchRequest,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
+    _ensure_eval_schema("eval_vector_search")
     if not req.vector and not req.text:
         raise HTTPException(status_code=400, detail="Provide either 'vector' or 'text'")
 
@@ -293,13 +378,23 @@ async def eval_vector_search(
         key = (x_openrouter_key or OPENROUTER_API_KEY or "").strip()
         if not key:
             raise HTTPException(status_code=400, detail="No OpenRouter key available")
-        emb = OpenAIEmbeddings(
-            model="openai/text-embedding-3-small",
-            api_key=key,  # type: ignore
-            base_url=OPENROUTER_BASE_URL,
-            check_embedding_ctx_length=False,
-        )
-        vector = await emb.aembed_query(req.text or "")
+        try:
+            emb = OpenAIEmbeddings(
+                model="openai/text-embedding-3-small",
+                api_key=key,  # type: ignore
+                base_url=OPENROUTER_BASE_URL,
+                check_embedding_ctx_length=False,
+            )
+            vector = await emb.aembed_query(req.text or "")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=_error_detail(
+                    "embedding_provider_error",
+                    str(exc),
+                    operation="eval_vector_search_embed",
+                ),
+            ) from exc
 
     index = "evaltrace_embeddings" if req.kind == "trace" else "evalresult_embeddings"
     where = ["score >= $min_score"]
@@ -353,7 +448,7 @@ async def eval_vector_search(
     ORDER BY score DESC
     """
 
-    rows = await run_in_threadpool(_rows, cypher, params)
+    rows = await _run_rows_query(cypher, params, "eval_vector_search")
 
     out = []
     for r in rows:
@@ -397,6 +492,7 @@ async def eval_metrics_summary(
     model: Optional[str] = None,
     status: Optional[str] = None,
 ):
+    _ensure_eval_schema("eval_metrics_summary")
     # 1. Fetch grouped items via Cypher
     q = """
     MATCH (r:EvalResult)
@@ -416,10 +512,10 @@ async def eval_metrics_summary(
     ORDER BY metric_name ASC
     """
 
-    rows = await run_in_threadpool(
-        _rows,
+    rows = await _run_rows_query(
         q,
         {"metric_name": metric_name, "provider": provider, "model": model, "status": status},
+        "eval_metrics_summary",
     )
 
     # 2. Calculate totals in Python
@@ -450,6 +546,7 @@ async def eval_metrics_failures(
     model: Optional[str] = None,
     status: Optional[str] = None,
 ):
+    _ensure_eval_schema("eval_metrics_failures")
     if metric_name is not None:
         metric_name = metric_name.strip() or None
 
@@ -526,8 +623,7 @@ async def eval_metrics_failures(
           t.started_at AS started_at
         """
 
-    rows = await run_in_threadpool(
-        _rows,
+    rows = await _run_rows_query(
         q,
         {
             "limit": limit,
@@ -537,6 +633,7 @@ async def eval_metrics_failures(
             "model": model,
             "status": status,
         },
+        "eval_metrics_failures",
     )
 
     return {"limit": limit, "offset": offset, "items": rows}
@@ -544,7 +641,8 @@ async def eval_metrics_failures(
 
 @router.get("/question-types")
 async def question_types(limit: int = 200):
-    rows = Neo4jManager.execute_read(
+    _ensure_eval_schema("eval_question_types")
+    rows = await _run_rows_query(
         """
         MATCH (t:EvalTrace)
         WHERE t.started_at IS NOT NULL
@@ -553,6 +651,7 @@ async def question_types(limit: int = 200):
         ORDER BY n DESC
         """,
         {"limit": limit},
+        "eval_question_types",
     )
     total = sum(int(r["n"]) for r in rows) or 1
     items = [

@@ -26,7 +26,7 @@ def get_embeddings_model(api_key: str):
 
 def ingest_grounding_data(openrouter_key: str):
     # Reuse the same source data
-    json_path = os.path.join("data", "hfcl_faq_data.json")
+    json_path = os.path.join("data", "mft_faq_data.json")
     if not os.path.exists(json_path):
         print(f"❌ File not found: {json_path}")
         return

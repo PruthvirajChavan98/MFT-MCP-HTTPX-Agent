@@ -1,644 +1,469 @@
-# HFCL Agent Service API Reference
+# MFT Agent Service API Reference
 
-## Introduction
+This reference is aligned with the currently mounted routers in `src/main_agent.py`.
 
-This document provides a reference for the HFCL Agent Service API. The service provides a comprehensive set of endpoints for agent interaction, session management, and system evaluation.
+## Base URL
 
-**Base URLs:**
-- Development: `http://localhost:8000`
-- Docker: `http://localhost:8005`
+- Local: `http://localhost:8000`
+- Deployed: your API domain
 
----
+## Common Headers
 
-## Data Structures
+- `Content-Type: application/json`
+- `X-Admin-Key`: optional; required only if admin key enforcement is enabled
+- `X-OpenRouter-Key`: optional per-request key for selected endpoints
+- `X-Groq-Key`: optional per-request key for selected endpoints
+- `X-Eval-Ingest-Key`: required only if `EVAL_INGEST_KEY` is configured
 
-### TokenUsage
-
-Token consumption breakdown for LLM requests.
-
-```json
-{
-  "prompt_tokens": 150,
-  "completion_tokens": 75,
-  "total_tokens": 225,
-  "reasoning_tokens": 50,        // Optional: For DeepSeek R1, O1, Qwen reasoning models
-  "cached_tokens": 100            // Optional: Cache hits for Claude/Gemini prompt caching
-}
-```
-
-### CostBreakdown
-
-Complete cost breakdown with pricing details.
-
-```json
-{
-  "prompt_cost": 0.00015,
-  "completion_cost": 0.00020,
-  "reasoning_cost": 0.00010,      // Optional: Cost of reasoning tokens (when applicable)
-  "cached_cost": 0.00005,         // Optional: Cost of cached tokens (usually 50% discount)
-  "total_cost": 0.00050,
-  "model": "openai/gpt-4o",
-  "provider": "openrouter",
-  "currency": "USD",
-  "free_tier": false,             // Whether this request used free tier (Groq/NVIDIA)
-  "usage": { /* TokenUsage object */ },
-  "pricing_rates": {              // Per-token pricing rates
-    "prompt_per_token": 0.000001,
-    "completion_per_token": 0.0000027,
-    "prompt_per_1m": 1.00,
-    "completion_per_1m": 2.70
-  }
-}
-```
-
-### RouterResult
-
-Classification router output.
-
-```json
-{
-  "backend": "llm_glm_4.7",       // Backend used: "embeddings", "llm_glm_4.7", "hybrid"
-  "sentiment": {
-    "label": "positive",
-    "score": 0.85,
-    "top": [["positive", 0.85], ["neutral", 0.12]]
-  },
-  "reason": {                     // Optional: Classification reason/category
-    "label": "loan_inquiry",
-    "score": 0.92
-  },
-  "embeddings": { /* ... */ },    // Optional: Embeddings-based result
-  "llm": { /* ... */ },           // Optional: LLM-based result
-  "disabled": false               // Optional: Whether router is disabled
-}
-```
-
----
-
-## Core Agent API
-
-### Agent Interaction
-
-#### `POST /agent/query`
-
-- **Summary:** Submits a query to the agent and receives a complete, non-streamed response.
-- **Request Body:**
-  ```json
-  {
-    "session_id": "sess_12345",
-    "question": "What is the capital of France?"
-  }
-  ```
-- **Success Response (200):**
-  ```json
-  {
-    "response": { /* Agent response object */ },
-    "router": { /* RouterResult object (optional) */ },
-    "provider": "openrouter",
-    "kb_first": false                          // Optional: true if response from KB guardrail
-  }
-  ```
-- **Alternative Response (KB-First Cached):**
-  ```json
-  {
-    "response": "Answer from knowledge base",
-    "kb_first": true,
-    "router": { /* ... */ }
-  }
-  ```
-
-#### `POST /agent/stream`
-
-- **Summary:** Submits a query and receives a streamed response using Server-Sent Events (SSE). The stream includes tokens, tool calls, and cost information.
-- **Request Body:**
-  ```json
-  {
-    "session_id": "sess_12345",
-    "question": "What is the capital of France?"
-  }
-  ```
-- **SSE Events:**
-  - `token`: A text token from the response.
-  - `reasoning_token`: A token related to the agent's reasoning process.
-  - `tool_start`: Indicates the start of a tool call.
-  - `tool_end`: Indicates the end of a tool call.
-  - `cost`: Provides detailed cost information for the request.
-    ```json
-    {
-      "total_cost": 0.002,
-      "usage": {
-        "prompt_tokens": 150,
-        "completion_tokens": 75,
-        "total_tokens": 225,
-        "reasoning_tokens": 20,              // Optional: for reasoning models
-        "cached_tokens": 50                  // Optional: for cache hits
-      },
-      "model": "openai/gpt-4o",
-      "provider": "openrouter",
-      "currency": "USD",
-      "cached": false                        // Whether prompt caching was used
-    }
-    ```
-  - `router`: Contains the output of the classification router (RouterResult object).
-  - `done`: Indicates the end of the stream.
-  - `error`: Sent if an error occurs during the stream.
-
-### Follow-Up Questions
-
-#### `POST /agent/follow-up`
-
-- **Summary:** Generates a list of suggested follow-up questions based on the conversation history.
-- **Request Body:**
-  ```json
-  {
-    "session_id": "sess_12345",
-    "question": "What was the previous topic?"
-  }
-  ```
-- **Success Response (200):**
-  ```json
-  {
-    "questions": [
-      "Can you elaborate on that?",
-      "What are the alternatives?"
-    ],
-    "provider": "openrouter"
-  }
-  ```
-
-#### `POST /agent/follow-up-stream`
-
-- **Summary:** Generates and streams follow-up questions as they are created.
-- **Request Body:**
-  ```json
-  {
-    "session_id": "sess_12345",
-    "question": "What was the previous topic?"
-  }
-  ```
-- **SSE Events:**
-  - `question`: A suggested follow-up question.
-  - `done`: Indicates the end of the stream.
-  - `error`: Sent if an error occurs.
-
----
-
-## System & Configuration
+## Health and Monitoring
 
 ### `GET /health`
 
-- **Summary:** A simple health check endpoint.
-- **Success Response (200):**
-  ```json
-  {
-    "status": "healthy",
-    "service": "agent",
-    "version": "2.0.0"
-  }
-  ```
+Basic health check.
 
-### `GET /agent/models`
+Example response:
 
-- **Summary:** Lists all available models from the catalog, grouped by provider.
-- **Success Response (200):**
-  ```json
-  {
-    "count": 132,
-    "categories": [
-      {
-        "name": "openrouter",
-        "models": [
-          {
-            "id": "openai/gpt-4o",
-            "name": "gpt-4o",
-            "provider": "openrouter",
-            "context_length": 128000,
-            "pricing": {
-              "prompt": 5.0,              // USD per 1M tokens
-              "completion": 15.0,
-              "unit": "1M tokens"
-            },
-            "supported_parameters": ["temperature", "max_tokens", "top_p"],
-            "modality": "text",           // "text", "multimodal", etc.
-            "type": "chat"                // "chat", "reasoning", etc.
-          }
-        ]
-      }
-    ]
-  }
-  ```
+```json
+{
+  "status": "healthy",
+  "service": "agent",
+  "version": "2.0.0",
+  "timestamp": 1739836800
+}
+```
 
-**Note**: The GraphQL endpoint at `/graphql` provides access to additional model metadata including `parameter_specs` and `architecture` details.
+### `GET /health/live`
 
-### `POST /graphql`
+Liveness probe.
 
-- **Summary:** A GraphQL endpoint for querying model information.
-- **Query Example:**
-  ```graphql
-  query {
-    models(provider: "openrouter") {
-      name
-      models {
-        id
-        name
-        provider
-      }
-    }
-  }
-  ```
+```json
+{
+  "status": "alive",
+  "service": "agent"
+}
+```
 
----
+### `GET /health/ready`
 
-## Session Management & Costing
+Readiness probe with dependency checks (`redis`, optional `postgres`, optional `tor_exit_list`).
+
+### `GET /metrics`
+
+Prometheus metrics endpoint. Returns `404` if metrics are disabled.
+
+## Agent Endpoints
+
+### `POST /agent/query`
+
+Non-streaming agent response.
+
+Request:
+
+```json
+{
+  "session_id": "sess_123",
+  "question": "What are foreclosure charges?"
+}
+```
+
+Response:
+
+```json
+{
+  "response": "...",
+  "provider": "openrouter",
+  "model": "z-ai/glm-5",
+  "kb_first": false,
+  "router": {}
+}
+```
+
+Notes:
+
+- `router` is only present when inline router is enabled and exposed.
+- `kb_first=true` indicates answer served directly from KB shortcut path.
+
+### `POST /agent/stream`
+
+Server-Sent Events stream.
+
+Request:
+
+```json
+{
+  "session_id": "sess_123",
+  "question": "customer care"
+}
+```
+
+Public SSE events:
+
+- `reasoning` (optional; controlled by `AGENT_STREAM_EXPOSE_REASONING`)
+- `tool_call`
+- `token`
+- `router` (optional; only if inline router expose is enabled)
+- `cost`
+- `done`
+- `error`
+
+Event payloads:
+
+- `reasoning`:
+
+```text
+<string token/chunk>
+```
+
+- `tool_call`:
+
+```json
+{
+  "name": "tool_name",
+  "output": "tool output",
+  "tool_call_id": "run-id"
+}
+```
+
+- `token`:
+
+```text
+<string token/chunk>
+```
+
+- `cost`:
+
+```json
+{
+  "total_cost": 0.001529,
+  "usage": {
+    "prompt_tokens": 1519,
+    "completion_tokens": 275,
+    "total_tokens": 1794,
+    "reasoning_tokens": 146
+  },
+  "model": "z-ai/glm-5",
+  "provider": "openrouter",
+  "currency": "USD"
+}
+```
+
+- `done`:
+
+```json
+{
+  "status": "complete"
+}
+```
+
+- `error`:
+
+```json
+{
+  "message": "..."
+}
+```
+
+Debug-only internal lifecycle events (only when `AGENT_STREAM_EXPOSE_INTERNAL_EVENTS=true`):
+
+- `on_chat_model_start`, `on_chat_model_stream`, `on_chat_model_end`
+- `on_tool_start`, `on_tool_end`
+- `on_chain_start`, `on_chain_stream`, `on_chain_end`
+- `on_llm_start`, `on_llm_stream`, `on_llm_end`
+- `on_retriever_start`, `on_retriever_end`
+- `on_prompt_start`, `on_prompt_end`
+
+### `POST /agent/follow-up`
+
+Generate follow-up questions (non-streaming).
+
+Request:
+
+```json
+{
+  "session_id": "sess_123",
+  "question": "I want better EMI options"
+}
+```
+
+Response:
+
+```json
+{
+  "questions": ["...", "..."],
+  "provider": "openrouter"
+}
+```
+
+### `POST /agent/follow-up-stream`
+
+SSE follow-up generation.
+
+Events:
+
+- `status` (plain text status)
+- `token` (JSON string payload: `{"index": <int>, "token": "..."}`)
+- `done` (data: `[DONE]`)
+- `error`
+
+## Session and Cost Endpoints
 
 ### `GET /agent/sessions`
 
-- **Summary:** Lists all active session IDs.
+List active sessions.
 
 ### `GET /agent/verify/{session_id}`
 
-- **Summary:** Checks if a session exists.
+Verify a session exists.
 
 ### `GET /agent/config/{session_id}`
 
-- **Summary:** Retrieves the configuration for a specific session.
-- **Success Response (200):**
-  ```json
-  {
-    "session_id": "sess_xxx",
-    "system_prompt": "string",
-    "model_name": "string",
-    "reasoning_effort": "string or null",               // Reasoning effort level
-    "has_openrouter_key": false,                        // Whether OpenRouter key configured
-    "has_nvidia_key": false,                            // Whether NVIDIA key configured
-    "has_groq_key": false,                              // Whether Groq key configured
-    "provider": "string or null",
-    "is_customized": true                               // Whether session has custom config
-  }
-  ```
+Get effective session config and key-presence flags.
 
 ### `POST /agent/config`
 
-- **Summary:** Creates or updates a session's configuration.
-- **Request Body:**
-  ```json
-  {
-    "session_id": "sess_12345",
-    "system_prompt": "You are a helpful assistant.",    // Optional
-    "model_name": "openai/gpt-4o",                      // Optional
-    "reasoning_effort": "high",                         // Optional: For O1/DeepSeek reasoning models
-    "provider": "openrouter",                           // Optional: "groq", "openrouter", "nvidia"
-    "openrouter_api_key": "sk-or-...",                  // Optional: Bring your own key
-    "nvidia_api_key": "nvapi-...",                      // Optional: NVIDIA API key
-    "groq_api_key": "gsk_..."                           // Optional: Groq API key
-  }
-  ```
+Create/update session config.
+
+Request model:
+
+```json
+{
+  "session_id": "sess_123",
+  "system_prompt": "optional",
+  "model_name": "optional",
+  "reasoning_effort": "optional",
+  "provider": "groq | openrouter | nvidia",
+  "openrouter_api_key": "optional",
+  "nvidia_api_key": "optional",
+  "groq_api_key": "optional"
+}
+```
 
 ### `DELETE /agent/logout/{session_id}`
 
-- **Summary:** Deletes a session's configuration.
+Delete session config.
 
-### Costing Endpoints
+### `GET /agent/sessions/{session_id}/cost`
 
-#### `GET /agent/sessions/{session_id}/cost`
+Aggregate cost and usage for session.
 
-Get aggregate cost for a session with detailed breakdown.
+### `GET /agent/sessions/{session_id}/cost/history`
 
-- **Success Response (200):**
-  ```json
-  {
-    "session_id": "sess_xxx",
-    "total_cost": 0.025,
-    "total_requests": 15,
-    "total_tokens": 12500,
-    "total_prompt_tokens": 8000,
-    "total_completion_tokens": 4000,
-    "total_reasoning_tokens": 500,              // Reasoning tokens across all requests
-    "total_cached_tokens": 2000,                // Cache hits across all requests
-    "by_model": {
-      "openai/gpt-4o": {
-        "cost": 0.015,
-        "requests": 10,
-        "tokens": 10000,
-        "prompt_tokens": 6000,
-        "completion_tokens": 3500,
-        "reasoning_tokens": 500
-      }
-    },
-    "by_provider": {
-      "openrouter": {
-        "cost": 0.015,
-        "requests": 10,
-        "tokens": 10000,
-        "free_tier": false
-      },
-      "groq": {
-        "cost": 0.0,
-        "requests": 5,
-        "tokens": 2500,
-        "free_tier": true                      // Groq free tier usage
-      }
-    },
-    "first_request_at": "2024-01-15T10:30:00Z",
-    "last_request_at": "2024-01-15T14:45:00Z",
-    "version": "1.0",
-    "average_cost_per_request": 0.00167       // Computed average
-  }
-  ```
+Chronological cost history (`limit` query param, `1..1000`, default `100`).
 
-#### `GET /agent/sessions/{session_id}/cost/history`
+### `DELETE /agent/sessions/{session_id}/cost`
 
-Get chronological cost history for a session.
+Reset session cost data.
 
-- **Parameters:**
-  - Query: `limit` (int, 1-1000, default=100) - Maximum entries to return
+### `GET /agent/sessions/summary`
 
-- **Success Response (200):**
-  ```json
-  {
-    "session_id": "sess_xxx",
-    "history": [
-      {
-        "timestamp": "2024-01-15T10:30:00Z",
-        "cost": 0.002,
-        "model": "openai/gpt-4o",
-        "provider": "openrouter",
-        "usage": {
-          "prompt_tokens": 150,
-          "completion_tokens": 75,
-          "total_tokens": 225,
-          "reasoning_tokens": 20,            // Present if > 0
-          "cached_tokens": 50                // Present if > 0
-        },
-        "metadata": {}
-      }
-    ],
-    "count": 15
-  }
-  ```
+Cross-session cost summary.
 
-#### `DELETE /agent/sessions/{session_id}/cost`
+### `DELETE /agent/sessions/cleanup`
 
-Reset cost tracking for a session.
+Admin cleanup for corrupted cost keys.
 
-- **Success Response (200):**
-  ```json
-  {
-    "session_id": "sess_xxx",
-    "status": "reset",
-    "message": "Cost tracking reset successfully"
-  }
-  ```
+## Model and Router Endpoints
 
-#### `GET /agent/sessions/summary`
+### `GET /agent/models`
 
-Get a cost summary for all sessions.
-
-- **Success Response (200):**
-  ```json
-  {
-    "active_sessions": 10,
-    "total_cost": 0.125,
-    "total_requests": 150,
-    "sessions": [
-      {
-        "session_id": "sess_xxx",
-        "total_cost": 0.025,
-        "total_requests": 15,
-        "last_request_at": "2024-01-15T14:45:00Z"
-      }
-    ]
-  }
-  ```
-
-#### `DELETE /agent/sessions/cleanup`
-
-Admin endpoint to clean up corrupted cost keys.
-
-- **Success Response (200):**
-  ```json
-  {
-    "status": "cleanup_complete",
-    "deleted_keys": 5,
-    "keys": ["key1", "key2"]
-  }
-  ```
-
----
-
-## Router API
+Returns model catalog grouped by provider.
 
 ### `POST /agent/router/classify`
 
-- **Summary:** Classifies a query using the NBFC router.
+Classify query with NBFC router.
+
+Request:
+
+```json
+{
+  "session_id": "optional",
+  "text": "query text",
+  "mode": "embeddings | llm | hybrid | compare",
+  "openrouter_api_key": "optional"
+}
+```
 
 ### `POST /agent/router/compare`
 
-- **Summary:** Compares router classifications.
+Compare router backends for same input.
 
----
+## Admin / FAQ Endpoints
 
-## Admin API
+### `GET /agent/all-follow-ups`
 
-### Authentication Headers
+Get cached follow-up datasets.
 
-Admin endpoints support optional authentication headers:
+### `POST /agent/admin/faqs/batch-json`
 
-- **`X-Admin-Key`**: Admin authentication key (required if `ADMIN_KEY` environment variable is set)
-- **`X-OpenRouter-Key`**: OpenRouter API key for embedding/LLM operations
-- **`X-Groq-Key`**: Groq API key for embedding/LLM operations
-- **`X-Eval-Ingest-Key`**: Evaluation ingest authentication key (required if `EVAL_INGEST_KEY` is set)
+Batch FAQ ingest via JSON.
 
-**Example:**
-```bash
-curl -X POST /agent/admin/faqs/batch-json \
-  -H "X-Admin-Key: your-admin-key" \
-  -H "X-OpenRouter-Key: your-or-key" \
-  -d '{"items": [...]}'
-```
+Headers used by implementation:
 
-### Follow-ups
+- `X-Admin-Key`
+- `X-Groq-Key`
+- `X-OpenRouter-Key`
 
-#### `GET /agent/all-follow-ups`
+### `POST /agent/admin/faqs/upload-pdf`
 
-- **Summary:** Retrieves all cached follow-up questions.
+PDF FAQ ingest with SSE progress events.
 
-### Knowledge Base (FAQ) Management
+### `GET /agent/admin/faqs`
 
-#### `POST /agent/admin/faqs/batch-json`
+List FAQs (`limit`, `skip`).
 
-Ingests a batch of FAQs from a JSON object.
+### `PUT /agent/admin/faqs`
 
-- **Headers:**
-  - `X-Admin-Key` (optional, required if admin key configured)
-  - `X-Groq-Key` (optional, for embeddings)
-  - `X-OpenRouter-Key` (optional, for embeddings)
+Edit FAQ.
 
-#### `POST /agent/admin/faqs/upload-pdf`
+### `DELETE /agent/admin/faqs`
 
-Ingests FAQs from a PDF file.
+Delete FAQ by exact `question` query param.
 
-- **Headers:**
-  - `X-Admin-Key` (optional, required if admin key configured)
-  - `X-Groq-Key` (optional, for embeddings)
-  - `X-OpenRouter-Key` (optional, for embeddings)
+### `DELETE /agent/admin/faqs/all`
 
-#### `GET /agent/admin/faqs`
+Delete all FAQs.
 
-Retrieves all FAQs.
+### `POST /agent/admin/faqs/semantic-search`
 
-- **Parameters:**
-  - Query: `limit` (int, 1-1000, default=100) - Maximum FAQs to return
-  - Query: `skip` (int, >=0, default=0) - Number of FAQs to skip (pagination)
+Semantic FAQ search.
 
-#### `PUT /agent/admin/faqs`
+### `POST /agent/admin/faqs/semantic-delete`
 
-Edits an existing FAQ.
+Semantic FAQ delete.
 
-- **Headers:**
-  - `X-Admin-Key` (optional, required if admin key configured)
-  - `X-OpenRouter-Key` (optional, for embeddings)
+Error handling:
 
-#### `DELETE /agent/admin/faqs`
+- `400` for missing key / invalid request shape
+- `503` when Neo4j is unavailable
+- `500` for generic KB operation failures
 
-Deletes an FAQ by its question.
+## Evaluation Endpoints (`/eval`)
 
-- **Headers:**
-  - `X-Admin-Key` (optional, required if admin key configured)
-- **Parameters:**
-  - Query: `question` (string, required) - Exact question text to delete
+Mounted endpoints:
 
-#### `DELETE /agent/admin/faqs/all`
-
-Clears all FAQs from the knowledge base.
-
-- **Headers:**
-  - `X-Admin-Key` (optional, required if admin key configured)
-
-#### `POST /agent/admin/faqs/semantic-search`
-
-Performs a semantic search on the FAQs.
-
-- **Headers:**
-  - `X-OpenRouter-Key` (optional, for embeddings)
-
-#### `POST /agent/admin/faqs/semantic-delete`
-
-Deletes an FAQ based on a semantic query.
-
-- **Headers:**
-  - `X-Admin-Key` (optional, required if admin key configured)
-  - `X-OpenRouter-Key` (optional, for embeddings)
-
----
-
-## Evaluation API (`/eval` prefix)
+- `POST /eval/ingest`
+- `GET /eval/search`
+- `GET /eval/sessions`
+- `GET /eval/trace/{trace_id}`
+- `GET /eval/fulltext`
+- `POST /eval/vector-search`
+- `GET /eval/metrics/summary`
+- `GET /eval/metrics/failures`
+- `GET /eval/question-types`
 
 ### `POST /eval/ingest`
 
-- **Summary:** Ingests evaluation data, including traces, events, and results.
-- **Headers:**
-  - `X-Eval-Ingest-Key` (required if `EVAL_INGEST_KEY` environment variable is set)
+Ingest trace/events/evals.
 
-- **Request Body:**
-  ```json
-  {
-    "trace": {
-      "trace_id": "trace_abc123",         // Required
-      "status": "completed",              // Optional: "completed", "failed", "running"
-      "started_at": "2024-01-15T10:30:00Z",
-      "provider": "openrouter",
-      "model": "openai/gpt-4o",
-      "endpoint": "/agent/query",
-      "session_id": "sess_12345",
-      "case_id": "test_case_001"
-    },
-    "events": [
-      {
-        "trace_id": "trace_abc123",
-        "seq": 1,
-        "ts": "2024-01-15T10:30:01Z",
-        "event_type": "llm_request",
-        "name": "query_start",
-        "text": "User asked: What is the capital?",
-        "payload": {},                   // Additional data
-        "meta": {}                       // Metadata
-      }
-    ],
-    "evals": [
-      {
-        "eval_id": "eval_xyz789",
-        "trace_id": "trace_abc123",
-        "metric_name": "accuracy",
-        "score": 0.95,
-        "passed": true,
-        "reasoning": "Response was factually correct",
-        "evaluator_id": "gpt-4o-judge",
-        "evidence": [],
-        "meta": {}
-      }
-    ]
+Response:
+
+```json
+{
+  "status": "ok",
+  "trace_id": "trace_123",
+  "events": 5,
+  "evals": 2
+}
+```
+
+### `GET /eval/search`
+
+Supports filters: `session_id`, `status`, `provider`, `model`, `case_id`, `metric_name`, `passed`, score ranges, ordering.
+
+### `GET /eval/sessions`
+
+Session-level summaries for traces.
+
+### `GET /eval/trace/{trace_id}`
+
+Detailed trace with compressed events and eval records.
+
+### `GET /eval/fulltext`
+
+Fulltext search by index kind (`event | trace | result`).
+
+### `POST /eval/vector-search`
+
+Vector similarity search over traces or eval results.
+
+Request model:
+
+```json
+{
+  "kind": "trace | result",
+  "text": "optional if vector provided",
+  "vector": [0.1, 0.2],
+  "k": 10,
+  "min_score": 0.0,
+  "provider": "optional",
+  "model": "optional",
+  "status": "optional",
+  "metric_name": "optional",
+  "passed": true,
+  "session_id": "optional",
+  "case_id": "optional"
+}
+```
+
+Notes:
+
+- If `vector` is omitted, service embeds `text` using OpenRouter and `X-OpenRouter-Key` (or server key).
+- Returns `400` when neither `vector` nor `text` is provided.
+- Returns `400` when embedding key is unavailable.
+
+### `GET /eval/metrics/summary`
+
+Aggregated pass-rate and score summaries.
+
+### `GET /eval/metrics/failures`
+
+Failure list with provider/model/session context.
+
+### `GET /eval/question-types`
+
+Distribution by router reason class.
+
+Evaluation error body pattern:
+
+```json
+{
+  "detail": {
+    "code": "neo4j_unavailable",
+    "operation": "eval_search_items",
+    "message": "...",
+    "hint": "Verify Neo4j container health and bolt connectivity on neo4j:7687."
   }
-  ```
+}
+```
 
-- **Success Response (200):**
-  ```json
-  {
-    "status": "ok",
-    "trace_id": "trace_abc123",
-    "events": 5,
-    "evals": 2
-  }
-  ```
+## Rate Limiting Endpoints (`/rate-limit`)
 
-- **Error Codes:**
-  - `400`: Missing required trace_id
-  - `401`: Invalid or missing X-Eval-Ingest-Key
+### `GET /rate-limit/metrics`
 
-### `GET /eval/live`
+Returns live limiter metrics.
 
-- **Summary:** Provides a real-time SSE feed of ingested evaluation traces.
-- **Parameters:**
-  - Query: `cursor` (string, default="$") - Redis stream cursor. Use "$" for only new events, "0-0" to replay all.
-  - Header: `Last-Event-ID` (optional) - Resume from last received event ID
+### `GET /rate-limit/status/{identifier}`
 
-- **SSE Events:**
-  - `hello`: Connection confirmation
-    ```json
-    {
-      "stream": "eval:live",
-      "cursor": "1234567890-0"
-    }
-    ```
-  - `trace`: New trace ingested
-    ```json
-    {
-      "id": "1234567890-0",
-      "trace_id": "trace_abc123",
-      "status": "completed",
-      "provider": "openrouter",
-      "model": "openai/gpt-4o",
-      "endpoint": "/agent/query",
-      "session_id": "sess_12345",
-      "case_id": "test_case_001",
-      "event_count": 5,
-      "eval_count": 2,
-      "pass_count": 2,
-      "pass_rate": 1.0
-    }
-    ```
-  - `error`: Error occurred
+Returns limiter status for an identifier.
 
-### Evaluation Data Retrieval
+### `POST /rate-limit/reset/{identifier}`
 
-- **`GET /eval/search`**: Searches for evaluation traces with various filters.
-- **`GET /eval/sessions`**: Lists sessions that have evaluation traces.
-- **`GET /eval/trace/{trace_id}`**: Retrieves a specific trace by its ID.
-- **`GET /eval/fulltext`**: Performs a full-text search on evaluation data.
-- **`POST /eval/vector-search`**: Performs a vector-based search on traces or results.
+Resets limiter state for an identifier.
 
-### Evaluation Metrics
+### `GET /rate-limit/health`
 
-- **`GET /eval/metrics/summary`**: Get a summary of evaluation metrics.
-- **`GET /eval/metrics/failures`**: Get a list of failed evaluations.
-- **`GET /eval/question-types`**: Get statistics on the types of questions evaluated.
+Health probe for rate limit infrastructure.
+
+### `GET /rate-limit/config`
+
+Returns effective rate-limit configuration.
+
+## GraphQL Endpoint
+
+### `GET /graphql`
+
+GraphQL IDE (when enabled by deployment).
+
+### `POST /graphql`
+
+GraphQL query/mutation endpoint.

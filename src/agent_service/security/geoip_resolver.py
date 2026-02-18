@@ -6,6 +6,7 @@ import ipaddress
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from src.agent_service.security.session_security import GeoLocation
 
@@ -17,6 +18,7 @@ class MaxMindGeoLiteResolver:
     """GeoIP resolver backed by a local GeoLite2 City MMDB file."""
 
     db_path: str
+    _reader: Any = None
 
     def __post_init__(self) -> None:
         self._reader = None
