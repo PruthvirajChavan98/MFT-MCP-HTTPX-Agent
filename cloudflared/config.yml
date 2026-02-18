@@ -1,8 +1,4 @@
 ingress:
-  - hostname: agent.pruthvirajchavan.codes
-    service: http://agent:8000
-  - hostname: mcp.pruthvirajchavan.codes
-    service: http://mcp:8050
-  - hostname: redis.pruthvirajchavan.codes
-    service: tcp://redis:6379
+  - hostname: frontend.pruthvirajchavan.codes
+    service: http://frontend:5173
   - service: http_status:404

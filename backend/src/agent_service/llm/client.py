@@ -7,6 +7,7 @@ from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
+from pydantic import SecretStr
 
 try:
     from langchain_openrouter import ChatOpenRouter
@@ -100,7 +101,7 @@ def get_llm(
                 openrouter_kwargs["reasoning"] = {"effort": normalized_reasoning_effort}
 
             log.info(f"Initializing openrouter with model: {model_name} (ChatOpenRouter)")
-            return ChatOpenRouter(model=model_name, api_key=api_key, **openrouter_kwargs)
+            return ChatOpenRouter(model=model_name, api_key=SecretStr(api_key) if api_key else None, **openrouter_kwargs)
 
         # Compatibility fallback for environments missing langchain-openrouter.
         log.warning(

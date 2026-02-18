@@ -39,7 +39,7 @@ services:
       retries: 5
     volumes:
       - postgres_data_local:/var/lib/postgresql/data
-      - ./infra/sql/session_security.sql:/docker-entrypoint-initdb.d/01_session_security.sql:ro
+      - ./backend/infra/sql/session_security.sql:/docker-entrypoint-initdb.d/01_session_security.sql:ro
     mem_limit: 1g
     cpus: 1.00
     networks:
@@ -71,7 +71,7 @@ services:
 
   mcp:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: mft_mcp:local
     container_name: mft_mcp_local
@@ -80,12 +80,12 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_MCP_PORT:-18050}:8050"
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
     volumes:
-      - .:/app
+      - ./backend:/app
     depends_on:
       redis:
         condition: service_healthy
@@ -108,7 +108,7 @@ services:
 
   agent:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: mft_agent:local
     container_name: mft_agent_local
@@ -128,7 +128,7 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_AGENT_PORT:-18000}:8000"
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       PORT: "8000"
       PYTHONUNBUFFERED: "1"
@@ -192,8 +192,8 @@ services:
       PROMETHEUS_METRICS_ENABLED: "true"
       GEOIP_DB_PATH: "/app/data/geoip/GeoLite2-City.mmdb"
     volumes:
-      - .:/app
-      - ./data/geoip:/app/data/geoip
+      - ./backend:/app
+      - ./backend/data/geoip:/app/data/geoip
     depends_on:
       redis:
         condition: service_healthy
@@ -218,7 +218,7 @@ services:
 
   localsetup:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: mft_localsetup:local
     container_name: mft_localsetup
@@ -230,7 +230,7 @@ services:
     profiles: ["setup"]
     restart: "no"
     volumes:
-      - .:/app
+      - ./backend:/app
     depends_on:
       redis:
         condition: service_started
@@ -250,21 +250,21 @@ services:
   router_worker:
     profiles: ["router"]
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: mft_router_worker:local
     container_name: mft_router_worker_local
     command: ["uv", "run", "python", "-m", "src.agent_service.router.worker"]
     restart: unless-stopped
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       REDIS_URL: "redis://redis:6379/0"
       NEO4J_URI: "bolt://neo4j:7687"
       NEO4J_USER: "neo4j"
       NEO4J_PASSWORD: "password"
     volumes:
-      - .:/app
+      - ./backend:/app
     depends_on:
       redis:
         condition: service_healthy
@@ -286,8 +286,8 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_PROMETHEUS_PORT:-19090}:9090"
     volumes:
-      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./backend/infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./backend/infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data_local:/prometheus
     depends_on:
       agent:
@@ -309,7 +309,7 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_ALERTMANAGER_PORT:-19093}:9093"
     volumes:
-      - ./infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./backend/infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.50
@@ -328,9 +328,9 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data_local:/var/lib/grafana
-      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./backend/infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./backend/infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./backend/infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       prometheus:
         condition: service_started
@@ -343,7 +343,7 @@ services:
   geoip_updater:
     profiles: ["geoip"]
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: mft_geoip_updater:local
     container_name: mft_geoip_updater_local
@@ -355,11 +355,40 @@ services:
       MAXMIND_LICENSE_KEY: "${MAXMIND_LICENSE_KEY}"
       IP2PROXY_LITE_URL: "${IP2PROXY_LITE_URL}"
     volumes:
-      - ./data/geoip:/app/data/geoip
-      - ./scripts/update_free_geoip.sh:/app/scripts/update_free_geoip.sh:ro
+      - ./backend/data/geoip:/app/data/geoip
+      - ./backend/scripts/update_free_geoip.sh:/app/scripts/update_free_geoip.sh:ro
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.25
+    networks:
+      - mft_local
+
+  frontend:
+    image: node:20-alpine
+    container_name: mft_frontend_local
+    working_dir: /app
+    command: ["sh", "-lc", "npm install && npm run dev -- --host 0.0.0.0 --port 5173"]
+    environment:
+      VITE_API_PROXY_TARGET: "http://agent:8000"
+      VITE_API_BASE_URL: "/api"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules_local:/app/node_modules
+    ports:
+      - "127.0.0.1:${LOCAL_FRONTEND_PORT:-15173}:5173"
+    depends_on:
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173 >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.00
     networks:
       - mft_local
 
@@ -368,13 +397,12 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: mft_cloudflared_local
     env_file:
-      - .env
+      - ./backend/.env
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
     depends_on:
-      - agent
-      - mcp
+      - frontend
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.50
@@ -391,3 +419,4 @@ volumes:
   neo4j_data_local:
   prometheus_data_local:
   grafana_data_local:
+  frontend_node_modules_local:

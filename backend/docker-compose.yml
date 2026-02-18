@@ -31,7 +31,7 @@ services:
       retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/infra/sql/session_security.sql:/docker-entrypoint-initdb.d/01_session_security.sql:ro
+      - ./infra/sql/session_security.sql:/docker-entrypoint-initdb.d/01_session_security.sql:ro
     mem_limit: 1g
     cpus: 1.00
     networks:
@@ -73,7 +73,7 @@ services:
 
   mcp:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       cache_from:
         - mft_mcp:latest
@@ -83,7 +83,7 @@ services:
     ports:
       - "127.0.0.1:8050:8050"
     env_file:
-      - ./backend/.env
+      - .env
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
@@ -100,7 +100,7 @@ services:
 
   agent:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       cache_from:
         - mft_agent:latest
@@ -120,7 +120,7 @@ services:
     ports:
       - "127.0.0.1:8005:8000"
     env_file:
-      - ./backend/.env
+      - .env
     environment:
       PORT: "8000"
       GUNICORN_WORKERS: "4"
@@ -194,7 +194,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./backend/data/geoip:/app/data/geoip
+      - ./data/geoip:/app/data/geoip
     restart: unless-stopped
     mem_limit: 2g
     cpus: 2.00
@@ -203,7 +203,7 @@ services:
 
   router_worker:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       cache_from:
         - mft_router_worker:latest
@@ -211,7 +211,7 @@ services:
     container_name: mft_router_worker
     command: ["python", "-m", "src.agent_service.router.worker"]
     env_file:
-      - ./backend/.env
+      - .env
     environment:
       REDIS_URL: "redis://redis:6379/0"
       NEO4J_URI: "bolt://neo4j:7687"
@@ -238,8 +238,8 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./backend/infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./backend/infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     depends_on:
       agent:
@@ -260,7 +260,7 @@ services:
     ports:
       - "127.0.0.1:9093:9093"
     volumes:
-      - ./backend/infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.50
@@ -278,9 +278,9 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./backend/infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./backend/infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./backend/infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       prometheus:
         condition: service_started
@@ -292,7 +292,7 @@ services:
 
   geoip_updater:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: mft_geoip_updater
     command: ["/bin/bash", "-lc", "while true; do /app/scripts/update_free_geoip.sh; sleep 86400; done"]
@@ -303,44 +303,11 @@ services:
       MAXMIND_LICENSE_KEY: "${MAXMIND_LICENSE_KEY}"
       IP2PROXY_LITE_URL: "${IP2PROXY_LITE_URL}"
     volumes:
-      - ./backend/data/geoip:/app/data/geoip
-      - ./backend/scripts/update_free_geoip.sh:/app/scripts/update_free_geoip.sh:ro
+      - ./data/geoip:/app/data/geoip
+      - ./scripts/update_free_geoip.sh:/app/scripts/update_free_geoip.sh:ro
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.25
-    networks:
-      - mft_network
-
-  frontend:
-    image: node:20-alpine
-    container_name: mft_frontend
-    working_dir: /app
-    command:
-      [
-        "sh",
-        "-lc",
-        "npm ci && npm run build && npm run preview -- --host 0.0.0.0 --port 5173",
-      ]
-    environment:
-      VITE_API_PROXY_TARGET: "http://agent:8000"
-      VITE_API_BASE_URL: "/api"
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-    ports:
-      - "127.0.0.1:${FRONTEND_PORT:-14173}:5173"
-    depends_on:
-      agent:
-        condition: service_started
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173 >/dev/null"]
-      interval: 20s
-      timeout: 5s
-      retries: 10
-      start_period: 25s
-    restart: unless-stopped
-    mem_limit: 512m
-    cpus: 1.00
     networks:
       - mft_network
 
@@ -348,12 +315,13 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: mft_cloudflared
     env_file:
-      - ./backend/.env
+      - .env
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
     depends_on:
-      - frontend
+      - agent
+      - mcp
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.50
@@ -369,4 +337,3 @@ volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
-  frontend_node_modules:
