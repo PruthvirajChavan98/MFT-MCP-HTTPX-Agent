@@ -7,7 +7,14 @@
 
 ## Backend
 
-Run all backend commands from `backend/`.
+Run backend application commands from `backend/`.
+
+Compose orchestration is centralized at repo root:
+
+- `docker-compose.yml`
+- `docker-compose.local.yml`
+
+Use root `docker compose ...` directly, or run backend `Makefile` Docker targets (they delegate to root compose files).
 
 ## Frontend
 
@@ -31,6 +38,8 @@ Run the full production-style stack from repo root:
 ```bash
 docker compose -f docker-compose.yml up -d
 ```
+
+Compose commands should be run from repo root (or via `make` inside `backend/`).
 
 Frontend calls backend through `/api` proxy:
 

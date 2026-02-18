@@ -2,3 +2,4 @@ neo4j_data/
 .env
 backend/.env
 backend/notebook.ipynb
+NBFC_Chatbot_UI/

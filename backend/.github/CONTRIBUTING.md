@@ -166,6 +166,8 @@ make docker-down    # Stop services
 make docker-logs    # View logs
 ```
 
+Docker targets in `backend/Makefile` run against root compose files (`../docker-compose.yml` and `../docker-compose.local.yml`) so there is a single orchestration source of truth.
+
 ### Cleanup
 
 ```bash

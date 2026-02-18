@@ -1,13 +1,18 @@
 .PHONY: \
 	help install install-dev dev test lint format format-check quality pre-commit clean \
 	docker-build docker-up docker-down docker-logs docker-restart deploy \
-	local-validate local-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
+	local-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
 	begin down-up
 
-COMPOSE ?= docker compose
-COMPOSE_FILE ?= docker-compose.yml
-LOCAL_COMPOSE_FILE ?= docker-compose.local.yml
+MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+REPO_ROOT ?= $(abspath $(MAKEFILE_DIR)/..)
+ROOT_ENV_FILE ?= $(REPO_ROOT)/.env
+BACKEND_ENV_FILE ?= .env
+
+COMPOSE ?= docker compose --project-directory $(REPO_ROOT) --env-file $(ROOT_ENV_FILE)
+COMPOSE_FILE ?= $(REPO_ROOT)/docker-compose.yml
+LOCAL_COMPOSE_FILE ?= $(REPO_ROOT)/docker-compose.local.yml
 
 MAIN_COMPOSE = $(COMPOSE) -f $(COMPOSE_FILE)
 LOCAL_COMPOSE = $(COMPOSE) -f $(LOCAL_COMPOSE_FILE)
@@ -42,7 +47,8 @@ help:
 	@echo ""
 	@echo "Local Stack ($(LOCAL_COMPOSE_FILE)):"
 	@echo "  local-validate      - Validate local compose config"
-	@echo "  local-env-audit     - Detect duplicate keys in .env"
+	@echo "  local-env-audit     - Detect duplicate keys in root .env (compose interpolation)"
+	@echo "  backend-env-audit   - Detect duplicate keys in backend/.env (runtime env_file)"
 	@echo "  local-setup-check   - Run setup profile checks against local stack"
 	@echo "  localsetup          - Validate/start local core stack and run setup checks"
 	@echo "  localsetup-full     - Run localsetup, then start router + monitoring + geoip + edge"
@@ -69,7 +75,7 @@ install:
 install-dev:
 	@echo "Installing development dependencies..."
 	uv pip install -r requirements-dev.txt
-	pre-commit install
+	uv run python -m pre_commit install --config .pre-commit-config.yaml --install-hooks
 	@echo "Development environment ready"
 
 dev:
@@ -105,7 +111,7 @@ quality: format-check lint
 
 pre-commit:
 	@echo "Running pre-commit on all files..."
-	pre-commit run --all-files
+	uv run python -m pre_commit run --all-files
 	@echo "Pre-commit checks complete"
 
 clean:
@@ -142,8 +148,13 @@ local-validate:
 	@echo "Local compose config is valid"
 
 local-env-audit:
-	@echo "Checking .env for duplicate keys..."
-	@awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{print $$1}' .env | sort | uniq -d | \
+	@echo "Checking root .env for duplicate keys..."
+	@awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{print $$1}' $(ROOT_ENV_FILE) | sort | uniq -d | \
+		awk '{print "Duplicate key:", $$0}' || true
+
+backend-env-audit:
+	@echo "Checking backend/.env for duplicate keys..."
+	@awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{print $$1}' $(BACKEND_ENV_FILE) | sort | uniq -d | \
 		awk '{print "Duplicate key:", $$0}' || true
 
 local-up:
