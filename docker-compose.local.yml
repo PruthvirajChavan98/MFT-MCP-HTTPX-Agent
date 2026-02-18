@@ -374,9 +374,9 @@ services:
     networks:
       - mft_local
 
-  frontend:
+  frontend_uat:
     image: node:20-alpine
-    container_name: mft_frontend_local
+    container_name: mft_frontend_uat_local
     working_dir: /app
     command: ["sh", "-lc", "npm install && npm run dev -- --host 0.0.0.0 --port 5173"]
     environment:
@@ -384,8 +384,8 @@ services:
       VITE_API_BASE_URL: "/api"
       CHOKIDAR_USEPOLLING: "true"
     volumes:
-      - ./frontend:/app
-      - frontend_node_modules_local:/app/node_modules
+      - ./frontend_uat:/app
+      - frontend_uat_node_modules_local:/app/node_modules
     ports:
       - "127.0.0.1:${LOCAL_FRONTEND_PORT:-15173}:5173"
     depends_on:
@@ -408,7 +408,7 @@ services:
     container_name: mft_ngrok_local
     restart: unless-stopped
     # We point ngrok at the internal docker service name and port
-    command: "http frontend:5173"
+    command: "http frontend_uat:5173"
     environment:
       # Add this variable to your .env file
       NGROK_AUTHTOKEN: "${NGROK_AUTHTOKEN_LOCAL}"
@@ -417,7 +417,7 @@ services:
     networks:
       - mft_local
     depends_on:
-      frontend:
+      frontend_uat:
         condition: service_healthy
 
   cloudflared:
@@ -430,7 +430,7 @@ services:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
     depends_on:
-      - frontend
+      - frontend_uat
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.50
@@ -447,4 +447,4 @@ volumes:
   neo4j_data_local:
   prometheus_data_local:
   grafana_data_local:
-  frontend_node_modules_local:
+  frontend_uat_node_modules_local:

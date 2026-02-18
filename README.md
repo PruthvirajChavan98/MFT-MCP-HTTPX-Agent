@@ -1,9 +1,9 @@
 # Monorepo Layout
 
 - `backend/`: Existing Python/FastAPI/MCP backend project.
-- `frontend/`: SolidJS + TypeScript + Tailwind CSS v4 frontend project.
-- `docker-compose.yml`: Root production-style orchestration for backend + frontend.
-- `docker-compose.local.yml`: Root local orchestration for backend + frontend.
+- `frontend_uat/`: SolidJS + TypeScript + Tailwind CSS v4 frontend project.
+- `docker-compose.yml`: Root production-style orchestration for backend + frontend_uat.
+- `docker-compose.local.yml`: Root local orchestration for backend + frontend_uat.
 
 ## Backend
 
@@ -18,7 +18,7 @@ Use root `docker compose ...` directly, or run backend `Makefile` Docker targets
 
 ## Frontend
 
-Run all frontend commands from `frontend/`:
+Run all frontend commands from `frontend_uat/`:
 
 ```bash
 npm install
@@ -43,10 +43,10 @@ Compose commands should be run from repo root (or via `make` inside `backend/`).
 
 Frontend calls backend through `/api` proxy:
 
-- Browser -> `frontend` (`/api/...`)
+- Browser -> `frontend_uat` (`/api/...`)
 - Frontend proxy -> `agent:8000`
 
 ## Cloudflare Tunnel
 
-The root tunnel config (`cloudflared/config.yml`) exposes only the frontend hostname.
+The root tunnel config (`cloudflared/config.yml`) exposes only the frontend hostname and routes to `frontend_uat`.
 Backend stays private and is reached internally via frontend proxy.

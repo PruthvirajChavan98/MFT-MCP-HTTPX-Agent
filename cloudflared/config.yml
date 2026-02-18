@@ -1,4 +1,4 @@
 ingress:
   - hostname: frontend.pruthvirajchavan.codes
-    service: http://frontend:5173
+    service: http://frontend_uat:5173
   - service: http_status:404
