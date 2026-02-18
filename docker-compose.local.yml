@@ -48,6 +48,7 @@ services:
   neo4j:
     image: neo4j:5.26.0
     container_name: mft_neo4j_local
+    hostname: neo4j
     restart: unless-stopped
     ports:
       - "127.0.0.1:${LOCAL_NEO4J_HTTP_PORT:-17474}:7474"
@@ -62,6 +63,16 @@ services:
       NEO4J_server_memory_heap_initial__size: "${LOCAL_NEO4J_HEAP_INITIAL:-512m}"
       NEO4J_server_memory_heap_max__size: "${LOCAL_NEO4J_HEAP_MAX:-512m}"
       NEO4J_server_memory_pagecache_size: "${LOCAL_NEO4J_PAGECACHE:-512m}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -a bolt://localhost:7687 -u ${NEO4J_USER} -p ${NEO4J_PASSWORD} 'RETURN 1;' >/dev/null",
+        ]
+      interval: 20s
+      timeout: 15s
+      retries: 12
+      start_period: 90s
     volumes:
       - neo4j_data_local:/data
     mem_limit: 2g
@@ -200,7 +211,7 @@ services:
       mcp:
         condition: service_healthy
       neo4j:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     healthcheck:
@@ -269,7 +280,7 @@ services:
       redis:
         condition: service_healthy
       neo4j:
-        condition: service_started
+        condition: service_healthy
     mem_limit: 768m
     cpus: 1.00
     networks:
@@ -391,6 +402,23 @@ services:
     cpus: 1.00
     networks:
       - mft_local
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: mft_ngrok_local
+    restart: unless-stopped
+    # We point ngrok at the internal docker service name and port
+    command: "http frontend:5173"
+    environment:
+      # Add this variable to your .env file
+      NGROK_AUTHTOKEN: "${NGROK_AUTHTOKEN_LOCAL}"
+    ports:
+      - "127.0.0.1:${LOCAL_NGROK_UI_PORT:-4040}:4040"
+    networks:
+      - mft_local
+    depends_on:
+      frontend:
+        condition: service_healthy
 
   cloudflared:
     profiles: ["edge"]
