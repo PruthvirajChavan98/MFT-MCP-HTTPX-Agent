@@ -9,6 +9,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Overview', blurb: 'Platform telemetry + quick launch' },
+  { path: '/chat', label: 'Chat', blurb: 'Conversational agent with streaming' },
   { path: '/workbench', label: 'Workbench', blurb: 'All API endpoints in one console' },
   { path: '/operations', label: 'Operations', blurb: 'Health, eval, rate-limit, graphql' },
   { path: '/streams', label: 'Streams', blurb: 'SSE-first execution and diagnostics' },

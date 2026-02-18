@@ -1,5 +1,6 @@
 import { Route, Router } from '@solidjs/router'
 import { AppShell } from '../components/layout/AppShell'
+import { ChatPage } from '../components/chat/ChatPage'
 import { AdminPage } from '../pages/AdminPage'
 import { HomePage } from '../pages/HomePage'
 import { OperationsPage } from '../pages/OperationsPage'
@@ -19,6 +20,7 @@ export function App() {
   return (
     <Router root={AppShell}>
       <Route path="/" component={HomePage} />
+      <Route path="/chat" component={ChatPage} />
       <Route path="/workbench" component={WorkbenchPage} />
       <Route path="/operations" component={OperationsPage} />
       <Route path="/streams" component={StreamsPage} />
