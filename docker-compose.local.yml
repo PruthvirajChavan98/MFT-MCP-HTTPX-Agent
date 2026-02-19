@@ -91,7 +91,7 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_MCP_PORT:-18050}:8050"
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
@@ -139,7 +139,7 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_AGENT_PORT:-18000}:8000"
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
       PORT: "8000"
       PYTHONUNBUFFERED: "1"
@@ -268,7 +268,7 @@ services:
     command: ["uv", "run", "python", "-m", "src.agent_service.router.worker"]
     restart: unless-stopped
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
       REDIS_URL: "redis://redis:6379/0"
       NEO4J_URI: "bolt://neo4j:7687"
@@ -413,7 +413,7 @@ services:
       VITE_API_BASE_URL: "/api"
       CHOKIDAR_USEPOLLING: "true"
     volumes:
-      - ./NBFC_Chatbot_UI:/app
+      - ./NBFC_Chatbot_UI_2:/app
       - frontend_nbfc_node_modules_local:/app/node_modules
     ports:
       - "127.0.0.1:${LOCAL_FRONTEND_NBFC_PORT:-15174}:5173"
@@ -454,7 +454,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: mft_cloudflared_local
     env_file:
-      - ./backend/.env
+      - ./.env
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]

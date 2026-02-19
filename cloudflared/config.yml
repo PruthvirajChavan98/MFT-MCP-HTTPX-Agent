@@ -1,4 +1,6 @@
 ingress:
-  - hostname: frontend.pruthvirajchavan.codes
-    service: http://frontend_nbfc:5173
+  - hostname: mft-agent.pruthvirajchavan.codes
+    service: http://127.0.0.1:5173
+  - hostname: mft-api.pruthvirajchavan.codes
+    service: http://127.0.0.1:8005
   - service: http_status:404

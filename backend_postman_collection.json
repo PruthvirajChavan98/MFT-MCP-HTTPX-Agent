@@ -1,0 +1,2273 @@
+{
+  "info": {
+    "name": "HFCL Agent Service API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health & Monitoring",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Basic health check."
+          },
+          "response": []
+        },
+        {
+          "name": "Liveness Probe",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health/live",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": "Liveness probe."
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness Probe",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health/ready",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "Readiness probe with dependency checks."
+          },
+          "response": []
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "Prometheus metrics endpoint."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Agent Interaction",
+      "item": [
+        {
+          "name": "Agent Query (Blocking)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/query",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "query"
+              ]
+            },
+            "description": "Non-streaming agent response.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"question\": \"What are foreclosure charges?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Agent Stream (SSE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "stream"
+              ]
+            },
+            "description": "Server-Sent Events stream.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"question\": \"Tell me about loan options.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Agent Follow-up (Batch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/follow-up",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "follow-up"
+              ]
+            },
+            "description": "Generate follow-up questions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"question\": \"I want better EMI options\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Agent Follow-up (Stream)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/follow-up-stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "follow-up-stream"
+              ]
+            },
+            "description": "SSE follow-up generation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"question\": \"I want better EMI options\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Session Management",
+      "item": [
+        {
+          "name": "List Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "sessions"
+              ]
+            },
+            "description": "List active sessions."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/verify/{{session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "verify",
+                "{{session_id}}"
+              ]
+            },
+            "description": "Verify session exists."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session Config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/config/{{session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "config",
+                "{{session_id}}"
+              ]
+            },
+            "description": "Get effective session config."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Session Config",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "config"
+              ]
+            },
+            "description": "Create/update session config.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"system_prompt\": \"You are a helpful assistant.\",\n  \"model_name\": \"deepseek/deepseek-r1\",\n  \"reasoning_effort\": \"medium\",\n  \"provider\": \"openrouter\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout Session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/logout/{{session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "logout",
+                "{{session_id}}"
+              ]
+            },
+            "description": "Delete session config."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session Cost",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/sessions/{{session_id}}/cost",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "sessions",
+                "{{session_id}}",
+                "cost"
+              ]
+            },
+            "description": "Aggregate cost for session."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Cost History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/sessions/{{session_id}}/cost/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "sessions",
+                "{{session_id}}",
+                "cost",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Chronological cost history."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Session Cost",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/sessions/{{session_id}}/cost",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "sessions",
+                "{{session_id}}",
+                "cost"
+              ]
+            },
+            "description": "Reset session cost data."
+          },
+          "response": []
+        },
+        {
+          "name": "Global Cost Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/sessions/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "sessions",
+                "summary"
+              ]
+            },
+            "description": "Cross-session cost summary."
+          },
+          "response": []
+        },
+        {
+          "name": "Cleanup Cost Keys",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/sessions/cleanup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "sessions",
+                "cleanup"
+              ]
+            },
+            "description": "Admin cleanup for corrupted keys."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Models & Router",
+      "item": [
+        {
+          "name": "List Models",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/models",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "models"
+              ]
+            },
+            "description": "Returns model catalog."
+          },
+          "response": []
+        },
+        {
+          "name": "Router Classify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/router/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "router",
+                "classify"
+              ]
+            },
+            "description": "Classify query with NBFC router.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"I want to close my loan\",\n  \"mode\": \"hybrid\",\n  \"session_id\": \"{{session_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Router Compare",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/router/compare",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "router",
+                "compare"
+              ]
+            },
+            "description": "Compare router backends.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Where can I download my statement?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - Knowledge Base",
+      "item": [
+        {
+          "name": "Get All Follow-ups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/all-follow-ups",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "all-follow-ups"
+              ]
+            },
+            "description": "Get cached follow-up datasets."
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest FAQ (JSON Batch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs/batch-json",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs",
+                "batch-json"
+              ]
+            },
+            "description": "Batch FAQ ingest via JSON.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"question\": \"How do I pay?\",\n      \"answer\": \"Use the app.\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload FAQ PDF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs/upload-pdf",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs",
+                "upload-pdf"
+              ]
+            },
+            "description": "PDF FAQ ingest.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List FAQs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "skip",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "List FAQs."
+          },
+          "response": []
+        },
+        {
+          "name": "Edit FAQ",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs"
+              ]
+            },
+            "description": "Edit FAQ.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"original_question\": \"How do I pay?\",\n  \"new_question\": \"How to make payment?\",\n  \"new_answer\": \"Use UPI on website.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete FAQ",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs"
+              ],
+              "query": [
+                {
+                  "key": "question",
+                  "value": "How do I pay?"
+                }
+              ]
+            },
+            "description": "Delete FAQ by question."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete All FAQs",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs/all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs",
+                "all"
+              ]
+            },
+            "description": "Delete all FAQs."
+          },
+          "response": []
+        },
+        {
+          "name": "Semantic Search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs/semantic-search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs",
+                "semantic-search"
+              ]
+            },
+            "description": "Semantic FAQ search.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"payment methods\",\n  \"limit\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Semantic Delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/faqs/semantic-delete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "faqs",
+                "semantic-delete"
+              ]
+            },
+            "description": "Semantic FAQ delete.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"payment options\",\n  \"threshold\": 0.9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - Analytics & Feedback",
+      "item": [
+        {
+          "name": "Analytics Overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/analytics/overview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "analytics",
+                "overview"
+              ]
+            },
+            "description": "System overview stats."
+          },
+          "response": []
+        },
+        {
+          "name": "Analytics Conversations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/analytics/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "analytics",
+                "conversations"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Recent conversations."
+          },
+          "response": []
+        },
+        {
+          "name": "Analytics Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/analytics/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "analytics",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "User stats."
+          },
+          "response": []
+        },
+        {
+          "name": "Analytics Guardrails",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/analytics/guardrails",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "analytics",
+                "guardrails"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Guardrail events."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Feedback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/feedback",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "feedback"
+              ]
+            },
+            "description": "Submit user feedback.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"rating\": \"thumbs_up\",\n  \"comment\": \"Great help!\",\n  \"category\": \"accuracy\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Feedback",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/feedback",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "feedback"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Get feedback list."
+          },
+          "response": []
+        },
+        {
+          "name": "Feedback Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent/admin/feedback/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent",
+                "admin",
+                "feedback",
+                "summary"
+              ]
+            },
+            "description": "Get feedback stats."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Evaluation",
+      "item": [
+        {
+          "name": "Ingest Trace",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Eval-Ingest-Key",
+                "value": "{{ingest_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/ingest",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "ingest"
+              ]
+            },
+            "description": "Ingest trace/events/evals.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trace\": {\n    \"trace_id\": \"t1\",\n    \"session_id\": \"s1\",\n    \"inputs\": {\n      \"q\": \"hi\"\n    }\n  },\n  \"events\": [\n    {\n      \"seq\": 1,\n      \"type\": \"token\",\n      \"payload\": \"hello\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Traces",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Search traces."
+          },
+          "response": []
+        },
+        {
+          "name": "List Eval Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "sessions"
+              ]
+            },
+            "description": "Link evaluation sessions."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Trace",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/trace/{{trace_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "trace",
+                "{{trace_id}}"
+              ]
+            },
+            "description": "Get full trace details."
+          },
+          "response": []
+        },
+        {
+          "name": "Fulltext Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/fulltext",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "fulltext"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "error"
+                },
+                {
+                  "key": "kind",
+                  "value": "trace"
+                }
+              ]
+            },
+            "description": "Full text search."
+          },
+          "response": []
+        },
+        {
+          "name": "Vector Search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/vector-search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "vector-search"
+              ]
+            },
+            "description": "Vector similarity search.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"trace\",\n  \"text\": \"loan inquiries\",\n  \"k\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/metrics/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "metrics",
+                "summary"
+              ]
+            },
+            "description": "Aggregated metrics."
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics Failures",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/metrics/failures",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "metrics",
+                "failures"
+              ]
+            },
+            "description": "Failure analysis."
+          },
+          "response": []
+        },
+        {
+          "name": "Question Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/eval/question-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "eval",
+                "question-types"
+              ]
+            },
+            "description": "Distribution by router reason."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rate Limiting",
+      "item": [
+        {
+          "name": "Get Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rate-limit/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit",
+                "metrics"
+              ]
+            },
+            "description": "Returns live limiter metrics."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rate-limit/status/{{identifier}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit",
+                "status",
+                "{{identifier}}"
+              ]
+            },
+            "description": "Limiter status for identifier."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Limit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rate-limit/reset/{{identifier}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit",
+                "reset",
+                "{{identifier}}"
+              ]
+            },
+            "description": "Reset limiter state."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rate-limit/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit",
+                "health"
+              ]
+            },
+            "description": "Rate limit infra health."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rate-limit/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit",
+                "config"
+              ]
+            },
+            "description": "Effective rate-limit configuration."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GraphQL",
+      "item": [
+        {
+          "name": "GraphQL IDE",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/graphql",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "GraphQL IDE."
+          },
+          "response": []
+        },
+        {
+          "name": "GraphQL Query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}",
+                "type": "text",
+                "disabled": true
+              },
+              {
+                "key": "X-OpenRouter-Key",
+                "value": "{{openrouter_key}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/graphql",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Execute query.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { models { name models { id name contextLength } } }\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "session_id",
+      "value": "sess_default",
+      "type": "string"
+    },
+    {
+      "key": "trace_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "openrouter_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ingest_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "identifier",
+      "value": "session:sess_default",
+      "type": "string"
+    }
+  ]
+}

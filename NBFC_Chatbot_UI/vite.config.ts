@@ -9,6 +9,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    allowedHosts: ['effectual-jaleesa-sterically.ngrok-free.dev'],
     proxy: {
       '/api': {
         target: apiTarget,
@@ -21,6 +22,7 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: 5173,
+    allowedHosts: ['effectual-jaleesa-sterically.ngrok-free.dev'],
     proxy: {
       '/api': {
         target: apiTarget,

@@ -2,19 +2,26 @@ neo4j_data/
 .env
 backend/.env
 backend/notebook.ipynb
+
 NBFC_Chatbot_UI/node_modules/
 NBFC_Chatbot_UI/dist/
 NBFC_Chatbot_UI/.vite/
 NBFC_Chatbot_UI/dist-ssr/
+
 Chatbot UI and Admin Console/node_modules/
 Chatbot UI and Admin Console/.vite/
 Chatbot UI and Admin Console/dist/
 Chatbot UI and Admin Console/dist-ssr/
+
 NBFC_Chatbot_UI_2/node_modules/
 NBFC_Chatbot_UI_2/.vite/
 NBFC_Chatbot_UI_2/dist/
 NBFC_Chatbot_UI_2/dist-ssr/
-STALE_OLD_UI/
+
+STALE_OLD_UI/node_modules/
+STALE_OLD_UI/.vite/
+STALE_OLD_UI/dist/
+STALE_OLD_UI/dist-ssr/
 
 # Crash dumps
 core
