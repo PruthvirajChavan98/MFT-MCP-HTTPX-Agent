@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { AdminProvider, useAdminContext } from './AdminContext'
 import { CommandPalette } from './CommandPalette'
+import { GlobalTraceSheet } from './GlobalTraceSheet'
 
 const NAV = [
   { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -152,6 +153,8 @@ function AdminShell() {
       </div>
 
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
+      {/* Inject Global Sheet Here */}
+      <GlobalTraceSheet />
     </div >
   )
 }
