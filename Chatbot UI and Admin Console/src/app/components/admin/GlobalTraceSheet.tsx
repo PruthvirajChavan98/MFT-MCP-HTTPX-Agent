@@ -89,7 +89,7 @@ export function GlobalTraceSheet() {
                     </pre>
                   </div>
                 </div>
-                
+
                 <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Final Output</h3>
                   <div className="flex-1 text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-3 border border-slate-100 whitespace-pre-wrap">
