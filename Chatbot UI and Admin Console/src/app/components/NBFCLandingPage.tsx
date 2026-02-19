@@ -211,7 +211,7 @@ export function NBFCLandingPage() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 font-bold text-white text-sm shadow">
               HC
             </div>
-            <span className="text-lg font-bold tracking-tight">HFCL Finance</span>
+            <span className="text-lg font-bold tracking-tight">Mock FinTech</span>
           </div>
 
           <div className="hidden items-center gap-8 md:flex">
@@ -356,7 +356,7 @@ export function NBFCLandingPage() {
               transition={{ duration: 0.5 }}
               className="text-3xl font-bold sm:text-4xl"
             >
-              Why Choose HFCL Finance?
+              Why Choose Mock FinTech?
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 12 }}
@@ -427,10 +427,10 @@ export function NBFCLandingPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 text-xs font-bold text-white">
                 HC
               </div>
-              <span className="font-semibold text-slate-300">HFCL Finance</span>
+              <span className="font-semibold text-slate-300">Mock FinTech</span>
             </div>
             <p className="text-xs text-slate-600">
-              © {new Date().getFullYear()} HFCL Finance Ltd. RBI Registered NBFC. All rights
+              © {new Date().getFullYear()} Mock FinTech Ltd. RBI Registered NBFC. All rights
               reserved.
             </p>
             <div className="flex gap-6">

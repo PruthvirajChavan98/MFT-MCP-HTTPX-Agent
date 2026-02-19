@@ -4,7 +4,7 @@ transforming...
 ✗ Build failed in 306ms
 error during build:
 src/app/App.js (8:12): Expression expected
-file: /home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot UI and Admin Console/src/app/App.js:8:12
+file: /home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot UI and Admin Console/src/app/App.js:8:12
 
  6: var routes_1 = require("./routes");
  7: function App() {
@@ -13,9 +13,9 @@ file: /home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot UI and
  9:       <react_router_1.RouterProvider router={routes_1.router}/>
 10:       <sonner_1.Toaster richColors position="top-right"/>
 
-    at getRollupError (file:///home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
-    at ParseError.initialise (file:///home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:14465:28)
-    at convertNode (file:///home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:16437:10)
-    at convertProgram (file:///home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:15677:12)
-    at Module.setSource (file:///home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:17392:24)
-    at async ModuleLoader.addModuleSource (file:///home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:21474:13)
+    at getRollupError (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+    at ParseError.initialise (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:14465:28)
+    at convertNode (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:16437:10)
+    at convertProgram (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:15677:12)
+    at Module.setSource (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:17392:24)
+    at async ModuleLoader.addModuleSource (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:21474:13)

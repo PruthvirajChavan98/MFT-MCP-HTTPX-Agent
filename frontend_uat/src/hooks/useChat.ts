@@ -3,8 +3,8 @@ import type { ChatMessage, ChatSession, CostEvent, SessionCostSummary, ToolCallE
 import { parseMaybeJson } from '../lib/json'
 import { streamSse } from '../lib/stream'
 
-const STORAGE_SESSIONS = 'hfcl_chat_sessions'
-const storageMessagesKey = (id: string) => `hfcl_chat_msgs_${id}`
+const STORAGE_SESSIONS = 'mft_chat_sessions'
+const storageMessagesKey = (id: string) => `mft_chat_msgs_${id}`
 const MAX_STORED_MESSAGES = 200
 const MAX_STORED_FIELD_LEN = 2000
 
