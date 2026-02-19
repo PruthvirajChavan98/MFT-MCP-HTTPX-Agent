@@ -337,3 +337,27 @@ export async function feedbackSummary(adminKey: string): Promise<{
     headers: withAdminHeaders(adminKey),
   })
 }
+
+
+// --- System Health & Rate Limiting ---
+
+export interface SystemHealthResponse {
+  status: string;
+  healthy: boolean;
+  checks: Record<string, { ok: boolean;[key: string]: any }>;
+  timestamp: number;
+}
+
+export async function fetchSystemHealth(): Promise<SystemHealthResponse> {
+  return requestJson({ method: 'GET', path: '/health/ready' });
+}
+
+export async function fetchRateLimitMetrics(): Promise<any> {
+  return requestJson({ method: 'GET', path: '/rate-limit/metrics' });
+}
+
+export async function fetchRateLimitConfig(): Promise<any> {
+  return requestJson({ method: 'GET', path: '/rate-limit/config' });
+}
+export { requestJson }
+

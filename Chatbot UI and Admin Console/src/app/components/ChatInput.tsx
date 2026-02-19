@@ -39,7 +39,7 @@ export function ChatInput({ value, onChange, onSend, onStop, isStreaming, disabl
         rows={1}
         disabled={disabled || isStreaming}
         className={cn(
-          'flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400 transition-all max-h-[120px] overflow-y-auto',
+          'flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 leading-relaxed placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400 transition-all max-h-[120px] overflow-y-auto',
           (disabled || isStreaming) && 'opacity-60 cursor-not-allowed',
         )}
       />

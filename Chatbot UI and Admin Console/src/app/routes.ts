@@ -11,6 +11,7 @@ import { ModelConfig } from './components/admin/ModelConfig'
 import { Guardrails } from './components/admin/Guardrails'
 import { UsersAnalytics } from './components/admin/UsersAnalytics'
 import { Feedback } from './components/admin/Feedback'
+import { SystemHealth } from './components/admin/SystemHealth'
 
 export const router = createBrowserRouter([
   {
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
       { path: 'guardrails', Component: Guardrails },
       { path: 'users', Component: UsersAnalytics },
       { path: 'feedback', Component: Feedback },
+      { path: 'health', Component: SystemHealth },
     ],
   },
 ])

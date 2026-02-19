@@ -67,7 +67,10 @@ export async function streamSse(
       }
 
       if (line.startsWith('data:')) {
-        dataLines.push(line.slice(5).trimStart())
+        // Fix: Strictly remove only one optional leading space per the SSE spec. 
+        // Using trimStart() was destroying spaces inside/between LLM tokens.
+        const dataStr = line.slice(5)
+        dataLines.push(dataStr.startsWith(' ') ? dataStr.slice(1) : dataStr)
       }
     }
   }

@@ -11,12 +11,15 @@ interface FollowUpToken {
   token: string
 }
 
-function makeId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+interface SessionInitResponse {
+  session_id: string
+  system_prompt: string
+  model_name: string
+  provider: string
 }
 
-function createSessionId(): string {
-  return `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+function makeId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
 function createAssistantPlaceholder(): ChatMessage {
@@ -58,14 +61,35 @@ export function useChatStream() {
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
-  // Initialise session on mount
+  // Fetch a new session from the backend
+  const initNewSession = useCallback(async () => {
+    try {
+      const data = await requestJson<SessionInitResponse>({
+        method: 'POST',
+        path: '/agent/sessions/init', // Adjust prefix if your router is mounted differently
+      })
+      const sid = data.session_id
+      localStorage.setItem(SESSION_KEY, sid)
+      setSessionId(sid)
+      setMessages([])
+      setFollowUps([])
+      setError('')
+    } catch (err) {
+      console.error('Failed to initialize session:', err)
+      setError('Failed to initialize chat session')
+    }
+  }, [])
+
+  // Initialize session on mount
   useEffect(() => {
     const existing = localStorage.getItem(SESSION_KEY)
-    const sid = existing || createSessionId()
-    if (!existing) localStorage.setItem(SESSION_KEY, sid)
-    setSessionId(sid)
-    setMessages(safeParseMessages(localStorage.getItem(messageKey(sid))))
-  }, [])
+    if (existing) {
+      setSessionId(existing)
+      setMessages(safeParseMessages(localStorage.getItem(messageKey(existing))))
+    } else {
+      initNewSession()
+    }
+  }, [initNewSession])
 
   // Persist messages whenever they change
   useEffect(() => {
@@ -259,10 +283,10 @@ export function useChatStream() {
 
   const clearConversation = useCallback(() => {
     if (isStreaming) stopGeneration()
-    setMessages([])
-    setFollowUps([])
-    setError('')
-  }, [isStreaming, stopGeneration])
+    // Fetching a new session instead of just clearing local state ensures 
+    // the backend memory is correctly reset for the user as well.
+    initNewSession()
+  }, [isStreaming, stopGeneration, initNewSession])
 
   return {
     sessionId,

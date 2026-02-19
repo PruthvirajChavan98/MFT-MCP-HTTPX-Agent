@@ -1,6 +1,7 @@
 """Session management and cost tracking endpoints."""
 
 import logging
+import uuid7  # Added dependency
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -15,6 +16,41 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["sessions"])
 
 
+@router.post("/sessions/init", response_model=SessionInitResponse)
+async def initialize_session():
+    """
+    Initialize a new backend-managed session with UUIDv7.
+    Sets up the default BYOK (Bring Your Own Key) configuration in Redis.
+    """
+    try:
+        # Generate time-ordered UUIDv7
+        sid = str(uuid7.uuid7())
+        
+        default_prompt = SYSTEM_PROMPT.strip()
+        default_model = MODEL_NAME
+        default_provider = ResourceResolver.infer_provider_from_model_name(default_model)
+
+        # Persist default configuration explicitly (BYOK - no keys set yet)
+        await config_manager.set_config(
+            session_id=sid,
+            system_prompt=default_prompt,
+            model_name=default_model,
+            provider=default_provider,
+        )
+
+        log.info(f"Initialized new session {sid} with default BYOK config.")
+
+        return SessionInitResponse(
+            session_id=sid,
+            system_prompt=default_prompt,
+            model_name=default_model,
+            provider=default_provider,
+        )
+    except Exception as e:
+        log.error(f"Session initialization error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize session")
+
+
 @router.get("/sessions")
 async def list_active_sessions():
     """List all active sessions."""
@@ -25,6 +61,39 @@ async def list_active_sessions():
         log.error(f"List sessions error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/sessions/init", response_model=SessionInitResponse)
+async def initialize_session():
+    """
+    Initialize a new backend-managed session with UUIDv7.
+    Sets up the default BYOK (Bring Your Own Key) configuration in Redis.
+    """
+    try:
+        # Generate time-ordered UUIDv7
+        sid = str(uuid7.uuid7())
+        
+        default_prompt = SYSTEM_PROMPT.strip()
+        default_model = MODEL_NAME
+        default_provider = ResourceResolver.infer_provider_from_model_name(default_model)
+
+        # Persist default configuration explicitly (BYOK - no keys set yet)
+        await config_manager.set_config(
+            session_id=sid,
+            system_prompt=default_prompt,
+            model_name=default_model,
+            provider=default_provider,
+        )
+
+        log.info(f"Initialized new session {sid} with default BYOK config.")
+
+        return SessionInitResponse(
+            session_id=sid,
+            system_prompt=default_prompt,
+            model_name=default_model,
+            provider=default_provider,
+        )
+    except Exception as e:
+        log.error(f"Session initialization error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize session")
 
 @router.get("/verify/{session_id}")
 async def verify_session(session_id: str):

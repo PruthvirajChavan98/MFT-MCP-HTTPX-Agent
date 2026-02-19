@@ -31,6 +31,7 @@ dependencies = [
     "redis>=5.0.0",
     "strawberry-graphql>=0.240.0",
     "toon-format>=0.1.0",
+    "uuid7",
     "uvicorn[standard]>=0.30.0",
     "prometheus-client>=0.20.0",
     "geoip2>=4.8.0",

@@ -17,4 +17,5 @@ uvicorn[standard]
 prometheus-client
 geoip2
 asyncpg
+uuid7
 https://github.com/toon-format/toon-python.git

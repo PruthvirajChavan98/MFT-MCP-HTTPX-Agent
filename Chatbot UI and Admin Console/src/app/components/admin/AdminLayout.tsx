@@ -1,162 +1,179 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router'
+import { useState, useEffect } from "react";
+import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
 import {
-  BadgeDollarSign,
-  Database,
-  Eye,
-  EyeOff,
-  GitBranch,
-  LayoutDashboard,
-  MessageSquare,
-  Settings,
-  ShieldAlert,
-  Tags,
-  ThumbsUp,
-  Users,
-} from 'lucide-react'
-import { AdminProvider, useAdminContext } from './AdminContext'
-import { CommandPalette } from './CommandPalette'
-import { GlobalTraceSheet } from './GlobalTraceSheet'
+  LayoutDashboard, Database, DollarSign, Activity, MessageSquare,
+  Shield as ShieldIcon, Gauge, Cpu, Heart, ChevronLeft, Menu,
+  Settings, LogOut, Search, Bell, Tag, Key, Eye, EyeOff, AlertCircle, Users
+} from "lucide-react";
+import { AdminProvider, useAdminContext } from "./AdminContext";
+import { CommandPalette } from "./CommandPalette";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 
-const NAV = [
-  { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { path: '/admin/knowledge-base', label: 'Knowledge Base', icon: Database },
-  { path: '/admin/costs', label: 'Costs', icon: BadgeDollarSign },
-  { path: '/admin/traces', label: 'Traces', icon: GitBranch },
-  { path: '/admin/categories', label: 'Categories', icon: Tags },
-  { path: '/admin/conversations', label: 'Conversations', icon: MessageSquare },
-  { path: '/admin/model-config', label: 'Model Config', icon: Settings },
-  { path: '/admin/guardrails', label: 'Guardrails', icon: ShieldAlert },
-  { path: '/admin/users', label: 'Users', icon: Users },
-  { path: '/admin/feedback', label: 'Feedback', icon: ThumbsUp },
-] as const satisfies Array<{ path: string; label: string; icon: React.ElementType; end?: boolean }>
+const NAV_ITEMS = [
+  { path: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { path: "/admin/knowledge-base", label: "Knowledge Base", icon: Database },
+  { path: "/admin/costs", label: "Session Costs", icon: DollarSign },
+  { path: "/admin/traces", label: "Chat Traces", icon: Activity },
+  { path: "/admin/categories", label: "Question Categories", icon: Tag },
+  { path: "/admin/conversations", label: "Conversations", icon: MessageSquare },
+  { path: "/admin/guardrails", label: "Guardrails", icon: ShieldIcon },
+  { path: "/admin/users", label: "Users & Analytics", icon: Users },
+  { path: "/admin/model-config", label: "Models & Router", icon: Cpu },
+  { path: "/admin/health", label: "System Health", icon: Heart },
+];
 
-function KeyInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-}) {
-  const [visible, setVisible] = useState(false)
+function KeyInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [visible, setVisible] = useState(false);
   return (
-    <label className="flex flex-col gap-1 text-xs text-slate-600 min-w-0">
-      <span className="font-semibold truncate">{label}</span>
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold text-slate-600">{label}</Label>
       <div className="relative">
-        <input
-          type={visible ? 'text' : 'password'}
+        <Input
+          type={visible ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={`Set ${label}`}
-          className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
+          placeholder={`Enter ${label}...`}
+          className="pr-8 text-xs font-mono"
         />
         <button
           type="button"
           onClick={() => setVisible((p) => !p)}
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
         >
-          {visible ? <EyeOff size={13} /> : <Eye size={13} />}
+          {visible ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       </div>
-    </label>
-  )
+    </div>
+  );
 }
 
 function AdminShell() {
-  const auth = useAdminContext()
-  const [cmdOpen, setCmdOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const navigate = useNavigate();
+  const auth = useAdminContext();
 
+  // Command Palette Keyboard Shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setCmdOpen((p) => !p)
+        e.preventDefault();
+        setCmdOpen((p) => !p);
       }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const missingKeys = !auth.adminKey || !auth.openrouterKey;
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       {/* Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-slate-800 bg-slate-950 text-slate-100">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center font-bold text-white text-sm">
-            TF
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-cyan-100 leading-tight">TrustFin Admin</p>
-            <p className="text-xs text-slate-400">Production Console</p>
-          </div>
+      <aside className={`${sidebarOpen ? "w-64" : "w-16"} bg-white border-r border-gray-200 flex flex-col shrink-0 transition-all duration-300 ease-in-out`}>
+        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100">
+          {sidebarOpen && (
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gradient-to-r from-cyan-500 to-teal-500">
+                <ShieldIcon className="w-4 h-4 text-white" />
+              </div>
+              <span className="font-bold text-slate-900 truncate" style={{ fontSize: 15 }}>HFCL Admin</span>
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="w-8 h-8 shrink-0 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+          >
+            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map((item: any) => {
-            const { path, label, icon: Icon, end } = item
-            return (
-              <NavLink
-                key={path}
-                to={path}
-                end={end}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isActive
-                    ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/30'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-                  }`
-                }
-              >
-                <Icon size={16} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          })}
+        <nav className="flex-1 py-3 px-2 overflow-y-auto space-y-1 no-scrollbar">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.exact}
+              title={!sidebarOpen ? item.label : undefined}
+              className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${isActive ? "text-white shadow-md bg-gradient-to-r from-cyan-500 to-teal-500" : "text-gray-600 hover:bg-gray-100"
+                }`}
+            >
+              <item.icon className="w-4 h-4 shrink-0" />
+              {sidebarOpen && <span className="text-sm font-medium truncate">{item.label}</span>}
+            </NavLink>
+          ))}
         </nav>
 
-        {/* CMD+K hint */}
-        <div className="px-5 py-3 border-t border-slate-800">
-          <button
-            onClick={() => setCmdOpen(true)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-slate-800 text-xs text-slate-400 hover:bg-slate-700 transition-colors"
-          >
-            <span>Quick navigate</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 font-mono text-[10px]">
-              ⌘K
-            </kbd>
+        <div className="border-t border-gray-100 p-2 space-y-1">
+          <button onClick={() => setCmdOpen(true)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all">
+            <div className="flex items-center gap-3">
+              <Search className="w-4 h-4 shrink-0" />
+              {sidebarOpen && <span className="text-sm font-medium">Search</span>}
+            </div>
+            {sidebarOpen && <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-gray-200 rounded text-gray-500">⌘K</kbd>}
+          </button>
+          <button onClick={() => navigate("/")} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all">
+            <LogOut className="w-4 h-4 shrink-0" />
+            {sidebarOpen && <span className="text-sm font-medium">Exit Admin</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Key header */}
-        <header className="border-b border-slate-200 bg-white px-6 py-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
-            <KeyInput label="X-Admin-Key" value={auth.adminKey} onChange={auth.setAdminKey} />
-            <KeyInput
-              label="X-OpenRouter-Key"
-              value={auth.openrouterKey}
-              onChange={auth.setOpenrouterKey}
-            />
-            <KeyInput label="X-Groq-Key" value={auth.groqKey} onChange={auth.setGroqKey} />
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-slate-800">Production Console</h2>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Keys Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all text-xs font-semibold ${missingKeys ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                  <Key size={14} />
+                  <span>API Keys</span>
+                  {missingKeys && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl">
+                <div className="space-y-1 mb-2">
+                  <h4 className="font-semibold text-sm text-slate-900">Authentication</h4>
+                  <p className="text-xs text-slate-500">Required headers for accessing production backend endpoints.</p>
+                </div>
+                {missingKeys && (
+                  <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                    <p>You must provide at least an Admin Key and an LLM Provider Key to load dashboard data.</p>
+                  </div>
+                )}
+                <KeyInput label="Admin API Key (X-Admin-Key)" value={auth.adminKey} onChange={auth.setAdminKey} />
+                <KeyInput label="OpenRouter Key (X-OpenRouter-Key)" value={auth.openrouterKey} onChange={auth.setOpenrouterKey} />
+                <KeyInput label="Groq Key (X-Groq-Key)" value={auth.groqKey} onChange={auth.setGroqKey} />
+              </PopoverContent>
+            </Popover>
+
+            <button className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 relative transition-colors">
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full border border-white" />
+            </button>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm" style={{ background: "var(--brand-gradient)", fontSize: 11, fontWeight: 700 }}>
+              AD
+            </div>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
           <Outlet />
         </main>
       </div>
 
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
-      {/* Inject Global Sheet Here */}
-      <GlobalTraceSheet />
-    </div >
-  )
+    </div>
+  );
 }
 
 export function AdminLayout() {
@@ -164,5 +181,5 @@ export function AdminLayout() {
     <AdminProvider>
       <AdminShell />
     </AdminProvider>
-  )
+  );
 }

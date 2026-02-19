@@ -211,6 +211,20 @@ Events:
 
 List active sessions.
 
+### `POST /agent/sessions/init`
+
+- **Summary:** Initializes a new session entirely on the backend, returning a time-ordered UUIDv7 identifier and establishing the default BYOK (Bring Your Own Key) configuration state.
+- **Success Response (200):**
+  ```json
+  {
+    "session_id": "018e9a5a-6b2a-7c91-a1b2-13c4d5e6f7g8",
+    "system_prompt": "- You are a helpful assistant...",
+    "model_name": "openai/gpt-4o",
+    "provider": "openrouter",
+    "reasoning_effort": null,
+    "message": "Session initialized with default BYOK configuration."
+  }
+
 ### `GET /agent/verify/{session_id}`
 
 Verify a session exists.

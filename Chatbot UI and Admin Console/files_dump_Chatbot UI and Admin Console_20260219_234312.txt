@@ -2,23 +2,25 @@ Root: /home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot UI and
 ================================================================================
 ### PROJECT STRUCTURE
 ================================================================================
-./ [75.4kt]
-├── src/ [60.3kt]
-│   ├── app/ [53.6kt]
-│   │   ├── components/ [49.1kt]
-│   │   │   ├── admin/ [17.8kt]
+./ [87.8kt]
+├── src/ [72.4kt]
+│   ├── app/ [65.0kt]
+│   │   ├── components/ [60.5kt]
+│   │   │   ├── admin/ [25.9kt]
 │   │   │   │   ├── AdminContext.tsx [413t]
-│   │   │   │   ├── AdminLayout.tsx [1.4kt]
+│   │   │   │   ├── AdminLayout.tsx [2.3kt]
 │   │   │   │   ├── ChatCosts.tsx [1.1kt]
-│   │   │   │   ├── ChatTraces.tsx [1.8kt]
+│   │   │   │   ├── ChatTraces.tsx [1.6kt]
 │   │   │   │   ├── CommandPalette.tsx [515t]
-│   │   │   │   ├── Conversations.tsx [1.3kt]
-│   │   │   │   ├── Dashboard.tsx [1.8kt]
+│   │   │   │   ├── Conversations.tsx [2.2kt]
+│   │   │   │   ├── Dashboard.tsx [2.6kt]
 │   │   │   │   ├── Feedback.tsx [2.0kt]
+│   │   │   │   ├── GlobalTraceSheet.tsx [1.6kt]
 │   │   │   │   ├── Guardrails.tsx [1.6kt]
-│   │   │   │   ├── KnowledgeBase.tsx [2.4kt]
-│   │   │   │   ├── ModelConfig.tsx [1.5kt]
+│   │   │   │   ├── KnowledgeBase.tsx [3.7kt]
+│   │   │   │   ├── ModelConfig.tsx [2.6kt]
 │   │   │   │   ├── QuestionCategories.tsx [751t]
+│   │   │   │   ├── SystemHealth.tsx [1.8kt]
 │   │   │   │   └── UsersAnalytics.tsx [1.2kt]
 │   │   │   ├── figma/ [160t]
 │   │   │   │   └── ImageWithFallback.tsx [160t]
@@ -71,50 +73,52 @@ Root: /home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot UI and
 │   │   │   │   ├── tooltip.tsx [275t]
 │   │   │   │   ├── use-mobile.ts [141t]
 │   │   │   │   └── utils.ts [41t]
-│   │   │   ├── ChatInput.tsx [557t]
+│   │   │   ├── ChatInput.tsx [560t]
 │   │   │   ├── ChatMessage.tsx [994t]
-│   │   │   ├── ChatWidget.tsx [1.9kt]
+│   │   │   ├── ChatWidget.tsx [4.5kt]
 │   │   │   ├── LandingPage.tsx [29t]
-│   │   │   └── NBFCLandingPage.tsx [4.2kt]
+│   │   │   ├── NBFCLandingPage.tsx [4.2kt]
+│   │   │   └── PrototypeDisclaimer.tsx [724t]
 │   │   ├── data/ [4.0kt]
 │   │   │   └── mockData.ts [4.0kt]
-│   │   ├── App.tsx [67t]
-│   │   └── routes.ts [374t]
-│   ├── shared/ [6.1kt]
-│   │   ├── api/ [3.3kt]
-│   │   │   ├── admin.ts [2.3kt]
+│   │   ├── App.tsx [92t]
+│   │   └── routes.ts [403t]
+│   ├── shared/ [6.5kt]
+│   │   ├── api/ [3.4kt]
+│   │   │   ├── admin.ts [2.4kt]
 │   │   │   ├── http.ts [566t]
 │   │   │   └── sse.ts [429t]
-│   │   ├── hooks/ [2.1kt]
-│   │   │   └── useChatStream.ts [2.1kt]
+│   │   ├── hooks/ [2.4kt]
+│   │   │   ├── useChatStream.ts [2.1kt]
+│   │   │   └── useModels.ts [316t]
 │   │   ├── lib/ [214t]
 │   │   │   ├── format.ts [154t]
 │   │   │   └── json.ts [60t]
 │   │   └── types/ [497t]
 │   │       ├── admin.ts [315t]
 │   │       └── chat.ts [182t]
-│   ├── styles/ [442t]
+│   ├── styles/ [663t]
 │   │   ├── fonts.css [1t]
 │   │   ├── index.css [18t]
 │   │   ├── tailwind.css [5t]
-│   │   └── theme.css [418t]
+│   │   └── theme.css [639t]
 │   ├── main.tsx [137t]
 │   └── vite-env.d.ts [50t]
 ├── ATTRIBUTIONS.md [68t]
+├── Dockerfile.prod [135t]
 ├── README.md [113t]
 ├── build.log [415t]
 ├── index.html [74t]
+├── nginx.conf [423t]
 ├── package.json [680t]
 ├── postcss.config.mjs [4t]
 ├── tsconfig.json [184t]
 ├── tsconfig.node.json [94t]
 ├── tsconfig.node.tsbuildinfo [12.2kt]
-├── tsconfig.tsbuildinfo [768t]
-├── vite.config.d.ts [19t]
-├── vite.config.js [276t]
-└── vite.config.ts [237t]
+├── tsconfig.tsbuildinfo [781t]
+└── vite.config.ts [196t]
 
-13 directories, 97 files
+13 directories, 101 files
 
 ================================================================================
 ### FILE CONTENTS
@@ -145,92 +149,67 @@ Root: /home/pruthvi/projects/h-ai/HFCL-FastMCP-server-httpx-tools/Chatbot UI and
 
 
 
-===== tsconfig.tsbuildinfo [768 tokens] =====
-{"root":["./src/main.tsx","./src/vite-env.d.ts","./src/app/App.tsx","./src/app/routes.ts","./src/app/components/ChatInput.tsx","./src/app/components/ChatMessage.tsx","./src/app/components/ChatWidget.tsx","./src/app/components/LandingPage.tsx","./src/app/components/NBFCLandingPage.tsx","./src/app/components/admin/AdminContext.tsx","./src/app/components/admin/AdminLayout.tsx","./src/app/components/admin/ChatCosts.tsx","./src/app/components/admin/ChatTraces.tsx","./src/app/components/admin/CommandPalette.tsx","./src/app/components/admin/Conversations.tsx","./src/app/components/admin/Dashboard.tsx","./src/app/components/admin/Feedback.tsx","./src/app/components/admin/Guardrails.tsx","./src/app/components/admin/KnowledgeBase.tsx","./src/app/components/admin/ModelConfig.tsx","./src/app/components/admin/QuestionCategories.tsx","./src/app/components/admin/UsersAnalytics.tsx","./src/app/components/figma/ImageWithFallback.tsx","./src/app/components/ui/accordion.tsx","./src/app/components/ui/alert-dialog.tsx","./src/app/components/ui/alert.tsx","./src/app/components/ui/aspect-ratio.tsx","./src/app/components/ui/avatar.tsx","./src/app/components/ui/badge.tsx","./src/app/components/ui/breadcrumb.tsx","./src/app/components/ui/button.tsx","./src/app/components/ui/calendar.tsx","./src/app/components/ui/card.tsx","./src/app/components/ui/carousel.tsx","./src/app/components/ui/chart.tsx","./src/app/components/ui/checkbox.tsx","./src/app/components/ui/collapsible.tsx","./src/app/components/ui/command.tsx","./src/app/components/ui/context-menu.tsx","./src/app/components/ui/dialog.tsx","./src/app/components/ui/drawer.tsx","./src/app/components/ui/dropdown-menu.tsx","./src/app/components/ui/form.tsx","./src/app/components/ui/hover-card.tsx","./src/app/components/ui/input-otp.tsx","./src/app/components/ui/input.tsx","./src/app/components/ui/label.tsx","./src/app/components/ui/menubar.tsx","./src/app/components/ui/navigation-menu.tsx","./src/app/components/ui/pagination.tsx","./src/app/components/ui/popover.tsx","./src/app/components/ui/progress.tsx","./src/app/components/ui/radio-group.tsx","./src/app/components/ui/resizable.tsx","./src/app/components/ui/scroll-area.tsx","./src/app/components/ui/select.tsx","./src/app/components/ui/separator.tsx","./src/app/components/ui/sheet.tsx","./src/app/components/ui/sidebar.tsx","./src/app/components/ui/skeleton.tsx","./src/app/components/ui/slider.tsx","./src/app/components/ui/sonner.tsx","./src/app/components/ui/switch.tsx","./src/app/components/ui/table.tsx","./src/app/components/ui/tabs.tsx","./src/app/components/ui/textarea.tsx","./src/app/components/ui/toggle-group.tsx","./src/app/components/ui/toggle.tsx","./src/app/components/ui/tooltip.tsx","./src/app/components/ui/use-mobile.ts","./src/app/components/ui/utils.ts","./src/app/data/mockData.ts","./src/shared/api/admin.ts","./src/shared/api/http.ts","./src/shared/api/sse.ts","./src/shared/hooks/useChatStream.ts","./src/shared/lib/format.ts","./src/shared/lib/json.ts","./src/shared/types/admin.ts","./src/shared/types/chat.ts"],"version":"5.9.3"}
-
-
-===== vite.config.js [276 tokens] =====
-import { defineConfig } from 'vite';
-import path from 'path';
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-const apiTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000';
-export default defineConfig({
-    plugins: [react(), tailwindcss()],
-    resolve: {
-        alias: {
-            '@': path.resolve(__dirname, './src'),
-        },
-    },
-    assetsInclude: ['**/*.svg', '**/*.csv'],
-    server: {
-        allowedHosts: ['mft-agent.pruthvirajchavan.codes'],
-        proxy: {
-            '/api': {
-                target: apiTarget,
-                changeOrigin: true,
-                secure: false,
-                rewrite: (p) => p.replace(/^\/api/, ''),
-            },
-        },
-    },
-    preview: {
-        host: '0.0.0.0',
-        port: 5173,
-        allowedHosts: ['mft-agent.pruthvirajchavan.codes'],
-        proxy: {
-            '/api': {
-                target: apiTarget,
-                changeOrigin: true,
-                secure: false,
-                rewrite: (p) => p.replace(/^\/api/, ''),
-            },
-        },
-    },
-});
+===== tsconfig.tsbuildinfo [781 tokens] =====
+{"root":["./src/main.tsx","./src/vite-env.d.ts","./src/app/App.tsx","./src/app/routes.ts","./src/app/components/ChatInput.tsx","./src/app/components/ChatMessage.tsx","./src/app/components/ChatWidget.tsx","./src/app/components/LandingPage.tsx","./src/app/components/NBFCLandingPage.tsx","./src/app/components/admin/AdminContext.tsx","./src/app/components/admin/AdminLayout.tsx","./src/app/components/admin/ChatCosts.tsx","./src/app/components/admin/ChatTraces.tsx","./src/app/components/admin/CommandPalette.tsx","./src/app/components/admin/Conversations.tsx","./src/app/components/admin/Dashboard.tsx","./src/app/components/admin/Feedback.tsx","./src/app/components/admin/GlobalTraceSheet.tsx","./src/app/components/admin/Guardrails.tsx","./src/app/components/admin/KnowledgeBase.tsx","./src/app/components/admin/ModelConfig.tsx","./src/app/components/admin/QuestionCategories.tsx","./src/app/components/admin/UsersAnalytics.tsx","./src/app/components/figma/ImageWithFallback.tsx","./src/app/components/ui/accordion.tsx","./src/app/components/ui/alert-dialog.tsx","./src/app/components/ui/alert.tsx","./src/app/components/ui/aspect-ratio.tsx","./src/app/components/ui/avatar.tsx","./src/app/components/ui/badge.tsx","./src/app/components/ui/breadcrumb.tsx","./src/app/components/ui/button.tsx","./src/app/components/ui/calendar.tsx","./src/app/components/ui/card.tsx","./src/app/components/ui/carousel.tsx","./src/app/components/ui/chart.tsx","./src/app/components/ui/checkbox.tsx","./src/app/components/ui/collapsible.tsx","./src/app/components/ui/command.tsx","./src/app/components/ui/context-menu.tsx","./src/app/components/ui/dialog.tsx","./src/app/components/ui/drawer.tsx","./src/app/components/ui/dropdown-menu.tsx","./src/app/components/ui/form.tsx","./src/app/components/ui/hover-card.tsx","./src/app/components/ui/input-otp.tsx","./src/app/components/ui/input.tsx","./src/app/components/ui/label.tsx","./src/app/components/ui/menubar.tsx","./src/app/components/ui/navigation-menu.tsx","./src/app/components/ui/pagination.tsx","./src/app/components/ui/popover.tsx","./src/app/components/ui/progress.tsx","./src/app/components/ui/radio-group.tsx","./src/app/components/ui/resizable.tsx","./src/app/components/ui/scroll-area.tsx","./src/app/components/ui/select.tsx","./src/app/components/ui/separator.tsx","./src/app/components/ui/sheet.tsx","./src/app/components/ui/sidebar.tsx","./src/app/components/ui/skeleton.tsx","./src/app/components/ui/slider.tsx","./src/app/components/ui/sonner.tsx","./src/app/components/ui/switch.tsx","./src/app/components/ui/table.tsx","./src/app/components/ui/tabs.tsx","./src/app/components/ui/textarea.tsx","./src/app/components/ui/toggle-group.tsx","./src/app/components/ui/toggle.tsx","./src/app/components/ui/tooltip.tsx","./src/app/components/ui/use-mobile.ts","./src/app/components/ui/utils.ts","./src/app/data/mockData.ts","./src/shared/api/admin.ts","./src/shared/api/http.ts","./src/shared/api/sse.ts","./src/shared/hooks/useChatStream.ts","./src/shared/lib/format.ts","./src/shared/lib/json.ts","./src/shared/types/admin.ts","./src/shared/types/chat.ts"],"version":"5.9.3"}
 
 
 
-===== vite.config.ts [237 tokens] =====
-import { defineConfig } from 'vite'
+===== Dockerfile.prod [135 tokens] =====
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
+FROM node:20-slim AS builder
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --legacy-peer-deps
+
+COPY . .
+RUN npm run build
+
+# ── Stage 2: Serve ────────────────────────────────────────────────────────────
+FROM nginx:1.27-alpine
+
+# Remove default Nginx site
+RUN rm /etc/nginx/conf.d/default.conf
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+
+
+
+===== vite.config.ts [196 tokens] =====
+import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
-const apiTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000'
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const apiTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:8000'
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  assetsInclude: ['**/*.svg', '**/*.csv'],
-  server: {
-    allowedHosts: ['mft-agent.pruthvirajchavan.codes'],
-    proxy: {
-      '/api': {
-        target: apiTarget,
-        changeOrigin: true,
-        secure: false,
-        rewrite: (p) => p.replace(/^\/api/, ''),
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
       },
     },
-  },
-  preview: {
-    host: '0.0.0.0',
-    port: 5173,
-    allowedHosts: ['mft-agent.pruthvirajchavan.codes'],
-    proxy: {
-      '/api': {
-        target: apiTarget,
-        changeOrigin: true,
-        secure: false,
-        rewrite: (p) => p.replace(/^\/api/, ''),
+    assetsInclude: ['**/*.svg', '**/*.csv'],
+    server: {
+      allowedHosts: ['mft-agent.pruthvirajchavan.codes'],
+      proxy: {
+        '/api': {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false,
+          rewrite: (p) => p.replace(/^\/api/, ''),
+        },
       },
     },
-  },
+  }
 })
 
 
@@ -257,6 +236,60 @@ file: /home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot UI and 
     at convertProgram (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:15677:12)
     at Module.setSource (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:17392:24)
     at async ModuleLoader.addModuleSource (file:///home/pruthvi/projects/h-ai/mft-FastMCP-server-httpx-tools/Chatbot%20UI%20and%20Admin%20Console/node_modules/rollup/dist/es/shared/node-entry.js:21474:13)
+
+
+
+===== nginx.conf [423 tokens] =====
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # ── Gzip ──────────────────────────────────────────────────────────────
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+    gzip_min_length 256;
+    gzip_vary on;
+
+    # ── Security headers ──────────────────────────────────────────────────
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # ── Reverse-proxy /api/ → backend (strip /api prefix) ────────────────
+    location /api/ {
+        proxy_pass http://agent:8000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+
+        # SSE / streaming support — disable buffering
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+
+        # Pass through chunked encoding for streaming responses
+        chunked_transfer_encoding on;
+    }
+
+    # ── Hashed static assets — aggressive caching ─────────────────────────
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # ── SPA fallback — all other routes serve index.html ──────────────────
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
 
 
 
@@ -363,12 +396,6 @@ export default {}
 This project includes components from [shadcn/ui](https://ui.shadcn.com/) used under [MIT license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md).
 
 This project includes photos from [Unsplash](https://unsplash.com) used under [license](https://unsplash.com/license).
-
-
-
-===== vite.config.d.ts [19 tokens] =====
-declare const _default: import("vite").UserConfig;
-export default _default;
 
 
 
@@ -496,14 +523,17 @@ interface ImportMeta {
 
 
 
-===== src/app/App.tsx [67 tokens] =====
+===== src/app/App.tsx [92 tokens] =====
 import { RouterProvider } from 'react-router'
 import { Toaster } from 'sonner'
 import { router } from './routes'
 
+import { PrototypeDisclaimer } from './components/PrototypeDisclaimer'
+
 export default function App() {
   return (
     <>
+      <PrototypeDisclaimer />
       <RouterProvider router={router} />
       <Toaster richColors position="top-right" />
     </>
@@ -512,7 +542,7 @@ export default function App() {
 
 
 
-===== src/app/routes.ts [374 tokens] =====
+===== src/app/routes.ts [403 tokens] =====
 import { createBrowserRouter } from 'react-router'
 import { LandingPage } from './components/LandingPage'
 import { AdminLayout } from './components/admin/AdminLayout'
@@ -526,6 +556,7 @@ import { ModelConfig } from './components/admin/ModelConfig'
 import { Guardrails } from './components/admin/Guardrails'
 import { UsersAnalytics } from './components/admin/UsersAnalytics'
 import { Feedback } from './components/admin/Feedback'
+import { SystemHealth } from './components/admin/SystemHealth'
 
 export const router = createBrowserRouter([
   {
@@ -546,6 +577,7 @@ export const router = createBrowserRouter([
       { path: 'guardrails', Component: Guardrails },
       { path: 'users', Component: UsersAnalytics },
       { path: 'feedback', Component: Feedback },
+      { path: 'health', Component: SystemHealth },
     ],
   },
 ])
@@ -749,21 +781,172 @@ export const modelConfigs: ModelConfigRecord[] = [
 
 
 
-===== src/app/components/ChatWidget.tsx [1,887 tokens] =====
-import { useState, useRef, useEffect } from 'react'
-import { Bot, MessageCircle, X, Trash2 } from 'lucide-react'
+===== src/app/components/ChatWidget.tsx [4,502 tokens] =====
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Bot, MessageCircle, X, Trash2, Settings, ArrowLeft, Save, Loader2, KeyRound, Maximize2, Minimize2, AlertTriangle } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { useChatStream } from '../../shared/hooks/useChatStream'
+import { fetchSessionConfig, saveSessionConfig } from '../../shared/api/admin'
+import { useAvailableModels } from '../../shared/hooks/useModels'
 import { cn } from './ui/utils'
 
+// --- Settings View Component ---
+function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
+  const qc = useQueryClient()
+
+  const [formData, setFormData] = useState({
+    provider: 'groq',
+    model_name: '',
+    reasoning_effort: 'medium',
+    system_prompt: '',
+    apiKey: '',
+  })
+
+  const handleModelChange = useCallback((newModelId: string) => {
+    setFormData((prev) => ({ ...prev, model_name: newModelId }));
+  }, []);
+
+  const { availableModels, isLoading: mLoading } = useAvailableModels(
+    formData.provider,
+    formData.model_name,
+    handleModelChange
+  );
+
+  const { isLoading: cfgLoading } = useQuery({
+    queryKey: ['session-config', sessionId],
+    queryFn: () => fetchSessionConfig(sessionId),
+    enabled: !!sessionId,
+  })
+
+  useEffect(() => {
+    const cachedCfg = qc.getQueryData<any>(['session-config', sessionId])
+    if (cachedCfg) {
+      setFormData({
+        provider: cachedCfg.provider || 'groq',
+        model_name: cachedCfg.model_name || '',
+        reasoning_effort: cachedCfg.reasoning_effort || 'medium',
+        system_prompt: cachedCfg.system_prompt || '',
+        apiKey: '',
+      })
+    }
+  }, [sessionId, qc])
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      const payload: any = {
+        session_id: sessionId,
+        provider: formData.provider,
+        model_name: formData.model_name,
+        reasoning_effort: formData.reasoning_effort,
+        system_prompt: formData.system_prompt,
+      }
+
+      if (formData.apiKey) {
+        if (formData.provider === 'openrouter') payload.openrouter_api_key = formData.apiKey
+        else if (formData.provider === 'nvidia') payload.nvidia_api_key = formData.apiKey
+        else if (formData.provider === 'groq') payload.groq_api_key = formData.apiKey
+      }
+
+      return saveSessionConfig(payload)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['session-config', sessionId] })
+      toast.success('Session settings updated')
+      onBack()
+    },
+    onError: (e) => toast.error((e as Error).message),
+  })
+
+  if (mLoading || cfgLoading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-gray-50/40 text-gray-500">
+        <Loader2 className="w-6 h-6 animate-spin mb-2 text-cyan-600" />
+        <p className="text-sm font-medium">Loading config...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-gray-50/40 p-5 space-y-5">
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Provider</label>
+        <select
+          value={formData.provider}
+          onChange={(e) => setFormData({ ...formData, provider: e.target.value, model_name: '' })}
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-cyan-500 outline-none transition-shadow shadow-sm"
+        >
+          <option value="groq">Groq (Fastest)</option>
+          <option value="openrouter">OpenRouter (Most Models)</option>
+          <option value="nvidia">NVIDIA NIM</option>
+        </select>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Model</label>
+        <select
+          value={formData.model_name}
+          onChange={(e) => setFormData({ ...formData, model_name: e.target.value })}
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-cyan-500 outline-none transition-shadow shadow-sm"
+        >
+          <option value="" disabled>Select a model...</option>
+          {availableModels.map((m: any) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+          <KeyRound size={12} /> Bring Your Own Key (Optional)
+        </label>
+        <input
+          type="password"
+          value={formData.apiKey}
+          onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+          placeholder={`Enter ${formData.provider} API Key`}
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 font-mono focus:ring-2 focus:ring-cyan-500 outline-none transition-shadow shadow-sm placeholder:font-sans"
+        />
+        <p className="text-[10px] text-gray-500 leading-tight">
+          Leave blank to use server defaults. Keys are securely bound to this session.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">System Prompt</label>
+        <textarea
+          value={formData.system_prompt}
+          onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
+          placeholder="You are a helpful assistant..."
+          rows={4}
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-cyan-500 outline-none transition-shadow shadow-sm resize-none font-mono"
+        />
+      </div>
+
+      <button
+        onClick={() => saveMut.mutate()}
+        disabled={saveMut.isPending || !formData.model_name}
+        className="w-full py-3 rounded-xl text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition-opacity bg-gradient-to-r from-cyan-500 to-teal-500"
+      >
+        {saveMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+        Save & Apply
+      </button>
+    </div>
+  )
+}
+
+// --- Main Chat Widget ---
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
+  const [isMaximized, setIsMaximized] = useState(false)
+  const [view, setView] = useState<'chat' | 'settings'>('chat')
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { messages, followUps, isStreaming, error, sendMessage, stopGeneration, clearConversation } =
+  const { messages, followUps, isStreaming, error, sendMessage, stopGeneration, clearConversation, sessionId } =
     useChatStream()
 
   const scrollToBottom = () => {
@@ -771,8 +954,8 @@ export function ChatWidget() {
   }
 
   useEffect(() => {
-    if (isOpen) scrollToBottom()
-  }, [messages, isStreaming, isOpen])
+    if (isOpen && view === 'chat') scrollToBottom()
+  }, [messages, isStreaming, isOpen, view, isMaximized])
 
   const handleSend = () => {
     if (!input.trim() || isStreaming) return
@@ -785,147 +968,210 @@ export function ChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
-      {/* Chat window */}
+    <>
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.85, y: 20 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-            className="w-[380px] max-w-[calc(100vw-2rem)] h-[540px] max-h-[calc(100vh-8rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 origin-bottom-right"
-          >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white p-4 flex items-center gap-3 flex-shrink-0">
-              <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
-                <Bot size={18} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm leading-tight">TrustFin Assistant</h3>
-                <p className="text-white/80 text-xs flex items-center gap-1.5 mt-0.5">
-                  <span className={cn('w-1.5 h-1.5 rounded-full', isStreaming ? 'bg-yellow-300 animate-pulse' : 'bg-green-400')} />
-                  {isStreaming ? 'Thinking…' : 'Online'}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={clearConversation}
-                  className="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition-colors"
-                  title="Clear chat"
-                >
-                  <Trash2 size={13} className="text-white" />
-                </button>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <X size={15} className="text-white" />
-                </button>
-              </div>
-            </div>
+          <>
+            {/* Backdrop for maximized mode */}
+            {isMaximized && (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40"
+                onClick={() => setIsMaximized(false)}
+              />
+            )}
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/40">
-              {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-8">
-                  <div className="w-12 h-12 bg-cyan-100 rounded-full flex items-center justify-center">
-                    <Bot size={22} className="text-cyan-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm text-gray-700">Welcome to TrustFin</p>
-                    <p className="text-xs text-gray-500 mt-1 max-w-[220px]">
-                      Ask me about home loans, business loans, EMI schedules, and more.
-                    </p>
-                  </div>
-                </div>
+            <motion.div
+              layout
+              initial={{ opacity: 0, scale: 0.85, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.85, y: 20 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              className={cn(
+                "bg-white shadow-2xl flex flex-col overflow-hidden border border-gray-200/60 z-50 transition-all origin-bottom-right",
+                isMaximized
+                  ? "fixed inset-4 sm:inset-10 rounded-2xl"
+                  : "fixed bottom-6 right-6 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-8rem)] rounded-3xl"
               )}
-
-              {messages.map((msg) => (
-                <ChatMessage key={msg.id} message={msg} />
-              ))}
-
-              {/* Streaming dot indicator */}
-              {isStreaming && messages[messages.length - 1]?.role === 'user' && (
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center flex-shrink-0">
-                    <Bot size={14} className="text-white" />
-                  </div>
-                  <div className="px-4 py-3 bg-white border border-gray-100 rounded-2xl rounded-tl-sm shadow-sm">
-                    <div className="flex gap-1 items-center h-4">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:0ms]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:150ms]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:300ms]" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Error */}
-              {error && (
-                <p className="text-xs text-red-500 text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                  {error}
-                </p>
-              )}
-
-              {/* Follow-up suggestions */}
-              {!isStreaming && followUps.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {followUps.map((fu, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleFollowUp(fu)}
-                      className="text-xs px-3 py-1.5 rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 transition-colors text-left"
-                    >
-                      {fu}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white p-4 flex items-center justify-between flex-shrink-0 shadow-sm relative z-10">
+                <div className="flex items-center gap-3 min-w-0">
+                  {view === 'settings' ? (
+                    <button onClick={() => setView('chat')} className="w-8 h-8 -ml-1 rounded-full hover:bg-white/20 flex items-center justify-center transition-colors">
+                      <ArrowLeft size={18} className="text-white" />
                     </button>
-                  ))}
+                  ) : (
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-inner">
+                      <Bot size={20} className="text-white drop-shadow-sm" />
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-sm tracking-tight truncate">
+                      {view === 'settings' ? 'Session Configuration' : 'TrustFin Assistant'}
+                    </h3>
+                    {view === 'chat' && (
+                      <p className="text-white/80 text-xs font-medium flex items-center gap-1.5 mt-0.5">
+                        <span className={cn('w-1.5 h-1.5 rounded-full shadow-sm', isStreaming ? 'bg-yellow-300 animate-pulse' : 'bg-green-400')} />
+                        {isStreaming ? 'Generating…' : 'Online'}
+                      </p>
+                    )}
+                  </div>
                 </div>
+
+                <div className="flex items-center gap-1 ml-2">
+                  {view === 'chat' && (
+                    <>
+                      <button
+                        onClick={clearConversation}
+                        className="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center transition-colors"
+                        title="Clear chat history"
+                      >
+                        <Trash2 size={14} className="text-white" />
+                      </button>
+                      <button
+                        onClick={() => setView('settings')}
+                        className="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center transition-colors"
+                        title="Configure AI Session"
+                      >
+                        <Settings size={15} className="text-white" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setIsMaximized(!isMaximized)}
+                    className="hidden sm:flex w-8 h-8 rounded-full hover:bg-white/20 items-center justify-center transition-colors"
+                    title={isMaximized ? "Minimize" : "Maximize"}
+                  >
+                    {isMaximized ? <Minimize2 size={15} className="text-white" /> : <Maximize2 size={15} className="text-white" />}
+                  </button>
+                  <button
+                    onClick={() => { setIsOpen(false); setIsMaximized(false); }}
+                    className="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center transition-colors ml-1 bg-black/10"
+                    title="Close widget"
+                  >
+                    <X size={16} className="text-white" />
+                  </button>
+                </div>
+              </div>
+
+              {/* View Switcher */}
+              {view === 'settings' ? (
+                <ChatSettingsView sessionId={sessionId} onBack={() => setView('chat')} />
+              ) : (
+                <>
+                  {/* Messages Area */}
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/50 scroll-smooth">
+                    {messages.length === 0 && (
+                      <div className="flex flex-col items-center justify-center h-full text-center px-4 py-8">
+                        <div className="w-16 h-16 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-cyan-200/50">
+                          <Bot size={28} className="text-cyan-600" />
+                        </div>
+                        <p className="font-bold text-gray-800 text-lg">Welcome to TrustFin</p>
+                        <p className="text-sm text-gray-500 mt-2 max-w-[240px] leading-relaxed">
+                          I can help you check loan eligibility, track applications, or explain our financial products.
+                        </p>
+                        <div className="mt-6 flex flex-col sm:flex-row flex-wrap justify-center gap-2 w-full max-w-lg">
+                          {["What are your home loan rates?", "I need help with my EMI", "Documents required for a business loan?"].map(q => (
+                            <button key={q} onClick={() => handleFollowUp(q)} className="text-xs bg-white border border-gray-200 hover:border-cyan-300 hover:bg-cyan-50 text-gray-600 py-2.5 px-3 rounded-xl transition-all shadow-sm text-left">
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {messages.map((msg) => (
+                      <ChatMessage key={msg.id} message={msg} />
+                    ))}
+
+                    {/* Streaming Indicator */}
+                    {isStreaming && messages[messages.length - 1]?.role === 'user' && (
+                      <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <Bot size={14} className="text-white" />
+                        </div>
+                        <div className="px-4 py-3 bg-white border border-gray-200 rounded-2xl rounded-tl-sm shadow-sm">
+                          <div className="flex gap-1.5 items-center h-4">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:0ms]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:150ms]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:300ms]" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Error State */}
+                    {error && (
+                      <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3 shadow-sm animate-in fade-in">
+                        <AlertTriangle size={14} className="shrink-0" />
+                        <p>{error}</p>
+                      </div>
+                    )}
+
+                    {/* Follow-up suggestions */}
+                    {!isStreaming && followUps.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {followUps.map((fu, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleFollowUp(fu)}
+                            className="text-xs px-3.5 py-2 rounded-xl border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 transition-colors text-left shadow-sm font-medium"
+                          >
+                            {fu}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div ref={messagesEndRef} className="h-2" />
+                  </div>
+
+                  {/* Input Area */}
+                  <ChatInput
+                    value={input}
+                    onChange={setInput}
+                    onSend={handleSend}
+                    onStop={stopGeneration}
+                    isStreaming={isStreaming}
+                  />
+                </>
               )}
-
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input */}
-            <ChatInput
-              value={input}
-              onChange={setInput}
-              onSend={handleSend}
-              onStop={stopGeneration}
-              isStreaming={isStreaming}
-            />
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
-      {/* FAB */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen((p) => !p)}
-        className="w-14 h-14 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 shadow-lg hover:shadow-xl flex items-center justify-center text-white transition-shadow"
-        aria-label="Open chat"
-      >
-        <AnimatePresence mode="wait">
-          {isOpen ? (
-            <motion.span key="x" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
-              <X size={22} />
-            </motion.span>
-          ) : (
-            <motion.span key="chat" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
-              <MessageCircle size={22} />
-            </motion.span>
+      {/* FAB (Floating Action Button) - Hidden when maximized or open */}
+      {!isOpen && (
+        <motion.button
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsOpen((p) => !p)}
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white transition-all border border-white/20 bg-gradient-to-br from-cyan-500 to-teal-600"
+          aria-label="Open chat"
+        >
+          <AnimatePresence mode="wait">
+            {isOpen ? (
+              <motion.span key="x" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                <X size={24} />
+              </motion.span>
+            ) : (
+              <motion.span key="chat" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.15 }}>
+                <MessageCircle size={24} />
+              </motion.span>
+            )}
+          </AnimatePresence>
+
+          {!isOpen && messages.length > 0 && (
+            <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white animate-pulse" />
           )}
-        </AnimatePresence>
-        {/* Unread dot when closed */}
-        {!isOpen && messages.length > 0 && (
-          <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
-        )}
-      </motion.button>
-    </div>
+        </motion.button>
+      )}
+    </>
   )
 }
-
 
 
 ===== src/app/components/NBFCLandingPage.tsx [4,223 tokens] =====
@@ -1392,6 +1638,72 @@ export function LandingPage() {
 
 
 
+===== src/app/components/PrototypeDisclaimer.tsx [724 tokens] =====
+import { useState, useEffect } from 'react'
+import {
+    AlertDialog,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogAction,
+} from './ui/alert-dialog'
+import { AlertTriangle, ShieldAlert } from 'lucide-react'
+
+export function PrototypeDisclaimer() {
+    const [open, setOpen] = useState(false)
+
+    useEffect(() => {
+        // Open immediately on mount to ensure it shows every time (even on refresh)
+        setOpen(true)
+    }, [])
+
+    return (
+        <AlertDialog open={open} onOpenChange={setOpen}>
+            <AlertDialogContent className="max-w-[480px] border-amber-200/50 bg-amber-50/95 backdrop-blur-xl shadow-2xl">
+                <AlertDialogHeader className="space-y-4">
+                    <div className="flex items-center gap-3 text-amber-700">
+                        <div className="p-2.5 bg-amber-100 rounded-xl">
+                            <ShieldAlert className="h-6 w-6" />
+                        </div>
+                        <AlertDialogTitle className="text-xl font-bold tracking-tight text-amber-900">
+                            Prototype Disclaimer
+                        </AlertDialogTitle>
+                    </div>
+
+                    <div className="space-y-3">
+                        <AlertDialogDescription className="text-amber-900/80 text-[15px] font-medium leading-relaxed">
+                            You are viewing a demonstration prototype.
+                        </AlertDialogDescription>
+
+                        <div className="p-4 bg-amber-100/50 rounded-xl border border-amber-200/50">
+                            <p className="text-sm text-amber-800 leading-6">
+                                <strong>TrustFin</strong> is a fictional entity. The services, products, and scenarios depicted in this application <span className="font-bold underline decoration-amber-500/50 decoration-2 underline-offset-2">do not exist in real life</span>.
+                            </p>
+                        </div>
+
+                        <p className="text-xs text-amber-700/60 font-medium pt-1">
+                            No real financial transactions or sensitive data processing will occur.
+                        </p>
+                    </div>
+                </AlertDialogHeader>
+
+                <AlertDialogFooter className="mt-2">
+                    <AlertDialogAction
+                        onClick={() => setOpen(false)}
+                        className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-900/10 border-none transition-all hover:scale-[1.02] active:scale-[0.98] font-semibold"
+                    >
+                        I Understand, Proceed to Demo
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )
+}
+
+
+
 ===== src/app/components/ChatMessage.tsx [994 tokens] =====
 import { useState } from 'react'
 import { Bot, ChevronDown, ChevronUp, Copy, User, Wrench } from 'lucide-react'
@@ -1509,7 +1821,7 @@ export function ChatMessage({ message }: Props) {
 
 
 
-===== src/app/components/ChatInput.tsx [557 tokens] =====
+===== src/app/components/ChatInput.tsx [560 tokens] =====
 import { useRef, useEffect } from 'react'
 import { Send, Square } from 'lucide-react'
 import { cn } from './ui/utils'
@@ -1551,7 +1863,7 @@ export function ChatInput({ value, onChange, onSend, onStop, isStreaming, disabl
         rows={1}
         disabled={disabled || isStreaming}
         className={cn(
-          'flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400 transition-all max-h-[120px] overflow-y-auto',
+          'flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 leading-relaxed placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400 transition-all max-h-[120px] overflow-y-auto',
           (disabled || isStreaming) && 'opacity-60 cursor-not-allowed',
         )}
       />
@@ -3288,163 +3600,183 @@ export function SidebarMenuButton({ children, asChild, isActive, className }: { 
 
 
 
-===== src/app/components/admin/AdminLayout.tsx [1,428 tokens] =====
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router'
+===== src/app/components/admin/AdminLayout.tsx [2,266 tokens] =====
+import { useState, useEffect } from "react";
+import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
 import {
-  BadgeDollarSign,
-  Database,
-  Eye,
-  EyeOff,
-  GitBranch,
-  LayoutDashboard,
-  MessageSquare,
-  Settings,
-  ShieldAlert,
-  Tags,
-  ThumbsUp,
-  Users,
-} from 'lucide-react'
-import { AdminProvider, useAdminContext } from './AdminContext'
-import { CommandPalette } from './CommandPalette'
+  LayoutDashboard, Database, DollarSign, Activity, MessageSquare,
+  Shield as ShieldIcon, Gauge, Cpu, Heart, ChevronLeft, Menu,
+  Settings, LogOut, Search, Bell, Tag, Key, Eye, EyeOff, AlertCircle, Users
+} from "lucide-react";
+import { AdminProvider, useAdminContext } from "./AdminContext";
+import { CommandPalette } from "./CommandPalette";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 
-const NAV = [
-  { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { path: '/admin/knowledge-base', label: 'Knowledge Base', icon: Database },
-  { path: '/admin/costs', label: 'Costs', icon: BadgeDollarSign },
-  { path: '/admin/traces', label: 'Traces', icon: GitBranch },
-  { path: '/admin/categories', label: 'Categories', icon: Tags },
-  { path: '/admin/conversations', label: 'Conversations', icon: MessageSquare },
-  { path: '/admin/model-config', label: 'Model Config', icon: Settings },
-  { path: '/admin/guardrails', label: 'Guardrails', icon: ShieldAlert },
-  { path: '/admin/users', label: 'Users', icon: Users },
-  { path: '/admin/feedback', label: 'Feedback', icon: ThumbsUp },
-] as const satisfies Array<{ path: string; label: string; icon: React.ElementType; end?: boolean }>
+const NAV_ITEMS = [
+  { path: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { path: "/admin/knowledge-base", label: "Knowledge Base", icon: Database },
+  { path: "/admin/costs", label: "Session Costs", icon: DollarSign },
+  { path: "/admin/traces", label: "Chat Traces", icon: Activity },
+  { path: "/admin/categories", label: "Question Categories", icon: Tag },
+  { path: "/admin/conversations", label: "Conversations", icon: MessageSquare },
+  { path: "/admin/guardrails", label: "Guardrails", icon: ShieldIcon },
+  { path: "/admin/users", label: "Users & Analytics", icon: Users },
+  { path: "/admin/model-config", label: "Models & Router", icon: Cpu },
+  { path: "/admin/health", label: "System Health", icon: Heart },
+];
 
-function KeyInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-}) {
-  const [visible, setVisible] = useState(false)
+function KeyInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [visible, setVisible] = useState(false);
   return (
-    <label className="flex flex-col gap-1 text-xs text-slate-600 min-w-0">
-      <span className="font-semibold truncate">{label}</span>
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold text-slate-600">{label}</Label>
       <div className="relative">
-        <input
-          type={visible ? 'text' : 'password'}
+        <Input
+          type={visible ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={`Set ${label}`}
-          className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
+          placeholder={`Enter ${label}...`}
+          className="pr-8 text-xs font-mono"
         />
         <button
           type="button"
           onClick={() => setVisible((p) => !p)}
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
         >
-          {visible ? <EyeOff size={13} /> : <Eye size={13} />}
+          {visible ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       </div>
-    </label>
-  )
+    </div>
+  );
 }
 
 function AdminShell() {
-  const auth = useAdminContext()
-  const [cmdOpen, setCmdOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const navigate = useNavigate();
+  const auth = useAdminContext();
 
+  // Command Palette Keyboard Shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setCmdOpen((p) => !p)
+        e.preventDefault();
+        setCmdOpen((p) => !p);
       }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const missingKeys = !auth.adminKey || !auth.openrouterKey;
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       {/* Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-slate-800 bg-slate-950 text-slate-100">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center font-bold text-white text-sm">
-            TF
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-cyan-100 leading-tight">TrustFin Admin</p>
-            <p className="text-xs text-slate-400">Production Console</p>
-          </div>
+      <aside className={`${sidebarOpen ? "w-64" : "w-16"} bg-white border-r border-gray-200 flex flex-col shrink-0 transition-all duration-300 ease-in-out`}>
+        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100">
+          {sidebarOpen && (
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gradient-to-r from-cyan-500 to-teal-500">
+                <ShieldIcon className="w-4 h-4 text-white" />
+              </div>
+              <span className="font-bold text-slate-900 truncate" style={{ fontSize: 15 }}>HFCL Admin</span>
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="w-8 h-8 shrink-0 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+          >
+            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map((item: any) => {
-            const { path, label, icon: Icon, end } = item
-            return (
-              <NavLink
-                key={path}
-                to={path}
-                end={end}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isActive
-                    ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/30'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-                  }`
-                }
-              >
-                <Icon size={16} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          })}
+        <nav className="flex-1 py-3 px-2 overflow-y-auto space-y-1 no-scrollbar">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.exact}
+              title={!sidebarOpen ? item.label : undefined}
+              className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${isActive ? "text-white shadow-md bg-gradient-to-r from-cyan-500 to-teal-500" : "text-gray-600 hover:bg-gray-100"
+                }`}
+            >
+              <item.icon className="w-4 h-4 shrink-0" />
+              {sidebarOpen && <span className="text-sm font-medium truncate">{item.label}</span>}
+            </NavLink>
+          ))}
         </nav>
 
-        {/* CMD+K hint */}
-        <div className="px-5 py-3 border-t border-slate-800">
-          <button
-            onClick={() => setCmdOpen(true)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-slate-800 text-xs text-slate-400 hover:bg-slate-700 transition-colors"
-          >
-            <span>Quick navigate</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 font-mono text-[10px]">
-              ⌘K
-            </kbd>
+        <div className="border-t border-gray-100 p-2 space-y-1">
+          <button onClick={() => setCmdOpen(true)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all">
+            <div className="flex items-center gap-3">
+              <Search className="w-4 h-4 shrink-0" />
+              {sidebarOpen && <span className="text-sm font-medium">Search</span>}
+            </div>
+            {sidebarOpen && <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-gray-200 rounded text-gray-500">⌘K</kbd>}
+          </button>
+          <button onClick={() => navigate("/")} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all">
+            <LogOut className="w-4 h-4 shrink-0" />
+            {sidebarOpen && <span className="text-sm font-medium">Exit Admin</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Key header */}
-        <header className="border-b border-slate-200 bg-white px-6 py-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
-            <KeyInput label="X-Admin-Key" value={auth.adminKey} onChange={auth.setAdminKey} />
-            <KeyInput
-              label="X-OpenRouter-Key"
-              value={auth.openrouterKey}
-              onChange={auth.setOpenrouterKey}
-            />
-            <KeyInput label="X-Groq-Key" value={auth.groqKey} onChange={auth.setGroqKey} />
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-slate-800">Production Console</h2>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Keys Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all text-xs font-semibold ${missingKeys ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                  <Key size={14} />
+                  <span>API Keys</span>
+                  {missingKeys && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl">
+                <div className="space-y-1 mb-2">
+                  <h4 className="font-semibold text-sm text-slate-900">Authentication</h4>
+                  <p className="text-xs text-slate-500">Required headers for accessing production backend endpoints.</p>
+                </div>
+                {missingKeys && (
+                  <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                    <p>You must provide at least an Admin Key and an LLM Provider Key to load dashboard data.</p>
+                  </div>
+                )}
+                <KeyInput label="Admin API Key (X-Admin-Key)" value={auth.adminKey} onChange={auth.setAdminKey} />
+                <KeyInput label="OpenRouter Key (X-OpenRouter-Key)" value={auth.openrouterKey} onChange={auth.setOpenrouterKey} />
+                <KeyInput label="Groq Key (X-Groq-Key)" value={auth.groqKey} onChange={auth.setGroqKey} />
+              </PopoverContent>
+            </Popover>
+
+            <button className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 relative transition-colors">
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full border border-white" />
+            </button>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm" style={{ background: "var(--brand-gradient)", fontSize: 11, fontWeight: 700 }}>
+              AD
+            </div>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
           <Outlet />
         </main>
       </div>
 
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
-    </div >
-  )
+    </div>
+  );
 }
 
 export function AdminLayout() {
@@ -3452,6 +3784,141 @@ export function AdminLayout() {
     <AdminProvider>
       <AdminShell />
     </AdminProvider>
+  );
+}
+
+
+===== src/app/components/admin/GlobalTraceSheet.tsx [1,579 tokens] =====
+import { useEffect } from 'react'
+import { useSearchParams } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
+import { BrainCircuit, XCircle, CheckCircle2 } from 'lucide-react'
+import { fetchEvalTrace } from '../../../shared/api/admin'
+import { toPrettyJson } from '../../../shared/lib/json'
+import { formatDateTime } from '../../../shared/lib/format'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '../ui/sheet'
+import { Skeleton } from '../ui/skeleton'
+
+export function GlobalTraceSheet() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const traceId = searchParams.get('traceId')
+
+  const { data: detail, isLoading, error } = useQuery({
+    queryKey: ['eval-trace', traceId],
+    queryFn: () => fetchEvalTrace(traceId!),
+    enabled: !!traceId,
+  })
+
+  const handleClose = () => {
+    setSearchParams((prev) => {
+      prev.delete('traceId')
+      return prev
+    })
+  }
+
+  return (
+    <Sheet open={!!traceId} onOpenChange={(open) => !open && handleClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto bg-slate-50 p-0">
+        <SheetHeader className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+              <BrainCircuit size={20} />
+            </div>
+            <div className="text-left">
+              <SheetTitle className="text-base font-semibold">Trace Details</SheetTitle>
+              <SheetDescription className="font-mono text-xs text-slate-500">
+                {traceId}
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="p-6 space-y-6">
+          {isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-24 w-full rounded-xl" />
+              <Skeleton className="h-48 w-full rounded-xl" />
+            </div>
+          ) : error ? (
+            <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 text-sm">
+              Error loading trace: {(error as Error).message}
+            </div>
+          ) : detail ? (
+            <>
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  ['Status', detail.trace.status === 'success' ? (
+                    <span className="flex items-center gap-1 text-emerald-600"><CheckCircle2 size={14}/> Success</span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-red-600"><XCircle size={14}/> {detail.trace.status}</span>
+                  )],
+                  ['Model', detail.trace.model ?? '—'],
+                  ['Latency', detail.trace.latency_ms ? `${detail.trace.latency_ms}ms` : '—'],
+                  ['Started', formatDateTime(detail.trace.started_at)],
+                ].map(([label, val], i) => (
+                  <div key={i} className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
+                    <div className="mt-1 text-sm font-medium text-slate-700 truncate">{val}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* I/O Section */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Inputs</h3>
+                  <div className="flex-1 bg-slate-900 rounded-lg p-3 overflow-x-auto">
+                    <pre className="text-xs text-green-400 font-mono">
+                      {toPrettyJson(detail.trace.inputs_json)}
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Final Output</h3>
+                  <div className="flex-1 text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-3 border border-slate-100 whitespace-pre-wrap">
+                    {detail.trace.final_output || <span className="text-slate-400 italic">No output generated</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Events Timeline */}
+              {detail.events.length > 0 && (
+                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Execution Events</h3>
+                  <div className="space-y-3 relative before:absolute before:inset-y-0 before:left-3 before:w-px before:bg-slate-200">
+                    {detail.events.map((ev, i) => (
+                      <div key={i} className="relative pl-8">
+                        <div className="absolute left-[9px] top-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-4 ring-white" />
+                        <div className="bg-slate-50 rounded-lg border border-slate-100 p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-slate-700">{ev.name ?? ev.event_type ?? ev.event_key}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">{ev.ts ? formatDateTime(ev.ts) : ''}</span>
+                          </div>
+                          {ev.text && <p className="text-xs text-slate-600 mb-2">{ev.text}</p>}
+                          {ev.payload_json && (
+                            <pre className="text-[10px] bg-slate-900 text-slate-300 rounded p-2 overflow-x-auto max-h-40">
+                              {toPrettyJson(ev.payload_json)}
+                            </pre>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -3525,214 +3992,234 @@ export function QuestionCategories() {
 
 
 
-===== src/app/components/admin/KnowledgeBase.tsx [2,431 tokens] =====
+===== src/app/components/admin/KnowledgeBase.tsx [3,658 tokens] =====
 import { useState, useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, Upload, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Upload, Search, Database, Sparkles, AlertTriangle, Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { fetchFaqs, updateFaq, deleteFaq, ingestFaqBatch } from '../../../shared/api/admin'
+import { fetchFaqs, updateFaq, deleteFaq, ingestFaqBatch, requestJson } from '../../../shared/api/admin'
 import { useAdminContext } from './AdminContext'
 import type { FaqRecord } from '../../../shared/types/admin'
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Textarea } from '../ui/textarea'
-import { Skeleton } from '../ui/skeleton'
-import { Alert, AlertDescription } from '../ui/alert'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '../ui/alert-dialog'
-import { Badge } from '../ui/badge'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog'
 import { Progress } from '../ui/progress'
 
-interface FaqForm {
-  question: string
-  answer: string
-}
-
 export function KnowledgeBase() {
-  const auth = useAdminContext()
-  const qc = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState<FaqRecord | null>(null)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [ingestProgress, setIngestProgress] = useState<string | null>(null)
-  const [batchText, setBatchText] = useState('')
+  const auth = useAdminContext();
+  const qc = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<FaqRecord | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [batchText, setBatchText] = useState('');
+  const [ingestProgress, setIngestProgress] = useState<string | null>(null);
 
-  const { data: faqs = [], isLoading, error } = useQuery({
+  const [semanticMode, setSemanticMode] = useState(false);
+  const [semanticResults, setSemanticResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const { data: faqs = [], isLoading } = useQuery({
     queryKey: ['faqs', auth.adminKey],
     queryFn: () => fetchFaqs(auth.adminKey),
     enabled: !!auth.adminKey,
-  })
+  });
 
-  const form = useForm<FaqForm>({ defaultValues: { question: '', answer: '' } })
+  const { register, handleSubmit, reset } = useForm({ defaultValues: { question: '', answer: '' } });
 
-  const filtered = faqs.filter(
-    (f) =>
-      !search ||
-      f.question.toLowerCase().includes(search.toLowerCase()) ||
-      f.answer.toLowerCase().includes(search.toLowerCase()),
-  )
+  const filtered = faqs.filter((f) => !search || f.question.toLowerCase().includes(search.toLowerCase()) || f.answer.toLowerCase().includes(search.toLowerCase()));
 
   const saveMut = useMutation({
-    mutationFn: (data: FaqForm) =>
-      editing
-        ? updateFaq(auth.adminKey, { original_question: editing.question, new_question: data.question, new_answer: data.answer })
-        : updateFaq(auth.adminKey, { original_question: data.question, new_question: data.question, new_answer: data.answer }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['faqs'] })
-      toast.success(editing ? 'FAQ updated' : 'FAQ added')
-      setDialogOpen(false)
-      setEditing(null)
-      form.reset()
-    },
+    mutationFn: (data: any) => updateFaq(auth.adminKey, { original_question: editing ? editing.question : data.question, new_question: data.question, new_answer: data.answer }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['faqs'] }); toast.success('Saved successfully'); setDialogOpen(false); reset(); },
     onError: (e) => toast.error((e as Error).message),
-  })
+  });
 
   const deleteMut = useMutation({
-    mutationFn: (question: string) => deleteFaq(auth.adminKey, question),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['faqs'] })
-      toast.success('FAQ deleted')
-    },
-    onError: (e) => toast.error((e as Error).message),
-  })
+    mutationFn: (q: string) => deleteFaq(auth.adminKey, q),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['faqs'] }); toast.success('Deleted successfully'); },
+  });
 
-  const handleEdit = (faq: FaqRecord) => {
-    setEditing(faq)
-    form.reset({ question: faq.question, answer: faq.answer })
-    setDialogOpen(true)
-  }
-
-  const handleAdd = () => {
-    setEditing(null)
-    form.reset({ question: '', answer: '' })
-    setDialogOpen(true)
-  }
+  const handleSemanticSearch = async () => {
+    if (!search.trim() || !auth.openrouterKey) return toast.error("OpenRouter key required for semantic search");
+    setIsSearching(true);
+    try {
+      const res: any = await requestJson({
+        method: 'POST', path: '/agent/admin/faqs/semantic-search',
+        body: { query: search, limit: 5 },
+        headers: { 'X-Admin-Key': auth.adminKey, 'X-OpenRouter-Key': auth.openrouterKey }
+      });
+      setSemanticResults(res.results || []);
+    } catch (e) { toast.error(String(e)); } finally { setIsSearching(false); }
+  };
 
   const handleBatchIngest = useCallback(async () => {
-    if (!batchText.trim() || !auth.adminKey) return
-    const lines = batchText.trim().split('\n').filter(Boolean)
-    const items = lines.map((line) => {
-      const [question, ...rest] = line.split('|')
-      return { question: question.trim(), answer: rest.join('|').trim() }
-    }).filter((item) => item.question && item.answer)
-    if (!items.length) { toast.error('Format: question|answer per line'); return }
-    setIngestProgress('Starting...')
-    try {
-      await ingestFaqBatch(auth.adminKey, items, (msg) => setIngestProgress(msg), auth.openrouterKey, auth.groqKey)
-      toast.success('Batch ingest complete')
-      qc.invalidateQueries({ queryKey: ['faqs'] })
-      setBatchText('')
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setIngestProgress(null)
-    }
-  }, [auth.adminKey, auth.openrouterKey, auth.groqKey, batchText, qc])
+    if (!batchText.trim()) return;
+    const items = batchText.trim().split('\n').filter(Boolean).map(line => {
+      const [q, ...rest] = line.split('|');
+      return { question: q.trim(), answer: rest.join('|').trim() };
+    }).filter(i => i.question && i.answer);
 
-  if (!auth.adminKey) return <Alert><AlertDescription>Set X-Admin-Key in the header to use Knowledge Base.</AlertDescription></Alert>
-  if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>
+    if (!items.length) return toast.error('Use format: question|answer');
+
+    setIngestProgress('Starting ingestion pipeline...');
+    try {
+      await ingestFaqBatch(auth.adminKey, items, (msg) => setIngestProgress(msg), auth.openrouterKey, auth.groqKey);
+      toast.success('Batch ingest complete');
+      qc.invalidateQueries({ queryKey: ['faqs'] });
+      setBatchText('');
+    } catch (e) { toast.error((e as Error).message); } finally { setIngestProgress(null); }
+  }, [auth, batchText, qc]);
+
+  if (!auth.adminKey) return <div className="p-8 text-center bg-red-50 text-red-600 rounded-xl font-medium mt-10 max-w-2xl mx-auto border border-red-200">Admin API Key Required. Configure in Header.</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-xl font-semibold">Knowledge Base</h1>
-        <Button size="sm" onClick={handleAdd}><Plus size={14} className="mr-1" /> Add FAQ</Button>
+    <div className="space-y-8 max-w-[1600px] mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>Knowledge Base</h1>
+          <p className="text-gray-500 text-sm mt-1">Manage FAQs, vector embeddings, and Neo4j graph relationships.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => { setEditing(null); reset({ question: '', answer: '' }); setDialogOpen(true); }} className="px-5 py-2.5 rounded-xl text-white font-semibold flex items-center gap-2 shadow-md hover:opacity-90 transition-opacity" style={{ background: "var(--brand-gradient)" }}>
+            <Plus size={16} /> Add FAQ
+          </button>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search FAQs…" className="pl-8 h-8 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Main List */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[240px] relative">
+              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={search} onChange={(e) => { setSearch(e.target.value); setSemanticResults([]); }}
+                onKeyDown={(e) => e.key === 'Enter' && semanticMode && handleSemanticSearch()}
+                placeholder={semanticMode ? "Describe concept to find matches..." : "Search exactly..."}
+                className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm font-medium"
+              />
+            </div>
+            <button
+              onClick={() => setSemanticMode(!semanticMode)}
+              className={`px-4 py-2.5 rounded-lg flex items-center gap-2 font-semibold text-sm transition-all ${semanticMode ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              <Sparkles size={14} className={semanticMode ? "text-purple-600" : ""} /> Semantic Search
+            </button>
+            {semanticMode && (
+              <button onClick={handleSemanticSearch} disabled={isSearching} className="px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-semibold disabled:opacity-50 flex items-center gap-2">
+                {isSearching ? <Loader2 size={14} className="animate-spin" /> : "Search"}
+              </button>
+            )}
+          </div>
 
-      {/* Batch ingest */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Batch Ingest (question|answer per line)</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <Textarea value={batchText} onChange={(e) => setBatchText(e.target.value)} placeholder="What is your rate?|Our rate starts at 8.5% p.a." rows={4} className="text-sm font-mono" />
-          {ingestProgress && <div className="space-y-1"><p className="text-xs text-muted-foreground">{ingestProgress}</p><Progress value={50} className="h-1.5" /></div>}
-          <Button size="sm" variant="outline" onClick={handleBatchIngest} disabled={!batchText.trim() || !!ingestProgress}><Upload size={13} className="mr-1" /> Ingest</Button>
-        </CardContent>
-      </Card>
-
-      {/* FAQs table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 rounded" />)}</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    {['Question', 'Answer', 'Actions'].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((faq) => (
-                    <tr key={faq.question} className="border-b last:border-0 hover:bg-slate-50/50">
-                      <td className="px-4 py-3 max-w-[280px]"><p className="font-medium text-sm line-clamp-2">{faq.question}</p></td>
-                      <td className="px-4 py-3 max-w-[380px]"><p className="text-sm text-muted-foreground line-clamp-2">{faq.answer}</p></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(faq)}><Pencil size={13} /></Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"><Trash2 size={13} /></Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete FAQ?</AlertDialogTitle>
-                                <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => deleteMut.mutate(faq.question)}>Delete</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {!filtered.length && <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">No FAQs found</td></tr>}
-                </tbody>
-              </table>
+          {semanticMode && semanticResults.length > 0 && (
+            <div className="bg-purple-50 rounded-xl p-5 border border-purple-100 shadow-inner">
+              <h4 className="text-sm font-bold text-purple-900 mb-3 flex items-center gap-2"><Sparkles size={16} /> Semantic Matches</h4>
+              <div className="space-y-3">
+                {semanticResults.map((r, i) => (
+                  <div key={i} className="bg-white p-4 rounded-lg border border-purple-100 shadow-sm flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{r.question}</p>
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-2">{r.answer}</p>
+                    </div>
+                    <span className="shrink-0 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">
+                      {(r.score * 100).toFixed(1)}% Match
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Add/Edit dialog */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            {isLoading ? <div className="p-6 text-center text-gray-500"><Loader2 className="animate-spin mx-auto mb-2" /> Loading Knowledge Base...</div> : (
+              <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                {filtered.map((faq) => (
+                  <div key={faq.question} className="p-5 hover:bg-gray-50/80 transition-colors group flex items-start justify-between gap-6">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-bold text-gray-900 mb-1.5">{faq.question}</h4>
+                      <p className="text-sm text-gray-600 leading-relaxed">{faq.answer}</p>
+                    </div>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button onClick={() => { setEditing(faq); reset({ question: faq.question, answer: faq.answer }); setDialogOpen(true); }} className="w-8 h-8 flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"><Pencil size={14} /></button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild><button className="w-8 h-8 flex items-center justify-center rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors"><Trash2 size={14} /></button></AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete FAQ?</AlertDialogTitle>
+                            <AlertDialogDescription>This removes the node and its vector embeddings from Neo4j.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteMut.mutate(faq.question)} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                ))}
+                {!filtered.length && <div className="p-12 text-center text-gray-500 font-medium flex flex-col items-center"><Database size={32} className="mb-3 text-gray-300" /> No FAQs found.</div>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Sidebar: Ingestion */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Upload className="text-cyan-600" size={18} />
+              <h3 className="text-base font-bold text-gray-900">Batch Ingest</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">Paste bulk data using the <code className="bg-gray-100 px-1 rounded text-pink-600">Question | Answer</code> format per line. The system will automatically embed and link topics in the graph.</p>
+            <textarea
+              value={batchText} onChange={(e) => setBatchText(e.target.value)}
+              placeholder="What is the ROI? | ROI starts at 8.5% p.a."
+              rows={8}
+              className="w-full bg-slate-900 text-green-400 font-mono text-xs p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none shadow-inner"
+            />
+            {ingestProgress && (
+              <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                <div className="flex items-center gap-2 text-indigo-700 text-xs font-bold mb-2">
+                  <Loader2 size={14} className="animate-spin" /> {ingestProgress}
+                </div>
+                <Progress value={undefined} className="h-1.5 bg-indigo-200" />
+              </div>
+            )}
+            <button onClick={handleBatchIngest} disabled={!batchText.trim() || !!ingestProgress} className="w-full mt-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold rounded-lg disabled:opacity-50 transition-colors">
+              Execute Pipeline
+            </button>
+          </div>
+
+          <div className="bg-rose-50 rounded-xl p-6 border border-rose-100">
+            <h3 className="text-sm font-bold text-rose-800 mb-2 flex items-center gap-2"><AlertTriangle size={16} /> Danger Zone</h3>
+            <p className="text-xs text-rose-600 mb-4">Wipe the entire Knowledge Base graph and vector store. Cannot be undone.</p>
+            <button className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg w-full transition-colors">
+              Purge Database
+            </button>
+          </div>
+        </div>
+      </div>
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editing ? 'Edit FAQ' : 'Add FAQ'}</DialogTitle></DialogHeader>
-          <form onSubmit={form.handleSubmit((d) => saveMut.mutate(d))} className="space-y-3">
-            <div>
-              <label className="text-xs font-medium">Question</label>
-              <Input {...form.register('question', { required: true })} className="mt-1 text-sm" />
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">{editing ? 'Edit Content Node' : 'Create Content Node'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit((d) => saveMut.mutate(d))} className="space-y-5 mt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">Question</label>
+              <input {...register('question', { required: true })} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm" placeholder="Enter query..." />
             </div>
-            <div>
-              <label className="text-xs font-medium">Answer</label>
-              <Textarea {...form.register('answer', { required: true })} rows={4} className="mt-1 text-sm" />
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">Answer</label>
+              <textarea {...register('answer', { required: true })} rows={6} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm resize-none" placeholder="Provide factual response..." />
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={saveMut.isPending}>{saveMut.isPending ? 'Saving…' : 'Save'}</Button>
+            <DialogFooter className="pt-2 border-t border-gray-100">
+              <button type="button" onClick={() => setDialogOpen(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+              <button type="submit" disabled={saveMut.isPending} className="px-6 py-2 text-sm font-bold text-white rounded-lg disabled:opacity-50" style={{ background: "var(--brand-gradient)" }}>
+                {saveMut.isPending ? 'Committing...' : 'Commit to Graph'}
+              </button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -3740,7 +4227,6 @@ export function KnowledgeBase() {
     </div>
   )
 }
-
 
 
 ===== src/app/components/admin/Feedback.tsx [1,962 tokens] =====
@@ -3980,11 +4466,12 @@ export function UsersAnalytics() {
 
 
 
-===== src/app/components/admin/ModelConfig.tsx [1,482 tokens] =====
-import { useState, useEffect } from 'react'
+===== src/app/components/admin/ModelConfig.tsx [2,593 tokens] =====
+import { useState, useEffect, useCallback } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { fetchModels, fetchSessionConfig, saveSessionConfig } from '../../../shared/api/admin'
+import { fetchSessionConfig, saveSessionConfig } from '../../../shared/api/admin'
+import { useAvailableModels } from '../../../shared/hooks/useModels'
 import { useAdminContext } from './AdminContext'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
@@ -3995,27 +4482,46 @@ import { Slider } from '../ui/slider'
 import { Alert, AlertDescription } from '../ui/alert'
 import { Skeleton } from '../ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Cpu, Save, Search, Server, Sparkles } from 'lucide-react'
 
 export function ModelConfig() {
   const auth = useAdminContext()
   const [sessionId, setSessionId] = useState('')
   const [fetchedSession, setFetchedSession] = useState('')
-  const [config, setConfig] = useState({ model_name: '', provider: 'openrouter', reasoning_effort: 'medium', system_prompt: '' })
+
+  const [config, setConfig] = useState({
+    model_name: '',
+    provider: 'groq',
+    reasoning_effort: 'medium',
+    system_prompt: ''
+  })
+
   const [temperature, setTemperature] = useState([0.3])
 
-  const { data: models = [], isLoading: mLoading } = useQuery({ queryKey: ['models'], queryFn: fetchModels })
+  const handleModelChange = useCallback((newModelId: string) => {
+    setConfig((prev) => ({ ...prev, model_name: newModelId }));
+  }, []);
 
+  // 🚀 Invoke the Shared Global Hook
+  const { availableModels, isLoading: mLoading } = useAvailableModels(
+    config.provider,
+    config.model_name,
+    handleModelChange
+  );
+
+  // Fetch specific session config
   const { data: sessionCfg, isLoading: sCfgLoading, refetch } = useQuery({
     queryKey: ['session-config', fetchedSession],
     queryFn: () => fetchSessionConfig(fetchedSession),
     enabled: !!fetchedSession,
   })
 
+  // Hydrate config state when loaded
   useEffect(() => {
     if (sessionCfg) {
       setConfig({
         model_name: sessionCfg.model_name ?? '',
-        provider: sessionCfg.provider ?? 'openrouter',
+        provider: sessionCfg.provider ?? 'groq',
         reasoning_effort: sessionCfg.reasoning_effort ?? 'medium',
         system_prompt: sessionCfg.system_prompt ?? '',
       })
@@ -4030,83 +4536,164 @@ export function ModelConfig() {
         openrouter_api_key: auth.openrouterKey || undefined,
         groq_api_key: auth.groqKey || undefined,
       }),
-    onSuccess: () => toast.success('Config saved'),
+    onSuccess: () => toast.success('Configuration successfully deployed'),
     onError: (e) => toast.error((e as Error).message),
   })
 
-  const allModels = models.flatMap((cat) => cat.models)
+  if (!auth.adminKey) {
+    return (
+      <Alert className="max-w-2xl mt-6 border-amber-200 bg-amber-50 text-amber-800">
+        <AlertDescription className="font-medium">
+          Admin API Key is missing. Please configure it in the top header to manage models.
+        </AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <h1 className="text-xl font-semibold">Model Configuration</h1>
+    <div className="space-y-6 max-w-4xl mx-auto pb-10">
+      <div>
+        <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>Model Configuration</h1>
+        <p className="text-gray-500 text-sm mt-1">Manage execution parameters, logic paths, and provider assignments.</p>
+      </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm font-semibold">Session</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-2">
-            <Input value={sessionId} onChange={(e) => setSessionId(e.target.value)} placeholder="Session ID" className="text-sm font-mono" />
-            <Button size="sm" variant="outline" onClick={() => { setFetchedSession(sessionId); refetch() }}>Load</Button>
+      {/* Target Session */}
+      <Card className="border-gray-200 shadow-sm">
+        <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Server size={16} className="text-cyan-600" /> Target Session Context
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={sessionId}
+                onChange={(e) => setSessionId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !!sessionId.trim() && (setFetchedSession(sessionId), refetch())}
+                placeholder="Enter Session ID to override..."
+                className="pl-9 text-sm font-mono bg-gray-50 h-10"
+              />
+            </div>
+            <Button
+              className="h-10 px-6 font-semibold"
+              onClick={() => { setFetchedSession(sessionId); refetch() }}
+              disabled={!sessionId.trim()}
+            >
+              Load Config
+            </Button>
           </div>
-          {sCfgLoading && <Skeleton className="h-8 rounded" />}
+          {sCfgLoading && <Skeleton className="h-10 w-full mt-4 rounded-lg" />}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm font-semibold">Model & Provider</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label className="text-xs">Model</Label>
-              {mLoading ? <Skeleton className="h-10 rounded" /> : (
-                <Select value={config.model_name} onValueChange={(v) => setConfig((p) => ({ ...p, model_name: v }))}>
-                  <SelectTrigger className="text-sm"><SelectValue placeholder="Select model" /></SelectTrigger>
-                  <SelectContent>{allModels.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
-                </Select>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Provider</Label>
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Engine Config */}
+        <Card className="border-gray-200 shadow-sm">
+          <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <Cpu size={16} className="text-indigo-500" /> Inference Engine
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Provider Vendor</Label>
               <Select value={config.provider} onValueChange={(v) => setConfig((p) => ({ ...p, provider: v }))}>
-                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-10 text-sm font-medium">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {['openrouter', 'groq', 'nvidia'].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  <SelectItem value="groq">Groq (LPU - Fastest)</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter (Aggregator)</SelectItem>
+                  <SelectItem value="nvidia">NVIDIA NIM</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs">Reasoning Effort</Label>
-            <Select value={config.reasoning_effort} onValueChange={(v) => setConfig((p) => ({ ...p, reasoning_effort: v }))}>
-              <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>{['low', 'medium', 'high'].map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Temperature</Label>
-              <span className="text-xs font-mono text-muted-foreground">{temperature[0].toFixed(2)}</span>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Model Selection</Label>
+              {mLoading ? <Skeleton className="h-10 rounded-md w-full" /> : (
+                <Select value={config.model_name} onValueChange={(v) => setConfig((p) => ({ ...p, model_name: v }))}>
+                  <SelectTrigger className="h-10 text-sm font-medium">
+                    <SelectValue placeholder="Select model..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {availableModels.map((m: any) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <div className="flex items-center justify-between w-full pr-4">
+                          <span>{m.name || m.id}</span>
+                          {m.type === 'reasoning' && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Reasoning</span>}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
-            <Slider min={0} max={2} step={0.01} value={temperature} onValueChange={setTemperature} className="w-full" />
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm font-semibold">System Prompt</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <Textarea value={config.system_prompt} onChange={(e) => setConfig((p) => ({ ...p, system_prompt: e.target.value }))} rows={8} className="text-sm font-mono resize-none" placeholder="You are TrustFin's AI assistant…" />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">{config.system_prompt.length} chars</span>
-            <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>{saveMut.isPending ? 'Saving…' : 'Save Config'}</Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Temperature</Label>
+                <span className="text-xs font-mono font-bold bg-gray-100 px-2 py-0.5 rounded text-gray-700">{temperature[0].toFixed(2)}</span>
+              </div>
+              <Slider min={0} max={2} step={0.01} value={temperature} onValueChange={setTemperature} className="w-full cursor-grab" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Reasoning & Behavior */}
+        <Card className="border-gray-200 shadow-sm flex flex-col">
+          <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-500" /> Behavior & Reasoning
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6 flex-1 flex flex-col">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Reasoning Effort</Label>
+              <Select value={config.reasoning_effort} onValueChange={(v) => setConfig((p) => ({ ...p, reasoning_effort: v }))}>
+                <SelectTrigger className="h-10 text-sm font-medium">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low (Fastest)</SelectItem>
+                  <SelectItem value="medium">Medium (Balanced)</SelectItem>
+                  <SelectItem value="high">High (Deep Thinking)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-gray-400 mt-1">Only applicable for reasoning models (o1, o3, deepseek-r1).</p>
+            </div>
+
+            <div className="space-y-2 flex-1 flex flex-col">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">System Prompt</Label>
+                <span className="text-[10px] font-mono text-gray-400">{config.system_prompt.length} chars</span>
+              </div>
+              <Textarea
+                value={config.system_prompt}
+                onChange={(e) => setConfig((p) => ({ ...p, system_prompt: e.target.value }))}
+                className="flex-1 min-h-[140px] text-sm font-mono resize-none bg-gray-50 border-gray-200 focus:border-cyan-500 focus:ring-cyan-500/20"
+                placeholder="You are an expert AI assistant..."
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex justify-end pt-4">
+        <Button
+          size="lg"
+          onClick={() => saveMut.mutate()}
+          disabled={saveMut.isPending || !config.model_name || !sessionId.trim()}
+          className="w-full sm:w-auto font-bold text-white shadow-lg disabled:opacity-50 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 border-0"
+        >
+          {saveMut.isPending ? 'Committing Changes...' : <><Save className="w-4 h-4 mr-2" /> Commit to Session</>}
+        </Button>
+      </div>
     </div>
   )
 }
-
 
 
 ===== src/app/components/admin/ChatCosts.tsx [1,084 tokens] =====
@@ -4273,33 +4860,145 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
 
 
-===== src/app/components/admin/ChatTraces.tsx [1,796 tokens] =====
+===== src/app/components/admin/SystemHealth.tsx [1,809 tokens] =====
+import { useQuery } from '@tanstack/react-query'
+import { Heart, CheckCircle, XCircle, RefreshCw, Server, Database, Globe, Network } from "lucide-react";
+import { fetchSystemHealth } from '../../../shared/api/admin';
+import { Skeleton } from '../ui/skeleton';
+import { Alert, AlertDescription } from '../ui/alert';
+import { cn } from '../ui/utils';
+
+const DEPENDENCY_ICONS: Record<string, any> = {
+    redis: Database,
+    postgres: Server,
+    tor_exit_list: Network,
+};
+
+export function SystemHealth() {
+    const { data: health, isLoading, error, refetch, isFetching } = useQuery({
+        queryKey: ['system-health'],
+        queryFn: fetchSystemHealth,
+        refetchInterval: 15000,
+    });
+
+    if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>;
+
+    return (
+        <div className="space-y-8 max-w-[1200px] mx-auto">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>System Health</h1>
+                    <p className="text-gray-500 text-sm mt-1">Platform telemetry and dependency readiness</p>
+                </div>
+                <button
+                    onClick={() => refetch()}
+                    disabled={isFetching}
+                    className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-semibold text-sm flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+                >
+                    <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin text-cyan-600' : ''}`} /> Sync State
+                </button>
+            </div>
+
+            {isLoading || !health ? (
+                <Skeleton className="w-full h-48 rounded-2xl" />
+            ) : (
+                <>
+                    <div
+                        className={cn(
+                            "rounded-3xl p-8 text-white relative overflow-hidden shadow-xl",
+                            health.healthy
+                                ? "bg-gradient-to-r from-cyan-500 to-teal-500"
+                                : "bg-gradient-to-r from-red-500 to-red-700"
+                        )}
+                    >
+                        <div className="absolute top-4 right-4 opacity-10">
+                            <Heart className="w-48 h-48" />
+                        </div>
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-inner">
+                                    {health.healthy ? <CheckCircle className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
+                                </div>
+                                <div>
+                                    <div className="text-white/80 font-semibold tracking-wider uppercase text-xs mb-1">Fleet Status</div>
+                                    <div className="text-4xl capitalize tracking-tight" style={{ fontWeight: 800 }}>{health.status}</div>
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-8 mt-8 p-4 bg-black/10 rounded-2xl border border-white/10 backdrop-blur-sm w-max">
+                                <div>
+                                    <div className="text-white/70 text-xs font-bold uppercase tracking-wider mb-1">Time</div>
+                                    <div className="font-mono text-sm">{new Date(health.timestamp * 1000).toUTCString()}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Infrastructure Dependencies</h3>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {Object.entries(health.checks || {}).map(([name, dep]) => {
+                                const Icon = DEPENDENCY_ICONS[name] || Globe;
+                                const isHealthy = dep.ok;
+
+                                return (
+                                    <div key={name} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                                        <div className={`absolute top-0 left-0 w-1 h-full ${isHealthy ? 'bg-emerald-400' : 'bg-red-500'}`} />
+                                        <div className="flex items-start justify-between mb-4 pl-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isHealthy ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                                    <Icon className="w-5 h-5" />
+                                                </div>
+                                                <div className="text-gray-900 capitalize font-bold text-base tracking-tight">{name.replace(/_/g, ' ')}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2.5 pl-2 pt-2 border-t border-gray-50">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</span>
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${isHealthy ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {isHealthy ? 'Operational' : 'Failing'}
+                                                </span>
+                                            </div>
+                                            {/* Dynamically render extra attributes like pool_min, stale_seconds */}
+                                            {Object.entries(dep).filter(([k]) => k !== 'ok').map(([k, v]) => (
+                                                <div key={k} className="flex items-center justify-between">
+                                                    <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider">{k.replace(/_/g, ' ')}</span>
+                                                    <span className="font-mono text-xs text-gray-900 font-bold bg-gray-100 px-2 py-0.5 rounded">{String(v)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
+
+===== src/app/components/admin/ChatTraces.tsx [1,603 tokens] =====
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
-import { fetchEvalTraces, fetchEvalTrace, extractTraceQuestion } from '../../../shared/api/admin'
+import { useSearchParams } from 'react-router'
+import { Search, CheckCircle2, XCircle, AlertTriangle, ExternalLink } from 'lucide-react'
+import { fetchEvalTraces, extractTraceQuestion } from '../../../shared/api/admin'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Input } from '../ui/input'
 import { Skeleton } from '../ui/skeleton'
 import { Alert, AlertDescription } from '../ui/alert'
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../ui/resizable'
-import { ScrollArea } from '../ui/scroll-area'
-import { toPrettyJson } from '../../../shared/lib/json'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { formatDateTime } from '../../../shared/lib/format'
 
 export function ChatTraces() {
+  const [, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const { data: traces = [], isLoading, error } = useQuery({
     queryKey: ['eval-traces'],
     queryFn: () => fetchEvalTraces(200),
-  })
-
-  const { data: detail, isLoading: dLoading } = useQuery({
-    queryKey: ['eval-trace', selectedId],
-    queryFn: () => fetchEvalTrace(selectedId!),
-    enabled: !!selectedId,
   })
 
   const filtered = traces.filter(
@@ -4310,125 +5009,124 @@ export function ChatTraces() {
       extractTraceQuestion(t).toLowerCase().includes(search.toLowerCase()),
   )
 
+  const openTrace = (id: string) => {
+    setSearchParams((prev) => {
+      prev.set('traceId', id)
+      return prev
+    })
+  }
+
   if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Chat Traces</h1>
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search traces…" className="pl-8 h-8 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Evaluation & Traces</h1>
+        <div className="relative w-72">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Search traces…" className="pl-8 h-9 text-sm bg-white" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
       </div>
 
-      <Card className="overflow-hidden" style={{ height: 'calc(100vh - 280px)', minHeight: 400 }}>
-        {/* @ts-expect-error - direction prop exists at runtime */}
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Left: trace list */}
-          <ResizablePanel defaultSize={35} minSize={25}>
-            <ScrollArea className="h-full">
+      <Tabs defaultValue="traces" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="traces">Search Traces</TabsTrigger>
+          <TabsTrigger value="metrics">Metrics Summary</TabsTrigger>
+          <TabsTrigger value="semantic">Semantic Search</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="traces">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">Execution Traces ({filtered.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
               {isLoading ? (
-                <div className="p-3 space-y-2">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-16 rounded" />)}</div>
+                <div className="p-4 space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 rounded" />)}</div>
               ) : (
-                <div className="p-2 space-y-1">
-                  {filtered.map((t) => (
-                    <button
-                      key={t.trace_id}
-                      onClick={() => setSelectedId(t.trace_id)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors text-sm ${selectedId === t.trace_id ? 'bg-cyan-50 border-cyan-200' : 'bg-white border-transparent hover:bg-slate-50 hover:border-slate-200'}`}
-                    >
-                      <p className="font-mono text-xs text-slate-400 truncate">{t.trace_id}</p>
-                      <p className="font-medium text-slate-700 text-sm mt-0.5 line-clamp-2">{extractTraceQuestion(t) || t.final_output?.slice(0, 80) || '—'}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {t.error ? <XCircle size={12} className="text-red-500" /> : <CheckCircle2 size={12} className="text-emerald-500" />}
-                        <span className="text-[10px] text-slate-400">{t.latency_ms ? `${t.latency_ms}ms` : ''} · {t.model ?? ''}</span>
-                      </div>
-                    </button>
-                  ))}
-                  {!filtered.length && <p className="p-4 text-sm text-muted-foreground text-center">No traces found</p>}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase">Status</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase">Trace ID</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase">Input Preview</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase">Model</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((t) => (
+                        <tr key={t.trace_id} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-3">
+                            {t.error ? <XCircle size={16} className="text-red-500" /> : <CheckCircle2 size={16} className="text-emerald-500" />}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs text-slate-500">{t.trace_id}</td>
+                          <td className="px-4 py-3 font-medium text-slate-700 max-w-[300px] truncate">
+                            {extractTraceQuestion(t) || t.final_output?.slice(0, 80) || '—'}
+                            <div className="text-[10px] text-slate-400 mt-0.5">{formatDateTime(t.started_at)}</div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-500">{t.model ?? '—'}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => openTrace(t.trace_id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-600 rounded-md text-xs font-medium transition-colors"
+                            >
+                              Inspect <ExternalLink size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {!filtered.length && <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">No traces found</td></tr>}
+                    </tbody>
+                  </table>
                 </div>
               )}
-            </ScrollArea>
-          </ResizablePanel>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <ResizableHandle withHandle />
+        <TabsContent value="metrics">
+          <Card>
+             <CardContent className="p-12 text-center text-muted-foreground flex flex-col items-center">
+               <AlertTriangle size={32} className="mb-3 text-slate-300" />
+               <p className="font-medium text-slate-900">Metrics Module Uncoupled</p>
+               <p className="text-sm mt-1">Connect your evaluation backend to render metric summaries here.</p>
+             </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* Right: trace detail */}
-          <ResizablePanel defaultSize={65} minSize={40}>
-            <ScrollArea className="h-full">
-              {!selectedId ? (
-                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">Select a trace to view details</div>
-              ) : dLoading ? (
-                <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 rounded" />)}</div>
-              ) : detail ? (
-                <div className="p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    {[
-                      ['Trace ID', detail.trace.trace_id],
-                      ['Session', detail.trace.session_id],
-                      ['Model', detail.trace.model ?? '—'],
-                      ['Provider', detail.trace.provider ?? '—'],
-                      ['Latency', detail.trace.latency_ms ? `${detail.trace.latency_ms}ms` : '—'],
-                      ['Started', formatDateTime(detail.trace.started_at)],
-                    ].map(([k, v]) => (
-                      <div key={k} className="bg-slate-50 rounded-lg p-2 border border-slate-100">
-                        <p className="text-muted-foreground font-medium">{k}</p>
-                        <p className="font-mono text-slate-700 truncate mt-0.5">{v}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {detail.trace.final_output && (
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 mb-1">Response</p>
-                      <div className="text-sm bg-slate-50 rounded-lg p-3 border border-slate-100 text-slate-700 leading-relaxed">{detail.trace.final_output}</div>
-                    </div>
-                  )}
-
-                  {/* Events */}
-                  {detail.events.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 mb-2">Events ({detail.events.length})</p>
-                      <div className="space-y-2">
-                        {detail.events.map((ev, i) => (
-                          <div key={i} className="bg-white rounded-lg border border-slate-200 p-3">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium text-slate-700">{ev.name ?? ev.event_type ?? ev.event_key}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">{ev.ts ? formatDateTime(ev.ts) : ''}</span>
-                            </div>
-                            {ev.text && <p className="text-xs text-slate-600">{ev.text}</p>}
-                            {ev.payload_json && (
-                              <pre className="text-[10px] mt-1 bg-slate-50 rounded p-2 overflow-x-auto text-slate-600 max-h-32">{toPrettyJson(ev.payload_json)}</pre>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </ScrollArea>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </Card>
+        <TabsContent value="semantic">
+           <Card>
+             <CardContent className="p-12 text-center text-muted-foreground flex flex-col items-center">
+               <Search size={32} className="mb-3 text-slate-300" />
+               <p className="font-medium text-slate-900">Semantic Vector Search</p>
+               <p className="text-sm mt-1">Provide Qdrant connection via API to enable vector similarity search.</p>
+             </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
 
 
 
-===== src/app/components/admin/Conversations.tsx [1,289 tokens] =====
-import { useState } from 'react'
+===== src/app/components/admin/Conversations.tsx [2,208 tokens] =====
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
+import { Search, MessageSquare } from 'lucide-react'
 import { fetchConversations, extractTraceQuestion } from '../../../shared/api/admin'
 import { useAdminContext } from './AdminContext'
-import { Card, CardContent } from '../ui/card'
+import { Card } from '../ui/card'
 import { Input } from '../ui/input'
 import { Skeleton } from '../ui/skeleton'
 import { Alert, AlertDescription } from '../ui/alert'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../ui/resizable'
 import { ScrollArea } from '../ui/scroll-area'
 import { formatDateTime } from '../../../shared/lib/format'
+import { ChatMessage } from '../ChatMessage'
+import type { ChatMessage as ChatMessageType } from '../../../shared/types/chat'
 
 export function Conversations() {
   const auth = useAdminContext()
@@ -4441,63 +5139,173 @@ export function Conversations() {
     enabled: !!auth.adminKey,
   })
 
-  const filtered = data.filter((c) => !search || extractTraceQuestion(c).toLowerCase().includes(search.toLowerCase()) || c.session_id.includes(search))
+  // Filter list based on search query
+  const filtered = data.filter((c) =>
+    !search ||
+    extractTraceQuestion(c).toLowerCase().includes(search.toLowerCase()) ||
+    c.session_id.includes(search)
+  )
+
   const selected = selectedIdx !== null ? filtered[selectedIdx] : null
 
-  if (!auth.adminKey) return <Alert><AlertDescription>Set X-Admin-Key to view conversations.</AlertDescription></Alert>
-  if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>
+  // 🚀 PRODUCTION-GRADE PATTERN: 
+  // Map the raw Evaluation Trace into strict ChatMessage structures.
+  // This allows us to feed the exact same component used by the end-user widget.
+  const conversationMessages = useMemo<ChatMessageType[]>(() => {
+    if (!selected) return []
+    const msgs: ChatMessageType[] = []
+
+    const question = extractTraceQuestion(selected)
+    if (question) {
+      msgs.push({
+        id: `user-${selected.trace_id}`,
+        role: 'user',
+        content: question,
+        reasoning: '',
+        timestamp: new Date(selected.started_at || Date.now()).getTime(),
+        status: 'done',
+        toolCalls: [],
+        cost: null,
+        router: null,
+      })
+    }
+
+    if (selected.final_output || selected.error) {
+      msgs.push({
+        id: `assistant-${selected.trace_id}`,
+        role: 'assistant',
+        content: selected.final_output || selected.error || '',
+        reasoning: '', // Reasoning would map here if exposed at the summary level
+        timestamp: new Date(selected.started_at || Date.now()).getTime() + 100,
+        status: selected.error ? 'error' : 'done',
+        toolCalls: [],
+        cost: null,
+        router: null,
+      })
+    }
+
+    return msgs
+  }, [selected])
+
+  if (!auth.adminKey) {
+    return (
+      <Alert className="max-w-2xl border-amber-200 bg-amber-50 text-amber-800">
+        <AlertDescription className="font-medium">
+          Set X-Admin-Key in the API Keys header to view conversations.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{(error as Error).message}</AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Conversations</h1>
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search…" className="pl-8 h-8 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+    <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>Conversations</h1>
+          <p className="text-gray-500 text-sm mt-1">Review live chat transcripts and AI interactions.</p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Input
+            placeholder="Search queries or sessions…"
+            className="pl-9 bg-white shadow-sm h-10 border-gray-200 focus:border-cyan-500 focus:ring-cyan-500/20"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
-      <Card className="overflow-hidden" style={{ height: 'calc(100vh - 280px)', minHeight: 400 }}>
-        {/* @ts-expect-error - direction prop exists at runtime */}
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          <ResizablePanel defaultSize={40} minSize={25}>
+      <Card className="overflow-hidden border-gray-200 shadow-md" style={{ height: 'calc(100vh - 220px)', minHeight: 500 }}>
+        {/* @ts-expect-error - direction prop exists at runtime for react-resizable-panels */}
+        <ResizablePanelGroup direction="horizontal" className="h-full bg-white">
+
+          {/* LEFT PANEL: Conversation List */}
+          <ResizablePanel defaultSize={35} minSize={25} className="bg-slate-50/50">
             <ScrollArea className="h-full">
-              {isLoading ? <div className="p-3 space-y-2">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-16 rounded" />)}</div> : (
-                <div className="p-2 space-y-1">
+              {isLoading ? (
+                <div className="p-4 space-y-3">
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+                </div>
+              ) : (
+                <div className="p-3 space-y-1.5">
                   {filtered.map((c, i) => (
-                    <button key={c.trace_id} onClick={() => setSelectedIdx(i)} className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedIdx === i ? 'bg-cyan-50 border-cyan-200' : 'bg-white border-transparent hover:bg-slate-50'}`}>
-                      <p className="font-mono text-xs text-slate-400 truncate">{c.session_id}</p>
-                      <p className="text-sm font-medium text-slate-700 mt-0.5 line-clamp-2">{extractTraceQuestion(c) || '—'}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{formatDateTime(c.started_at)}</p>
+                    <button
+                      key={c.trace_id}
+                      onClick={() => setSelectedIdx(i)}
+                      className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${selectedIdx === i
+                          ? 'bg-white border-cyan-300 shadow-[0_2px_10px_-3px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20'
+                          : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200 hover:shadow-sm'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-mono text-[11px] font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-md truncate max-w-[140px]">
+                          {c.session_id}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-medium">
+                          {formatDateTime(c.started_at)}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-700 mt-2 line-clamp-2 leading-snug">
+                        {extractTraceQuestion(c) || '—'}
+                      </p>
                     </button>
                   ))}
-                  {!filtered.length && <p className="p-4 text-sm text-muted-foreground text-center">No conversations</p>}
+                  {!filtered.length && (
+                    <div className="p-8 text-center text-sm text-gray-500 flex flex-col items-center">
+                      <MessageSquare size={24} className="mb-2 text-gray-300" />
+                      No conversations found
+                    </div>
+                  )}
                 </div>
               )}
             </ScrollArea>
           </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={60} minSize={40}>
+
+          <ResizableHandle withHandle className="w-1.5 bg-gray-100 hover:bg-cyan-200 transition-colors" />
+
+          {/* RIGHT PANEL: Chat Transcript */}
+          <ResizablePanel defaultSize={65} minSize={40} className="bg-[#f8fafc] relative">
             <ScrollArea className="h-full">
               {!selected ? (
-                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">Select a conversation</div>
-              ) : (
-                <div className="p-4 space-y-3">
-                  <div className="text-xs text-muted-foreground space-y-0.5">
-                    <p>Session: <span className="font-mono">{selected.session_id}</span></p>
-                    <p>Model: {selected.model ?? '—'} · {formatDateTime(selected.started_at)}</p>
+                <div className="flex flex-col items-center justify-center h-full text-sm text-gray-400 min-h-[400px]">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <MessageSquare size={24} className="text-gray-300" />
                   </div>
-                  <div className="space-y-3">
-                    {selected.inputs_json && (
-                      <div className="flex gap-2">
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs font-bold">U</span>
-                        <div className="bg-cyan-50 border border-cyan-100 rounded-xl px-3 py-2 text-sm text-slate-700 flex-1">{extractTraceQuestion(selected)}</div>
+                  Select a conversation from the list to view the transcript
+                </div>
+              ) : (
+                <div className="flex flex-col h-full">
+                  {/* Sticky Header */}
+                  <div className="px-6 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md sticky top-0 z-20 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                          Transcript for <span className="font-mono text-cyan-600 font-semibold">{selected.session_id}</span>
+                        </h3>
+                        <div className="text-xs font-medium text-gray-500 mt-1 flex items-center gap-2">
+                          <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono">
+                            {selected.model?.split('/').pop() ?? 'Unknown Model'}
+                          </span>
+                          <span>•</span>
+                          <span>{formatDateTime(selected.started_at)}</span>
+                        </div>
                       </div>
-                    )}
-                    {selected.final_output && (
-                      <div className="flex gap-2">
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold">A</span>
-                        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 flex-1 leading-relaxed">{selected.final_output}</div>
-                      </div>
-                    )}
+                    </div>
+                  </div>
+
+                  {/* Rendered Messages using the actual ChatWidget components */}
+                  <div className="p-6 space-y-6 max-w-3xl">
+                    {conversationMessages.map(msg => (
+                      <ChatMessage key={msg.id} message={msg} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -4508,7 +5316,6 @@ export function Conversations() {
     </div>
   )
 }
-
 
 
 ===== src/app/components/admin/AdminContext.tsx [413 tokens] =====
@@ -4686,230 +5493,201 @@ export function Guardrails() {
 
 
 
-===== src/app/components/admin/Dashboard.tsx [1,798 tokens] =====
-import { useQuery } from '@tanstack/react-query'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
-import { Activity, CheckCircle, Clock, DollarSign, Hash } from 'lucide-react'
-import {
-  fetchEvalTraces,
-  fetchSessionCostSummary,
-  fetchQuestionTypes,
-} from '../../../shared/api/admin'
-import { useAdminContext } from './AdminContext'
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
-import { Skeleton } from '../ui/skeleton'
-import { Alert, AlertDescription } from '../ui/alert'
-import { formatCurrency } from '../../../shared/lib/format'
+===== src/app/components/admin/Dashboard.tsx [2,599 tokens] =====
+import { useMemo } from "react";
+import { useQuery } from '@tanstack/react-query';
+import { Activity, Users, DollarSign, MessageSquare, Shield, TrendingUp, Database, Clock, Zap, AlertTriangle } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
+import { fetchEvalTraces, fetchSessionCostSummary, fetchQuestionTypes, fetchGuardrailEvents } from '../../../shared/api/admin';
+import { useAdminContext } from './AdminContext';
+import { Skeleton } from '../ui/skeleton';
+import { Alert, AlertDescription } from '../ui/alert';
+import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
 
-function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  color,
-}: {
-  icon: React.ElementType
-  label: string
-  value: string
-  sub?: string
-  color: string
-}) {
-  return (
-    <Card>
-      <CardContent className="p-5 flex items-start gap-4">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon size={18} className="text-white" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide truncate">
-            {label}
-          </p>
-          <p className="text-2xl font-bold text-foreground mt-0.5">{value}</p>
-          {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+const PIE_COLORS = ["#5eead4", "#67e8f9", "#38bdf8", "#818cf8", "#c084fc", "#f472b6", "#fb923c", "#fbbf24", "#a3e635"];
 
 export function Dashboard() {
-  const {
-    data: traces = [],
-    isLoading: tLoading,
-    error: tError,
-  } = useQuery({
+  const auth = useAdminContext();
+
+  const { data: traces = [], isLoading: tLoading, error: tError } = useQuery({
     queryKey: ['eval-traces'],
     queryFn: () => fetchEvalTraces(200),
     refetchInterval: 30_000,
-  })
+  });
 
-  const {
-    data: costs,
-    isLoading: cLoading,
-    error: cError,
-  } = useQuery({
+  const { data: costs, isLoading: cLoading, error: cError } = useQuery({
     queryKey: ['session-cost-summary'],
     queryFn: fetchSessionCostSummary,
     refetchInterval: 30_000,
-  })
+  });
 
-  const {
-    data: categories = [],
-    isLoading: catLoading,
-    error: catError,
-  } = useQuery({
+  const { data: categories = [], isLoading: catLoading } = useQuery({
     queryKey: ['question-types'],
     queryFn: () => fetchQuestionTypes(50),
-  })
+  });
 
-  const successCount = traces.filter((t) => t.status === 'success' || !t.error).length
-  const successRate = traces.length ? Math.round((successCount / traces.length) * 100) : 0
-  const avgLatency = traces.length
-    ? Math.round(traces.reduce((s, t) => s + (t.latency_ms ?? 0), 0) / traces.length)
-    : 0
+  const { data: guardrails = [] } = useQuery({
+    queryKey: ['guardrail-events', auth.adminKey],
+    queryFn: () => fetchGuardrailEvents(auth.adminKey, 100),
+    enabled: !!auth.adminKey,
+  });
 
-  const loading = tLoading || cLoading || catLoading
-  const err = tError || cError || catError
+  const loading = tLoading || cLoading || catLoading;
+  const error = tError || cError;
 
-  if (err) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>{(err as Error).message}</AlertDescription>
-      </Alert>
-    )
-  }
+  // Process data for charts
+  const activityTrend = useMemo(() => {
+    if (!traces.length) return [];
+    const counts: Record<string, number> = {};
+    traces.forEach(t => {
+      if (!t.started_at) return;
+      const date = new Date(t.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      counts[date] = (counts[date] || 0) + 1;
+    });
+    return Object.entries(counts).map(([date, count]) => ({ date, requests: count })).reverse(); // oldest to newest
+  }, [traces]);
+
+  const successCount = traces.filter((t) => t.status === 'success' || !t.error).length;
+  const successRate = traces.length ? ((successCount / traces.length) * 100).toFixed(1) : 0;
+  const avgLatency = traces.length ? Math.round(traces.reduce((s, t) => s + (t.latency_ms ?? 0), 0) / traces.length) : 0;
+
+  if (error) return <Alert variant="destructive"><AlertDescription className="font-mono text-xs">{(error as Error).message}</AlertDescription></Alert>;
+
+  const statCards = [
+    { label: "Active Sessions", value: costs?.active_sessions?.toLocaleString() || "0", icon: Users, color: "#4ade80" },
+    { label: "Total Queries", value: traces.length.toLocaleString(), icon: MessageSquare, color: "#60a5fa" },
+    { label: "Total Cost", value: formatCurrency(costs?.total_cost ?? 0), icon: DollarSign, color: "#f59e0b" },
+    { label: "Avg Latency", value: `${avgLatency}ms`, icon: Clock, color: "#a78bfa" },
+    { label: "Success Rate", value: `${successRate}%`, icon: Activity, color: "#34d399" },
+    { label: "Guardrail Blocks", value: guardrails.filter(g => g.risk_decision === 'deny').length.toString(), icon: Shield, color: "#ef4444" },
+  ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
-        ) : (
-          <>
-            <KpiCard
-              icon={Hash}
-              label="Total Traces"
-              value={traces.length.toLocaleString()}
-              color="bg-cyan-500"
-            />
-            <KpiCard
-              icon={CheckCircle}
-              label="Success Rate"
-              value={`${successRate}%`}
-              sub={`${successCount} / ${traces.length}`}
-              color="bg-emerald-500"
-            />
-            <KpiCard
-              icon={Clock}
-              label="Avg Latency"
-              value={`${avgLatency}ms`}
-              color="bg-violet-500"
-            />
-            <KpiCard
-              icon={DollarSign}
-              label="Total Cost"
-              value={formatCurrency(costs?.total_cost ?? 0)}
-              sub={`${costs?.total_requests ?? 0} requests`}
-              color="bg-amber-500"
-            />
-          </>
-        )}
+    <div className="space-y-6 max-w-[1600px] mx-auto">
+      <div>
+        <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>Overview</h1>
+        <p className="text-gray-500 text-sm mt-1">Real-time metrics from the TrustFin Agent Service</p>
       </div>
 
-      {/* Question categories chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">Question Categories</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {catLoading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={categories} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="reason" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => [v, 'Count']} />
-                <Bar dataKey="count" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recent traces table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">Recent Traces</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {tLoading ? (
-            <div className="p-4 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 rounded" />
-              ))}
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {loading ? Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />) : statCards.map((stat) => (
+          <div key={stat.label} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: stat.color + "20" }}>
+                <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    {['Trace ID', 'Session', 'Model', 'Latency', 'Status'].map((h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+            <div className="text-gray-900" style={{ fontSize: 24, fontWeight: 800 }}>{stat.value}</div>
+            <div className="text-gray-500 font-medium tracking-wide mt-1" style={{ fontSize: 11, textTransform: 'uppercase' }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid xl:grid-cols-3 gap-6">
+        {/* Activity Chart */}
+        <div className="xl:col-span-2 bg-white rounded-xl p-6 border border-gray-100 shadow-sm flex flex-col">
+          <h3 className="text-gray-900 mb-6 text-base" style={{ fontWeight: 700 }}>Request Volume Trend</h3>
+          <div className="flex-1 min-h-[300px]">
+            {loading ? <Skeleton className="h-full w-full rounded-lg" /> : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={activityTrend}>
+                  <defs>
+                    <linearGradient id="colorReq" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="oklch(78.9% 0.154 211.53)" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="oklch(78.9% 0.154 211.53)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} dx={-10} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                  />
+                  <Area type="monotone" dataKey="requests" stroke="oklch(78.9% 0.154 211.53)" strokeWidth={3} fill="url(#colorReq)" name="Requests" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Router Categories */}
+        <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm flex flex-col">
+          <h3 className="text-gray-900 mb-6 text-base" style={{ fontWeight: 700 }}>Topic Distribution</h3>
+          <div className="flex-1 min-h-[220px]">
+            {loading ? <Skeleton className="h-full w-full rounded-lg" /> : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={categories.slice(0, 6)}
+                    dataKey="count"
+                    nameKey="reason"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={3}
+                  >
+                    {categories.slice(0, 6).map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="space-y-2.5 mt-4">
+            {categories.slice(0, 4).map((cat, i) => (
+              <div key={cat.reason} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="w-3 h-3 rounded-full shadow-inner" style={{ backgroundColor: PIE_COLORS[i] }} />
+                  <span className="text-slate-600 font-medium truncate max-w-[150px]">{cat.reason.replace(/_/g, ' ')}</span>
+                </div>
+                <span className="text-slate-900 font-bold font-mono">{(cat.pct * 100).toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Traces Table */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100 bg-slate-50/50 flex justify-between items-center">
+          <h3 className="text-gray-900 text-base" style={{ fontWeight: 700 }}>Recent Executions</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-white">
+              <tr className="border-b border-gray-100">
+                {['Status', 'Trace ID', 'Model', 'Latency', 'Started'].map((h) => (
+                  <th key={h} className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {loading ? Array.from({ length: 5 }).map((_, i) => <tr key={i}><td colSpan={5} className="p-4"><Skeleton className="h-8 w-full" /></td></tr>) :
+                traces.slice(0, 8).map((t) => (
+                  <tr key={t.trace_id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide uppercase ${t.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                        }`}
                       >
-                        {h}
-                      </th>
-                    ))}
+                        {t.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs text-slate-600 font-medium">{t.trace_id}</td>
+                    <td className="px-6 py-4 text-slate-700 font-medium">{t.model?.split('/').pop() ?? '—'}</td>
+                    <td className="px-6 py-4 text-slate-700 font-mono">{t.latency_ms ? `${t.latency_ms}ms` : '—'}</td>
+                    <td className="px-6 py-4 text-slate-500">{formatDateTime(t.started_at)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {traces.slice(0, 20).map((t) => (
-                    <tr key={t.trace_id} className="border-b last:border-0 hover:bg-slate-50/50">
-                      <td className="px-4 py-2 font-mono text-xs text-slate-500 max-w-[140px] truncate">
-                        {t.trace_id}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-slate-500 max-w-[100px] truncate">
-                        {t.session_id}
-                      </td>
-                      <td className="px-4 py-2 text-xs">{t.model ?? '—'}</td>
-                      <td className="px-4 py-2 text-xs">{t.latency_ms ? `${t.latency_ms}ms` : '—'}</td>
-                      <td className="px-4 py-2">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                            t.error
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-emerald-100 text-emerald-700'
-                          }`}
-                        >
-                          {t.error ? 'error' : 'ok'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  )
+  );
 }
-
 
 
 ===== src/app/components/figma/ImageWithFallback.tsx [160 tokens] =====
@@ -5109,7 +5887,7 @@ export async function streamSse(
 
 
 
-===== src/shared/api/admin.ts [2,259 tokens] =====
+===== src/shared/api/admin.ts [2,419 tokens] =====
 import { API_BASE_URL, requestJson, withAdminHeaders } from './http'
 import { streamSse } from './sse'
 import type {
@@ -5451,6 +6229,30 @@ export async function feedbackSummary(adminKey: string): Promise<{
 }
 
 
+// --- System Health & Rate Limiting ---
+
+export interface SystemHealthResponse {
+  status: string;
+  healthy: boolean;
+  checks: Record<string, { ok: boolean;[key: string]: any }>;
+  timestamp: number;
+}
+
+export async function fetchSystemHealth(): Promise<SystemHealthResponse> {
+  return requestJson({ method: 'GET', path: '/health/ready' });
+}
+
+export async function fetchRateLimitMetrics(): Promise<any> {
+  return requestJson({ method: 'GET', path: '/rate-limit/metrics' });
+}
+
+export async function fetchRateLimitConfig(): Promise<any> {
+  return requestJson({ method: 'GET', path: '/rate-limit/config' });
+}
+export { requestJson }
+
+
+
 
 ===== src/shared/lib/json.ts [60 tokens] =====
 export function parseMaybeJson(data: string): unknown | undefined {
@@ -5775,6 +6577,44 @@ export function useChatStream() {
 
 
 
+===== src/shared/hooks/useModels.ts [316 tokens] =====
+import { useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchModels } from '../api/admin';
+
+export function useAvailableModels(
+    provider: string,
+    currentModel: string,
+    onModelChange: (newModelId: string) => void
+) {
+    // Fetch categorized models from the backend
+    const { data: modelCategories = [], isLoading } = useQuery({
+        queryKey: ['models'],
+        queryFn: fetchModels,
+        staleTime: 300000, // Cache for 5 minutes
+    });
+
+    // Extract models based ONLY on selected provider
+    const availableModels = useMemo(() => {
+        if (!modelCategories.length) return [];
+        const category = modelCategories.find((c) => c.name === provider);
+        return category?.models || [];
+    }, [modelCategories, provider]);
+
+    // Auto-select first model if provider changes and current model isn't valid
+    useEffect(() => {
+        if (availableModels.length > 0) {
+            const isValid = availableModels.some((m) => m.id === currentModel);
+            if (!isValid) {
+                onModelChange(availableModels[0].id);
+            }
+        }
+    }, [provider, availableModels, currentModel, onModelChange]);
+
+    return { modelCategories, availableModels, isLoading };
+}
+
+
 ===== src/shared/types/chat.ts [182 tokens] =====
 export interface ToolCallEvent {
   name: string
@@ -5891,73 +6731,104 @@ export interface FeedbackRecord {
 
 
 
-===== src/styles/theme.css [418 tokens] =====
+===== src/styles/theme.css [639 tokens] =====
+@custom-variant dark (&:is(.dark *));
+
+/* 🚀 Tailwind v4 Theme Mapping Engine */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 188 80% 35%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 188 80% 35%;
-    --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    /* 🚀 Explicit HEX codes fix the Tailwind v4 transparency bug */
+    --background: #ffffff;
+    --foreground: #020817;
+    --card: #ffffff;
+    --card-foreground: #020817;
+    --popover: #ffffff;
+    --popover-foreground: #020817;
+    --primary: #06b6d4;
+    /* cyan-500 */
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #0f172a;
+    --muted: #f8fafc;
+    --muted-foreground: #64748b;
+    --accent: #f1f5f9;
+    --accent-foreground: #0f172a;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --border: #e2e8f0;
+    --input: #e2e8f0;
+    --ring: #06b6d4;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 188 70% 55%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 188 70% 55%;
+    --background: #020617;
+    --foreground: #f8fafc;
+    --card: #0f172a;
+    --card-foreground: #f8fafc;
+    --popover: #0f172a;
+    --popover-foreground: #f8fafc;
+    --primary: #06b6d4;
+    --primary-foreground: #ffffff;
+    --secondary: #1e293b;
+    --secondary-foreground: #f8fafc;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --accent: #1e293b;
+    --accent-foreground: #f8fafc;
+    --destructive: #7f1d1d;
+    --destructive-foreground: #fca5a5;
+    --border: #1e293b;
+    --input: #1e293b;
+    --ring: #0891b2;
   }
 }
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
+    @apply border-border outline-ring/50;
   }
 
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    @apply bg-background text-foreground;
+  }
+
+  /* Force Radix/Shadcn floating elements to respect background stacking */
+  [data-radix-popper-content-wrapper] {
+    @apply z-50;
   }
 }
-
 
 
 ===== src/styles/index.css [18 tokens] =====
 @import "./fonts.css";
 @import "./tailwind.css";
 @import "./theme.css";
+

@@ -14,6 +14,16 @@ class AgentRequest(BaseModel):
     question: str = Field(..., description="User query")
 
 
+class SessionInitResponse(BaseModel):
+    """Response contract for backend session initialization."""
+
+    session_id: str = Field(..., description="Newly generated UUIDv7 session identifier")
+    system_prompt: str = Field(..., description="Default system prompt applied to the session")
+    model_name: str = Field(..., description="Default model applied to the session")
+    provider: str = Field(..., description="Default inferred provider")
+    reasoning_effort: Optional[str] = Field(default=None, description="Default reasoning effort")
+    message: str = Field(default="Session initialized with default BYOK configuration.")
+
 class SessionConfig(BaseModel):
     """
     Unified configuration for a session.

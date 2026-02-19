@@ -1,5 +1,5 @@
 .PHONY: \
-	help install install-dev dev test lint format format-check quality pre-commit clean \
+	help install install-dev dev test lint format format-check quality pre-commit clean context-docs context-docs-check \
 	docker-build docker-up docker-down docker-logs docker-restart deploy \
 	local-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
@@ -36,6 +36,8 @@ help:
 	@echo "  lint                - Run linters (Ruff, mypy)"
 	@echo "  quality             - Run all code quality checks"
 	@echo "  pre-commit          - Run pre-commit hooks on all files"
+	@echo "  context-docs        - Generate leaf `_context.md` files and root `_main_context.md`"
+	@echo "  context-docs-check  - Verify context docs are up-to-date (CI mode)"
 	@echo ""
 	@echo "Docker (main compose):"
 	@echo "  docker-build        - Build images from $(COMPOSE_FILE)"
@@ -113,6 +115,12 @@ pre-commit:
 	@echo "Running pre-commit on all files..."
 	uv run python -m pre_commit run --all-files
 	@echo "Pre-commit checks complete"
+
+context-docs:
+	uv run python scripts/generate_context_docs.py
+
+context-docs-check:
+	uv run python scripts/generate_context_docs.py --check
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
