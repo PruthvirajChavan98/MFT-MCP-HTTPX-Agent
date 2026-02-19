@@ -257,7 +257,7 @@ This Figma Make file includes photos from [Unsplash](https://unsplash.com) used 
       <script type="module" src="/src/main.tsx"></script>
     </body>
   </html>
-  
+
 
 
 ===== README.md [83 tokens] =====
@@ -271,7 +271,7 @@ This Figma Make file includes photos from [Unsplash](https://unsplash.com) used 
   Run `npm i` to install the dependencies.
 
   Run `npm run dev` to start the development server.
-  
+
 
 
 ===== src/main.tsx [45 tokens] =====
@@ -281,7 +281,7 @@ This Figma Make file includes photos from [Unsplash](https://unsplash.com) used 
   import "./styles/index.css";
 
   createRoot(document.getElementById("root")!).render(<App />);
-  
+
 
 
 ===== src/app/App.tsx [40 tokens] =====
