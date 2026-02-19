@@ -23,6 +23,11 @@ STALE_OLD_UI/.vite/
 STALE_OLD_UI/dist/
 STALE_OLD_UI/dist-ssr/
 
+Reference UI/node_modules/
+Reference UI/.vite/
+Reference UI/dist/
+Reference UI/dist-ssr/
+
 # Crash dumps
 core
 core.*

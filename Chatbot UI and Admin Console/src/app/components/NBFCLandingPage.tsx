@@ -209,7 +209,7 @@ export function NBFCLandingPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 font-bold text-white text-sm shadow">
-              HC
+              MFT
             </div>
             <span className="text-lg font-bold tracking-tight">Mock FinTech</span>
           </div>
@@ -425,7 +425,7 @@ export function NBFCLandingPage() {
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 text-xs font-bold text-white">
-                HC
+                MFT
               </div>
               <span className="font-semibold text-slate-300">Mock FinTech</span>
             </div>
