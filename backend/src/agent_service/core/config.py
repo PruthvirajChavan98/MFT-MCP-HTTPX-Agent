@@ -45,7 +45,7 @@ OPENROUTER_EMBED_MODEL_DEFAULT = os.getenv(
 ).strip()
 
 # --- MODEL DEFAULTS ---
-MODEL_NAME = os.getenv("MODEL", "openai/gpt-4o")
+MODEL_NAME = os.getenv("MODEL", "deepseek/deepseek-v3.2")
 
 # --- NBFC ROUTER CONFIGURATION ---
 NBFC_ROUTER_ENABLED = os.getenv("NBFC_ROUTER_ENABLED", "true").lower() in ("1", "true", "yes", "y")

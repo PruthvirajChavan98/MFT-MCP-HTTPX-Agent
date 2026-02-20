@@ -23,7 +23,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-
 LEAF_CONTEXT_NAME = "_context.md"
 MAIN_CONTEXT_NAME = "_main_context.md"
 
@@ -511,10 +510,14 @@ def _render_main_context(
     lines.append("")
     lines.append("## Master Context Build Plan")
     lines.append("1. Process one leaf folder at a time (see index below).")
-    lines.append("2. For each folder, capture: changed files, interface impact, test proof, open risks.")
+    lines.append(
+        "2. For each folder, capture: changed files, interface impact, test proof, open risks."
+    )
     lines.append("3. Re-run `make context-docs` immediately after folder completion.")
     lines.append("4. Fold each folder delta into a running `MASTER_CONTEXT.md` summary.")
-    lines.append("5. Keep `MASTER_CONTEXT.md` under a strict token budget by storing links, not code.")
+    lines.append(
+        "5. Keep `MASTER_CONTEXT.md` under a strict token budget by storing links, not code."
+    )
     lines.append("")
     lines.append("## Leaf Folder Index")
     lines.append("| Folder | Priority | Role | Files | Context |")
@@ -596,11 +599,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     snapshots = _collect_tree(root)
     leaf_snapshots = sorted(
-        (
-            snap
-            for snap in snapshots.values()
-            if snap.rel_dir != "." and len(snap.child_dirs) == 0
-        ),
+        (snap for snap in snapshots.values() if snap.rel_dir != "." and len(snap.child_dirs) == 0),
         key=lambda item: item.rel_dir,
     )
     folder_contexts = [_build_folder_context(root, snap) for snap in leaf_snapshots]

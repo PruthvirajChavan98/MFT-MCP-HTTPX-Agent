@@ -33,7 +33,7 @@ export function Conversations() {
 
   const selected = selectedIdx !== null ? filtered[selectedIdx] : null
 
-  // 🚀 PRODUCTION-GRADE PATTERN: 
+  // 🚀 PRODUCTION-GRADE PATTERN:
   // Map the raw Evaluation Trace into strict ChatMessage structures.
   // This allows us to feed the exact same component used by the end-user widget.
   const conversationMessages = useMemo<ChatMessageType[]>(() => {

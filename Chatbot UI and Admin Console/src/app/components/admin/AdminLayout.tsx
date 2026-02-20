@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { AdminProvider, useAdminContext } from "./AdminContext";
 import { CommandPalette } from "./CommandPalette";
+import { GlobalTraceSheet } from "./GlobalTraceSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -172,6 +173,7 @@ function AdminShell() {
       </div>
 
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
+      <GlobalTraceSheet />
     </div>
   );
 }

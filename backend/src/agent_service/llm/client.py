@@ -101,7 +101,11 @@ def get_llm(
                 openrouter_kwargs["reasoning"] = {"effort": normalized_reasoning_effort}
 
             log.info(f"Initializing openrouter with model: {model_name} (ChatOpenRouter)")
-            return ChatOpenRouter(model=model_name, api_key=SecretStr(api_key) if api_key else None, **openrouter_kwargs)
+            return ChatOpenRouter(
+                model=model_name,
+                api_key=SecretStr(api_key) if api_key else None,
+                **openrouter_kwargs,
+            )
 
         # Compatibility fallback for environments missing langchain-openrouter.
         log.warning(

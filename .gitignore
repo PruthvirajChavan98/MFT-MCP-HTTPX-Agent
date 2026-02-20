@@ -31,3 +31,11 @@ Reference UI/dist-ssr/
 # Crash dumps
 core
 core.*
+
+# Temporary files
+files_dump_*.txt
+Reference*
+reference*
+Reference Trace Module/
+Reference UI/
+

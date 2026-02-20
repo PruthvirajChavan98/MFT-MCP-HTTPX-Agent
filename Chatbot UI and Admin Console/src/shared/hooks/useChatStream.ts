@@ -283,7 +283,7 @@ export function useChatStream() {
 
   const clearConversation = useCallback(() => {
     if (isStreaming) stopGeneration()
-    // Fetching a new session instead of just clearing local state ensures 
+    // Fetching a new session instead of just clearing local state ensures
     // the backend memory is correctly reset for the user as well.
     initNewSession()
   }, [isStreaming, stopGeneration, initNewSession])

@@ -24,6 +24,7 @@ class SessionInitResponse(BaseModel):
     reasoning_effort: Optional[str] = Field(default=None, description="Default reasoning effort")
     message: str = Field(default="Session initialized with default BYOK configuration.")
 
+
 class SessionConfig(BaseModel):
     """
     Unified configuration for a session.

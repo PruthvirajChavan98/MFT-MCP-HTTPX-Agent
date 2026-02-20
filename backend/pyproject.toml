@@ -31,7 +31,7 @@ dependencies = [
     "redis>=5.0.0",
     "strawberry-graphql>=0.240.0",
     "toon-format>=0.1.0",
-    "uuid7",
+    "uuid-utils",
     "uvicorn[standard]>=0.30.0",
     "prometheus-client>=0.20.0",
     "geoip2>=4.8.0",
@@ -40,6 +40,11 @@ dependencies = [
 
 [tool.uv.sources]
 toon-format = { git = "https://github.com/toon-format/toon-python.git" }
+
+[dependency-groups]
+dev = [
+    "pre-commit>=3.5.0",
+]
 
 # =============================================================================
 # Code Formatting & Linting (Production Grade)
