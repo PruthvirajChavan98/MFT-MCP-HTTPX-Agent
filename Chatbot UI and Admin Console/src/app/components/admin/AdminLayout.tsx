@@ -1,3 +1,4 @@
+// src/app/components/admin/AdminLayout.tsx
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
 import {
@@ -7,7 +8,7 @@ import {
 } from "lucide-react";
 import { AdminProvider, useAdminContext } from "./AdminContext";
 import { CommandPalette } from "./CommandPalette";
-import { GlobalTraceSheet } from "./GlobalTraceSheet";
+import { GlobalTraceSheet } from "./trace/GlobalTraceSheet"; // <--- UPDATED PATH
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
