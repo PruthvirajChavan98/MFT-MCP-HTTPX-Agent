@@ -194,7 +194,7 @@ class SSEEventFormatter:
     @staticmethod
     def tool_start_event(tool_name: str, tool_input: Any) -> Dict[str, Any]:
         """Return dict - sse-starlette handles formatting."""
-        return {"event": "tool_start", "data": {"tool": tool_name, "input": tool_input}}
+        return {"event": "tool_start", "data": json.dumps({"tool": tool_name, "input": tool_input})}
 
     @staticmethod
     def tool_end_event(
@@ -203,7 +203,7 @@ class SSEEventFormatter:
         """Return dict - sse-starlette handles formatting."""
         return {
             "event": "tool_end",
-            "data": {"tool": tool_name, "output": output, "tool_call_id": tool_call_id},
+            "data": json.dumps({"tool": tool_name, "output": output, "tool_call_id": tool_call_id}),
         }
 
     @staticmethod
@@ -213,13 +213,13 @@ class SSEEventFormatter:
         """Public-facing tool execution event."""
         return {
             "event": "tool_call",
-            "data": {"name": tool_name, "output": output, "tool_call_id": tool_call_id},
+            "data": json.dumps({"name": tool_name, "output": output, "tool_call_id": tool_call_id}),
         }
 
     @staticmethod
     def router_event(router_output: Dict[str, Any]) -> Dict[str, Any]:
         """Return dict - sse-starlette handles formatting."""
-        return {"event": "router", "data": router_output}
+        return {"event": "router", "data": json.dumps(router_output)}
 
     @staticmethod
     def cost_event(
@@ -239,17 +239,22 @@ class SSEEventFormatter:
         if cached:
             cost_data["cached"] = True
 
-        return {"event": "cost", "data": cost_data}
+        return {"event": "cost", "data": json.dumps(cost_data)}
 
     @staticmethod
     def done_event() -> Dict[str, Any]:
         """Return dict - sse-starlette handles formatting."""
-        return {"event": "done", "data": {"status": "complete"}}
+        return {"event": "done", "data": json.dumps({"status": "complete"})}
+
+    @staticmethod
+    def trace_event(trace_id: str) -> Dict[str, Any]:
+        """Yield the generated trace_id for frontend reference."""
+        return {"event": "trace", "data": json.dumps({"trace_id": trace_id})}
 
     @staticmethod
     def error_event(error_message: str) -> Dict[str, Any]:
         """Return dict - sse-starlette handles formatting."""
-        return {"event": "error", "data": {"message": error_message}}
+        return {"event": "error", "data": json.dumps({"message": error_message})}
 
 
 # Singleton instances

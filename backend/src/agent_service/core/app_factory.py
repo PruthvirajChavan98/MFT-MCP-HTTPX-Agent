@@ -21,6 +21,7 @@ from src.agent_service.api.endpoints.agent_query import router as query_router
 from src.agent_service.api.endpoints.agent_stream import router as stream_router
 from src.agent_service.api.endpoints.follow_up import router as follow_up_router
 from src.agent_service.api.endpoints.health import router as health_router
+from src.agent_service.api.endpoints.live_dashboards import router as live_router
 from src.agent_service.api.endpoints.models import router as models_router
 from src.agent_service.api.endpoints.rate_limit_metrics import router as rate_limit_metrics_router
 from src.agent_service.api.endpoints.router_endpoints import router as router_router
@@ -40,6 +41,7 @@ from src.agent_service.core.config import (
     SECURITY_PREFER_IP_HEADER,
     SECURITY_TRUST_PROXY_HEADERS,
 )
+from src.agent_service.core.event_bus import event_bus
 from src.agent_service.core.session_utils import close_redis, get_redis
 from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.catalog import model_service
@@ -106,6 +108,11 @@ class AppFactory:
                     await postgres_pool.stop()
                 await mcp_manager.shutdown()
                 await config_manager.close()
+
+                # Graceful EventBus Shutdown
+                await event_bus.close()
+                log.info("✅ EventBus shut down")
+
                 await close_redis()
                 log.info("✅ Shutdown complete")
 
@@ -194,6 +201,7 @@ class AppFactory:
         app.include_router(stream_router)
         app.include_router(follow_up_router)
         app.include_router(rate_limit_metrics_router)
+        app.include_router(live_router)
 
         log.info("✅ All routers mounted")
 

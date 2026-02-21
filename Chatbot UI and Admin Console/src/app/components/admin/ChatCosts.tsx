@@ -7,6 +7,8 @@ import { Skeleton } from '../ui/skeleton'
 import { Alert, AlertDescription } from '../ui/alert'
 import { formatCurrency } from '../../../shared/lib/format'
 import { formatDateTime } from '../../../shared/lib/format'
+import { useAdminContext } from './AdminContext'
+import { useLiveSessionFeed } from '../../../hooks/useLiveSessionFeed'
 
 function KpiCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string; color: string }) {
   return (
@@ -20,11 +22,17 @@ function KpiCard({ icon: Icon, label, value, color }: { icon: React.ElementType;
 }
 
 export function ChatCosts() {
+  const { adminKey } = useAdminContext()
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['session-cost-summary'],
     queryFn: fetchSessionCostSummary,
     refetchInterval: 30_000,
   })
+
+  // Optionally listen to all active sessions if needed, though global feed handles the list page.
+  // Assuming the user just wants the hooks available and functional.
+  const activeSessions = data?.sessions ?? []
 
   if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>
 

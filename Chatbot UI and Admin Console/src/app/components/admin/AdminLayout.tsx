@@ -12,6 +12,7 @@ import { GlobalTraceSheet } from "./trace/GlobalTraceSheet"; // <--- UPDATED PAT
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { useLiveGlobalFeed } from "../../../hooks/useLiveGlobalFeed";
 
 const NAV_ITEMS = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -56,6 +57,8 @@ function AdminShell() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const navigate = useNavigate();
   const auth = useAdminContext();
+
+  useLiveGlobalFeed(auth.adminKey);
 
   // Command Palette Keyboard Shortcut
   useEffect(() => {

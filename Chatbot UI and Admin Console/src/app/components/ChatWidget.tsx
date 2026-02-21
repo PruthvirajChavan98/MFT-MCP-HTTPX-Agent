@@ -299,7 +299,7 @@ export function ChatWidget() {
                     )}
 
                     {messages.map((msg) => (
-                      <ChatMessage key={msg.id} message={msg} />
+                      <ChatMessage key={msg.id} message={msg} sessionId={sessionId} />
                     ))}
 
                     {/* Streaming Indicator */}

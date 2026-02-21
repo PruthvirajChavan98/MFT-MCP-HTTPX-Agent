@@ -10,6 +10,7 @@ export interface EvalTraceSummary {
   error?: string
   inputs_json?: unknown
   final_output?: string
+  reasoning?: string
   scores?: Array<{ name: string; score: number; passed: boolean }>
 }
 

@@ -1,5 +1,6 @@
 import { API_BASE_URL, requestJson, withAdminHeaders } from './http'
 import { streamSse } from './sse'
+import type { ChatMessage as ChatMessageType } from '../types/chat'
 import type {
   EvalTraceDetail,
   EvalTraceSummary,
@@ -61,6 +62,24 @@ export interface UserAnalyticsRow {
   last_active?: string
 }
 
+export interface VectorSearchItem {
+  labels: string[]
+  score: number
+  trace_id: string
+  event_key?: string | null
+  seq?: number | null
+  eval_id?: string | null
+  metric_name?: string | null
+  status?: string
+  provider?: string
+  model?: string
+  session_id?: string
+  app_id?: string
+  question?: string | null
+  final_output?: string | null
+  reasoning?: string | null
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseQuestion(input: unknown): string {
@@ -100,6 +119,27 @@ export async function fetchEvalTrace(traceId: string): Promise<EvalTraceDetail> 
     method: 'GET',
     path: `/eval/trace/${encodeURIComponent(traceId)}`,
   })
+}
+
+export async function fetchCheckpointTrace(adminKey: string, traceId: string): Promise<EvalTraceDetail> {
+  return requestJson<EvalTraceDetail>({
+    method: 'GET',
+    path: `/agent/admin/analytics/trace/${encodeURIComponent(traceId)}`,
+    headers: withAdminHeaders(adminKey),
+  })
+}
+
+export async function fetchVectorSearch(payload: {
+  kind: 'trace' | 'chunk'
+  text: string
+  k?: number
+}): Promise<{
+  index: string
+  k: number
+  min_score: number
+  items: VectorSearchItem[]
+}> {
+  return requestJson({ method: 'POST', path: '/eval/vector-search', body: payload })
 }
 
 export async function fetchMetricsSummary(): Promise<MetricsSummaryItem[]> {
@@ -287,13 +327,49 @@ export async function fetchUserAnalytics(
   return response.items ?? []
 }
 
+export interface SessionListItem {
+  session_id: string
+  started_at?: string
+  model?: string
+  provider?: string
+  message_count?: number
+  first_question?: string
+}
+
 export async function fetchConversations(
   adminKey: string,
   limit = 100,
+): Promise<SessionListItem[]> {
+  const response = await requestJson<{ items: SessionListItem[] }>({
+    method: 'GET',
+    path: '/agent/admin/analytics/conversations',
+    query: { limit },
+    headers: withAdminHeaders(adminKey),
+  })
+  return response.items ?? []
+}
+
+export async function fetchTraces(
+  adminKey: string,
+  limit = 200,
 ): Promise<EvalTraceSummary[]> {
   const response = await requestJson<{ items: EvalTraceSummary[] }>({
     method: 'GET',
-    path: '/agent/admin/analytics/conversations',
+    path: '/agent/admin/analytics/traces',
+    query: { limit },
+    headers: withAdminHeaders(adminKey),
+  })
+  return response.items ?? []
+}
+
+export async function fetchSessionTraces(
+  adminKey: string,
+  sessionId: string,
+  limit = 500,
+): Promise<ChatMessageType[]> {
+  const response = await requestJson<{ items: ChatMessageType[] }>({
+    method: 'GET',
+    path: `/agent/admin/analytics/session/${encodeURIComponent(sessionId)}`,
     query: { limit },
     headers: withAdminHeaders(adminKey),
   })

@@ -472,6 +472,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         metadata={"endpoint": "/agent/stream", "cached": True},
                     )
 
+                    yield sse_formatter.trace_event(collector.trace_id)
                     yield sse_formatter.done_event()
 
                 except Exception as e:
@@ -671,6 +672,19 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     metadata={"endpoint": "/agent/stream", "stream_version": "events_v2"},
                 )
 
+                if getattr(collector, "reasoning", ""):
+                    try:
+                        cfg = {"configurable": {"thread_id": sid}}
+                        current_state = await graph.aget_state(cfg)
+                        msgs = current_state.values.get("messages", [])
+                        if msgs and getattr(msgs[-1], "type", "") == "ai":
+                            # Mutate additional_kwargs to preserve reasoning natively in Checkpointer
+                            msgs[-1].additional_kwargs["reasoning"] = collector.reasoning
+                            await graph.aupdate_state(cfg, {"messages": [msgs[-1]]})
+                    except Exception as store_err:
+                        log.warning(f"Failed to save reasoning to checkpointer: {store_err}")
+
+                yield sse_formatter.trace_event(collector.trace_id)
                 yield sse_formatter.done_event()
 
                 asyncio.create_task(

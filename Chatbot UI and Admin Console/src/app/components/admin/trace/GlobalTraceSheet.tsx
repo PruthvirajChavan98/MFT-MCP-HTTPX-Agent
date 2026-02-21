@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEvalTrace } from '../../../../shared/api/admin'
+import { fetchCheckpointTrace } from '../../../../shared/api/admin'
+import { useAdminContext } from '../AdminContext'
 import { Sheet, SheetContent, SheetTitle } from '../../ui/sheet'
 import { TraceTree } from './TraceTree'
 import { TraceInspector } from './TraceInspector'
@@ -13,11 +14,12 @@ export function GlobalTraceSheet() {
   const [searchParams, setSearchParams] = useSearchParams()
   const traceId = searchParams.get('traceId')
   const [selectedNodeId, setSelectedNodeId] = useState<string>('root')
+  const auth = useAdminContext()
 
   const { data: detail, isLoading } = useQuery({
-    queryKey: ['eval-trace', traceId],
-    queryFn: () => fetchEvalTrace(traceId!),
-    enabled: !!traceId,
+    queryKey: ['checkpoint-trace', traceId, auth.adminKey],
+    queryFn: () => fetchCheckpointTrace(auth.adminKey, traceId!),
+    enabled: !!traceId && !!auth.adminKey,
   })
 
   useEffect(() => {

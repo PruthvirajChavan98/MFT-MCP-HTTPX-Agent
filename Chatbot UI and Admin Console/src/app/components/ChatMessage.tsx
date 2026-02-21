@@ -1,24 +1,44 @@
 import { useState } from 'react'
-import { Bot, ChevronDown, ChevronUp, Copy, User, Wrench } from 'lucide-react'
+import { Bot, ChevronDown, ChevronUp, Copy, User, Wrench, ThumbsUp, ThumbsDown, ArrowUpRight } from 'lucide-react'
 import { Streamdown } from 'streamdown'
 import { cn } from './ui/utils'
 import { formatCurrency } from '../../shared/lib/format'
 import type { ChatMessage as ChatMessageType } from '../../shared/types/chat'
+import { submitFeedback } from '../../shared/api/chat'
+import { toast } from 'sonner'
 
 interface Props {
   message: ChatMessageType
+  sessionId?: string
 }
 
-export function ChatMessage({ message }: Props) {
+export function ChatMessage({ message, sessionId }: Props) {
   const isUser = message.role === 'user'
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [feedbackState, setFeedbackState] = useState<'idle' | 'thumbs_up' | 'thumbs_down'>('idle')
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
+  }
+
+  const handleFeedback = async (rating: 'thumbs_up' | 'thumbs_down') => {
+    if (feedbackState !== 'idle') return
+    setFeedbackState(rating)
+    try {
+      await submitFeedback({
+        session_id: sessionId,
+        trace_id: message.traceId,
+        rating
+      })
+      toast.success('Feedback submitted')
+    } catch (err) {
+      toast.error('Failed to submit feedback')
+      setFeedbackState('idle')
+    }
   }
 
   return (
@@ -73,7 +93,7 @@ export function ChatMessage({ message }: Props) {
         )}
 
         {/* Tool calls */}
-        {!isUser && message.toolCalls.length > 0 && (
+        {!isUser && (message.toolCalls?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1">
             {message.toolCalls.map((tc, i) => (
               <span
@@ -87,8 +107,24 @@ export function ChatMessage({ message }: Props) {
           </div>
         )}
 
-        {/* Footer row: cost + copy */}
-        <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Trace Link */}
+        {!isUser && message.traceId && (
+          <a
+            href={`/admin/traces?traceId=${message.traceId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 mt-1.5 text-[11px] text-slate-400 hover:text-cyan-600 transition-colors w-max font-medium group/trace border border-transparent hover:border-cyan-100 px-2 py-1 -ml-2 rounded-md"
+          >
+            <div className="w-3.5 h-3.5 rounded-full bg-slate-100 group-hover/trace:bg-cyan-50 flex items-center justify-center">
+              <span className="text-slate-500 group-hover/trace:text-cyan-600 font-bold leading-none text-[8px] mb-[1px]">❖</span>
+            </div>
+            View trace
+            <ArrowUpRight size={10} className="opacity-0 group-hover/trace:opacity-100 transition-opacity -ml-0.5" />
+          </a>
+        )}
+
+        {/* Footer row: cost + copy + time + feedback */}
+        <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
           {!isUser && message.cost && (
             <span className="text-[10px] text-slate-400">
               {formatCurrency(message.cost.total_cost)}
@@ -103,7 +139,29 @@ export function ChatMessage({ message }: Props) {
               {copied ? 'Copied!' : 'Copy'}
             </button>
           )}
-          <span className="text-[10px] text-slate-300">
+
+          {!isUser && message.status === 'done' && sessionId && (
+            <div className="flex items-center gap-0.5 ml-1">
+              <button
+                onClick={() => handleFeedback('thumbs_up')}
+                disabled={feedbackState !== 'idle'}
+                className={cn("flex items-center justify-center w-5 h-5 transition-colors rounded hover:bg-slate-100", feedbackState === 'thumbs_up' ? "text-green-600 bg-green-50" : "text-slate-400 hover:text-green-600")}
+                title="Good response"
+              >
+                <ThumbsUp size={11} className={feedbackState === 'thumbs_up' ? "fill-current" : ""} />
+              </button>
+              <button
+                onClick={() => handleFeedback('thumbs_down')}
+                disabled={feedbackState !== 'idle'}
+                className={cn("flex items-center justify-center w-5 h-5 transition-colors rounded hover:bg-slate-100", feedbackState === 'thumbs_down' ? "text-red-600 bg-red-50" : "text-slate-400 hover:text-red-600")}
+                title="Bad response"
+              >
+                <ThumbsDown size={11} className={feedbackState === 'thumbs_down' ? "fill-current" : ""} />
+              </button>
+            </div>
+          )}
+
+          <span className="text-[10px] text-slate-300 ml-auto">
             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>

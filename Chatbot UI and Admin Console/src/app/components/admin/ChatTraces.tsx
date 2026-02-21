@@ -2,29 +2,34 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { Search, CheckCircle2, XCircle, AlertTriangle, ExternalLink } from 'lucide-react'
-import { fetchEvalTraces, extractTraceQuestion } from '../../../shared/api/admin'
+import { fetchTraces, extractTraceQuestion } from '../../../shared/api/admin'
+import { useAdminContext } from './AdminContext'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Input } from '../ui/input'
 import { Skeleton } from '../ui/skeleton'
 import { Alert, AlertDescription } from '../ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { formatDateTime } from '../../../shared/lib/format'
+import { MetricsDashboard } from './MetricsDashboard'
+import { SemanticSearchUI } from './SemanticSearchUI'
 
 export function ChatTraces() {
   const [, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
+  const auth = useAdminContext()
 
   const { data: traces = [], isLoading, error } = useQuery({
-    queryKey: ['eval-traces'],
-    queryFn: () => fetchEvalTraces(200),
+    queryKey: ['traces', auth.adminKey],
+    queryFn: () => fetchTraces(auth.adminKey, 200),
+    enabled: !!auth.adminKey,
   })
 
   const filtered = traces.filter(
     (t) =>
       !search ||
-      t.trace_id.includes(search) ||
-      t.session_id.includes(search) ||
-      extractTraceQuestion(t).toLowerCase().includes(search.toLowerCase()),
+      t.trace_id?.includes(search) ||
+      t.session_id?.includes(search) ||
+      (extractTraceQuestion(t) || '').toLowerCase().includes(search.toLowerCase()),
   )
 
   const openTrace = (id: string) => {
@@ -104,24 +109,12 @@ export function ChatTraces() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="metrics">
-          <Card>
-             <CardContent className="p-12 text-center text-muted-foreground flex flex-col items-center">
-               <AlertTriangle size={32} className="mb-3 text-slate-300" />
-               <p className="font-medium text-slate-900">Metrics Module Uncoupled</p>
-               <p className="text-sm mt-1">Connect your evaluation backend to render metric summaries here.</p>
-             </CardContent>
-          </Card>
+        <TabsContent value="metrics" className="pt-2">
+          <MetricsDashboard />
         </TabsContent>
 
-        <TabsContent value="semantic">
-           <Card>
-             <CardContent className="p-12 text-center text-muted-foreground flex flex-col items-center">
-               <Search size={32} className="mb-3 text-slate-300" />
-               <p className="font-medium text-slate-900">Semantic Vector Search</p>
-               <p className="text-sm mt-1">Provide Qdrant connection via API to enable vector similarity search.</p>
-             </CardContent>
-          </Card>
+        <TabsContent value="semantic" className="pt-2">
+          <SemanticSearchUI />
         </TabsContent>
       </Tabs>
     </div>

@@ -185,6 +185,24 @@ class SessionCostTracker:
                 f"Session {session_id}: Added ${cost:.6f} ({provider}/{model}), "
                 f"total: ${data['total_cost']:.6f} over {data['total_requests']} requests"
             )
+
+            from src.agent_service.core.event_bus import event_bus
+
+            await event_bus.publish(
+                channel="live:global:metrics",
+                event_type="cost_update",
+                data={
+                    "session_id": session_id,
+                    "incremental_cost": cost,
+                    "new_total": data["total_cost"]
+                }
+            )
+            await event_bus.publish(
+                channel=f"live:session:{session_id}",
+                event_type="session_tick",
+                data=data
+            )
+
             return True
 
         except RedisError as e:

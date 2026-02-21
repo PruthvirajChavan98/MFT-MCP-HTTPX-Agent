@@ -33,6 +33,7 @@ function createAssistantPlaceholder(): ChatMessage {
     toolCalls: [],
     cost: null,
     router: null,
+    traceId: undefined,
   }
 }
 
@@ -170,6 +171,7 @@ export function useChatStream() {
         toolCalls: [],
         cost: null,
         router: null,
+        traceId: undefined,
       }
 
       setMessages((prev) => [...prev, userMsg, createAssistantPlaceholder()])
@@ -222,6 +224,14 @@ export function useChatStream() {
                     patchAssistant((last) => ({
                       ...last,
                       router: parsed as Record<string, unknown>,
+                    }))
+                  }
+                  break
+                case 'trace':
+                  if (parsed && typeof parsed === 'object' && 'trace_id' in parsed) {
+                    patchAssistant((last) => ({
+                      ...last,
+                      traceId: (parsed as { trace_id: string }).trace_id,
                     }))
                   }
                   break

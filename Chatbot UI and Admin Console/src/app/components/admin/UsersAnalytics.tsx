@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUpDown } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { ArrowUpDown, ExternalLink } from 'lucide-react'
 import { fetchUserAnalytics } from '../../../shared/api/admin'
 import { useAdminContext } from './AdminContext'
 import { Card, CardContent } from '../ui/card'
@@ -13,6 +14,7 @@ import type { UserAnalyticsRow } from '../../../shared/api/admin'
 type SortKey = keyof UserAnalyticsRow
 export function UsersAnalytics() {
   const auth = useAdminContext()
+  const navigate = useNavigate()
   const [sortKey, setSortKey] = useState<SortKey>('trace_count')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -57,7 +59,8 @@ export function UsersAnalytics() {
                     <Th label="Errors" k="error_count" />
                     <Th label="Avg Latency" k="avg_latency_ms" />
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Success Rate</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Last Active</th>
+                    <Th label="Last Active" k="last_active" />
+                    <th className="px-4 py-2.5 w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -78,6 +81,15 @@ export function UsersAnalytics() {
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(u.last_active)}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-right">
+                          <button
+                            onClick={() => navigate(`/admin/conversations?sessionId=${encodeURIComponent(u.session_id)}`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-700 bg-cyan-50/50 hover:bg-cyan-100 hover:text-cyan-800 rounded-md transition-colors border border-cyan-100/50"
+                          >
+                            <ExternalLink size={12} />
+                            View
+                          </button>
+                        </td>
                       </tr>
                     )
                   })}

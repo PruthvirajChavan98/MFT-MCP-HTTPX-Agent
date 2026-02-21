@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { Heart, CheckCircle, XCircle, RefreshCw, Server, Database, Globe, Network } from "lucide-react";
-import { fetchSystemHealth } from '../../../shared/api/admin';
+import { Heart, CheckCircle, XCircle, RefreshCw, Server, Database, Globe, Network, Shield, Activity } from "lucide-react";
+import { fetchSystemHealth, fetchRateLimitMetrics, fetchRateLimitConfig } from '../../../shared/api/admin';
 import { Skeleton } from '../ui/skeleton';
 import { Alert, AlertDescription } from '../ui/alert';
 import { cn } from '../ui/utils';
@@ -18,6 +18,24 @@ export function SystemHealth() {
         refetchInterval: 15000,
     });
 
+    const { data: rlMetrics, isLoading: rlmLoading, refetch: refetchMetrics } = useQuery({
+        queryKey: ['rate-limit-metrics'],
+        queryFn: fetchRateLimitMetrics,
+        refetchInterval: 15000,
+    });
+
+    const { data: rlConfig, isLoading: rlcLoading, refetch: refetchConfig } = useQuery({
+        queryKey: ['rate-limit-config'],
+        queryFn: fetchRateLimitConfig,
+        refetchInterval: 60000,
+    });
+
+    const handleRefetch = () => {
+        refetch();
+        refetchMetrics();
+        refetchConfig();
+    };
+
     if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>;
 
     return (
@@ -28,7 +46,7 @@ export function SystemHealth() {
                     <p className="text-gray-500 text-sm mt-1">Platform telemetry and dependency readiness</p>
                 </div>
                 <button
-                    onClick={() => refetch()}
+                    onClick={handleRefetch}
                     disabled={isFetching}
                     className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-semibold text-sm flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
                 >
@@ -107,6 +125,87 @@ export function SystemHealth() {
                                     </div>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    {/* Rate Limiting Section */}
+                    <div className="pt-6 border-t border-gray-100">
+                        <div className="flex items-center gap-3 mb-6">
+                            <h3 className="text-lg font-bold text-gray-900">Traffic & Rate Limiting</h3>
+                            {rlConfig && (
+                                <span className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                                    rlConfig.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                                    {rlConfig.enabled ? 'Enforcing' : 'Disabled'}
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="grid lg:grid-cols-2 gap-6">
+                            {/* Global Config Card */}
+                            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                                    <Shield className="w-32 h-32" />
+                                </div>
+                                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Shield className="w-4 h-4 text-cyan-500" /> Active Configuration
+                                </h4>
+                                {rlcLoading || !rlConfig ? <Skeleton className="w-full h-32" /> : (
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Algorithm</div>
+                                                <div className="text-slate-900 font-mono text-xs font-semibold">{rlConfig.algorithm}</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Failure Mode</div>
+                                                <div className="text-slate-900 font-mono text-xs font-semibold">{rlConfig.failure_mode}</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Max Burst</div>
+                                                <div className="text-slate-900 font-mono text-xs font-semibold">{rlConfig.max_burst} reqs</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Per-IP Defense</div>
+                                                <div className="text-slate-900 font-mono text-xs font-semibold">{rlConfig.per_ip_enabled ? `Active (${rlConfig.per_ip?.limit})` : 'Inactive'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Endpoint Metrics */}
+                            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col items-start gap-4 h-full relative overflow-hidden">
+                                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                    <Activity className="w-4 h-4 text-rose-500" /> Endpoint Quotas
+                                </h4>
+                                {rlmLoading || !rlMetrics ? <Skeleton className="w-full h-32" /> : (
+                                    <div className="w-full overflow-x-auto no-scrollbar">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="border-b border-gray-100 text-slate-500 uppercase tracking-wider font-bold">
+                                                    <th className="pb-2">Endpoint</th>
+                                                    <th className="pb-2 text-right">Allowed</th>
+                                                    <th className="pb-2 text-right">Denied</th>
+                                                    <th className="pb-2 text-right">RPM</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50/50">
+                                                {Object.entries(rlMetrics.metrics || {}).map(([ep, stats]: [string, any]) => {
+                                                    const cleanName = ep.replace('endpoint:', '');
+                                                    return (
+                                                        <tr key={ep}>
+                                                            <td className="py-2.5 font-medium text-slate-700">/{cleanName}</td>
+                                                            <td className="py-2.5 text-right font-mono text-emerald-600">{stats.requests_allowed}</td>
+                                                            <td className="py-2.5 text-right font-mono text-red-500">{stats.requests_denied}</td>
+                                                            <td className="py-2.5 text-right font-mono text-slate-500">{stats.rate}</td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </>

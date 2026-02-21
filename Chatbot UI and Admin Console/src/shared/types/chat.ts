@@ -29,7 +29,8 @@ export interface ChatMessage {
   reasoning: string
   timestamp: number
   status: MessageStatus
-  toolCalls: ToolCallEvent[]
-  cost: CostEvent | null
-  router: Record<string, unknown> | null
+  toolCalls?: ToolCallEvent[]
+  cost?: CostEvent | null
+  router?: Record<string, unknown> | null
+  traceId?: string
 }
