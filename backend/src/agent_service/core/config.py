@@ -224,3 +224,46 @@ PROMETHEUS_METRICS_ENABLED = os.getenv("PROMETHEUS_METRICS_ENABLED", "true").low
     "true",
     "yes",
 )
+
+# =============================================================================
+# INLINE PROMPT GUARDRAILS
+# =============================================================================
+INLINE_GUARD_ENABLED = os.getenv("INLINE_GUARD_ENABLED", "true").lower() in ("1", "true", "yes")
+INLINE_GUARD_SIMILARITY_THRESHOLD = float(os.getenv("INLINE_GUARD_SIMILARITY_THRESHOLD", "0.85"))
+INLINE_GUARD_TOTAL_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_TOTAL_TIMEOUT_MS", "1200"))
+INLINE_GUARD_VECTOR_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_VECTOR_TIMEOUT_MS", "250"))
+INLINE_GUARD_GROQ_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_GROQ_TIMEOUT_MS", "900"))
+INLINE_GUARD_PROMPT_GUARD_MODEL = os.getenv(
+    "INLINE_GUARD_PROMPT_GUARD_MODEL", "meta-llama/llama-guard-4-12b"
+).strip()
+INLINE_GUARD_PROTOTYPE_CACHE_TTL_SECONDS = int(
+    os.getenv("INLINE_GUARD_PROTOTYPE_CACHE_TTL_SECONDS", "86400")
+)
+INLINE_GUARD_REDIS_KEY_PREFIX = os.getenv(
+    "INLINE_GUARD_REDIS_KEY_PREFIX", "agent:inline_guard"
+).strip()
+
+# =============================================================================
+# SHARED HTTP CLIENT (ASYNC)
+# =============================================================================
+SHARED_HTTP_MAX_CONNECTIONS = int(os.getenv("SHARED_HTTP_MAX_CONNECTIONS", "200"))
+SHARED_HTTP_MAX_KEEPALIVE = int(os.getenv("SHARED_HTTP_MAX_KEEPALIVE", "50"))
+SHARED_HTTP_TIMEOUT_CONNECT_SECONDS = float(os.getenv("SHARED_HTTP_TIMEOUT_CONNECT_SECONDS", "5.0"))
+SHARED_HTTP_TIMEOUT_READ_SECONDS = float(os.getenv("SHARED_HTTP_TIMEOUT_READ_SECONDS", "30.0"))
+SHARED_HTTP_TIMEOUT_WRITE_SECONDS = float(os.getenv("SHARED_HTTP_TIMEOUT_WRITE_SECONDS", "10.0"))
+SHARED_HTTP_TIMEOUT_POOL_SECONDS = float(os.getenv("SHARED_HTTP_TIMEOUT_POOL_SECONDS", "5.0"))
+
+# =============================================================================
+# SHADOW TRACE QUEUE + WORKER
+# =============================================================================
+SHADOW_TRACE_QUEUE_KEY = os.getenv("SHADOW_TRACE_QUEUE_KEY", "agent:shadow:trace_queue").strip()
+SHADOW_TRACE_QUEUE_MAXLEN = int(os.getenv("SHADOW_TRACE_QUEUE_MAXLEN", "50000"))
+SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS = float(
+    os.getenv("SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS", "0.25")
+)
+SHADOW_JUDGE_ENABLED = os.getenv("SHADOW_JUDGE_ENABLED", "true").lower() in ("1", "true", "yes")
+SHADOW_JUDGE_POLL_SECONDS = int(os.getenv("SHADOW_JUDGE_POLL_SECONDS", "60"))
+SHADOW_JUDGE_BATCH_SIZE = int(os.getenv("SHADOW_JUDGE_BATCH_SIZE", "50"))
+SHADOW_JUDGE_MODEL = os.getenv("SHADOW_JUDGE_MODEL", "openai/gpt-oss-safeguard-20b").strip()
+SHADOW_JUDGE_MODEL_FALLBACK = os.getenv("SHADOW_JUDGE_MODEL_FALLBACK", "gpt-oss-20b").strip()
+SHADOW_JUDGE_REASONING_EFFORT = os.getenv("SHADOW_JUDGE_REASONING_EFFORT", "low").strip().lower()

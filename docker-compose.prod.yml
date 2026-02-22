@@ -125,6 +125,7 @@ services:
     environment:
       PORT: "8000"
       GUNICORN_WORKERS: "4"
+      PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus_multiproc"
       MCP_SERVER_URL: "http://mcp:8050/sse"
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
@@ -196,6 +197,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend/data/geoip:/app/data/geoip
+      - prometheus_multiproc:/tmp/prometheus_multiproc
     restart: unless-stopped
     mem_limit: 2g
     cpus: 2.00
@@ -318,6 +320,9 @@ services:
       dockerfile: Dockerfile.prod
     image: mft_frontend_prod:latest
     container_name: mft_frontend_prod
+    environment:
+      FRONTEND_API_BASE_URL: "/api"
+      FRONTEND_APP_ENV: "production"
     ports:
       - "127.0.0.1:${PROD_FRONTEND_PORT:-5173}:80"
     depends_on:
@@ -360,3 +365,4 @@ volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  prometheus_multiproc:

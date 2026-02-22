@@ -1,17 +1,55 @@
+import { lazy } from 'react'
 import { createBrowserRouter } from 'react-router'
 import { LandingPage } from './components/LandingPage'
-import { AdminLayout } from './components/admin/AdminLayout'
-import { Dashboard } from './components/admin/Dashboard'
-import { KnowledgeBase } from './components/admin/KnowledgeBase'
-import { ChatCosts } from './components/admin/ChatCosts'
-import { ChatTraces } from './components/admin/ChatTraces'
-import { QuestionCategories } from './components/admin/QuestionCategories'
-import { Conversations } from './components/admin/Conversations'
-import { ModelConfig } from './components/admin/ModelConfig'
-import { Guardrails } from './components/admin/Guardrails'
-import { UsersAnalytics } from './components/admin/UsersAnalytics'
-import { Feedback } from './components/admin/Feedback'
-import { SystemHealth } from './components/admin/SystemHealth'
+
+const AdminLayout = lazy(async () => {
+  const module = await import('./components/admin/AdminLayout')
+  return { default: module.AdminLayout }
+})
+const Dashboard = lazy(async () => {
+  const module = await import('./components/admin/Dashboard')
+  return { default: module.Dashboard }
+})
+const KnowledgeBase = lazy(async () => {
+  const module = await import('./components/admin/KnowledgeBase')
+  return { default: module.KnowledgeBase }
+})
+const ChatCosts = lazy(async () => {
+  const module = await import('./components/admin/ChatCosts')
+  return { default: module.ChatCosts }
+})
+const ChatTraces = lazy(async () => {
+  const module = await import('./components/admin/ChatTraces')
+  return { default: module.ChatTraces }
+})
+const QuestionCategories = lazy(async () => {
+  const module = await import('./components/admin/QuestionCategories')
+  return { default: module.QuestionCategories }
+})
+const Conversations = lazy(async () => {
+  const module = await import('./components/admin/Conversations')
+  return { default: module.Conversations }
+})
+const ModelConfig = lazy(async () => {
+  const module = await import('./components/admin/ModelConfig')
+  return { default: module.ModelConfig }
+})
+const Guardrails = lazy(async () => {
+  const module = await import('./components/admin/Guardrails')
+  return { default: module.Guardrails }
+})
+const UsersAnalytics = lazy(async () => {
+  const module = await import('./components/admin/UsersAnalytics')
+  return { default: module.UsersAnalytics }
+})
+const Feedback = lazy(async () => {
+  const module = await import('./components/admin/Feedback')
+  return { default: module.Feedback }
+})
+const SystemHealth = lazy(async () => {
+  const module = await import('./components/admin/SystemHealth')
+  return { default: module.SystemHealth }
+})
 
 export const router = createBrowserRouter([
   {

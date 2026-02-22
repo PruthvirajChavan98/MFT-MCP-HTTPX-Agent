@@ -13,7 +13,7 @@ from src.agent_service.core.config import (
     NVIDIA_API_KEY,
     OPENROUTER_API_KEY,
 )
-from src.agent_service.core.prompts import SYSTEM_PROMPT
+from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.core.schemas import AgentRequest
 from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.client import get_llm
@@ -73,7 +73,9 @@ class ResourceResolver:
             saved_config = await config_manager.get_config(session_id)
 
             model_name = saved_config.get("model_name") or MODEL_NAME
-            system_prompt = saved_config.get("system_prompt") or SYSTEM_PROMPT.strip()
+            system_prompt = (
+                saved_config.get("system_prompt") or prompt_manager.get_default_system_prompt()
+            )
             reasoning_effort = saved_config.get("reasoning_effort")
             provider = saved_config.get(
                 "provider"

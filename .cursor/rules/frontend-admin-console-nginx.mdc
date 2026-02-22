@@ -1,0 +1,33 @@
+---
+description: Chatbot UI and Admin Console Nginx edge standards
+globs: "Chatbot UI and Admin Console/nginx.conf"
+alwaysApply: false
+---
+
+# Frontend Admin Console Nginx Standards
+
+This rule governs edge behavior for `Chatbot UI and Admin Console/nginx.conf`.
+Changes here are production-impacting and must follow enterprise ingress controls.
+
+## Required Edge Controls
+- Keep Layer-7 volumetric defense at Nginx (`limit_req_zone`, `limit_conn_zone`) with NAT-safe thresholds.
+- Do not move business identity quotas to Nginx. Per-user/per-tenant quotas remain in FastAPI `RateLimiterManager`.
+- Preserve SSE-safe proxy behavior for `/api/agent/stream`:
+  - `proxy_buffering off`
+  - streaming-friendly `proxy_read_timeout` and `proxy_send_timeout`
+  - forwarding headers and keep-alive-safe proxy settings
+  - disable buffering paths that can delay SSE delivery
+
+## Guardrails For Rate Limits
+- Avoid low per-IP caps that penalize NATed enterprise users.
+- Use edge limits to absorb abusive traffic, not to enforce authenticated product quotas.
+- Any threshold change must include operational rationale in `CHANGELOG.md`.
+
+## Validation Requirements Before Merge
+- Run an Nginx syntax sanity check for this file and capture outcome.
+- Confirm no route precedence regressions (`/api/agent/stream` remains above generic `/api/`).
+- Report verified items and residual risks in handoff notes.
+
+## Cross-Rule Alignment
+- Follow `.cursor/rules/user-enterprise-nonnegotiables.mdc` for plan-first and research-backed execution.
+- Follow `.cursor/rules/docker-and-deployment.mdc` for deployment consistency.

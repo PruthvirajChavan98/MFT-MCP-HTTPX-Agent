@@ -6,14 +6,11 @@ from typing import Any, Dict, List, Optional
 from langchain_core.tools import StructuredTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
-from pydantic import create_model
+from pydantic import BaseModel, Field, create_model
 
 from src.agent_service.core.config import SERVER_NAME, SERVER_URL
 from src.agent_service.core.session_utils import is_user_authenticated, valid_session_id
 from src.agent_service.core.utils import normalize_result
-
-# Local Imports (Updated paths)
-from .graph_rag import create_graph_tool
 
 log = logging.getLogger("mcp_manager")
 
@@ -74,8 +71,17 @@ class MCPManager:
 
     async def shutdown(self):
         await self.exit_stack.aclose()
+        self.exit_stack = AsyncExitStack()
+        self.client = None
+        self.session = None
         self.tool_blueprints = []
         log.info("MCP Session closed.")
+
+    def _find_raw_tool(self, tool_name: str):
+        for bp in self.tool_blueprints:
+            if bp.get("name") == tool_name:
+                return bp.get("raw_tool")
+        return None
 
     def _safe_schema_from_args_schema(self, tool_name: str, args_schema: Any):
         fields: Dict[str, Any] = {}
@@ -132,14 +138,32 @@ class MCPManager:
                 raw_tool = bp["raw_tool"]
 
                 # Wrapper to inject session_id into remote calls
-                async def tool_wrapper(_tool=raw_tool, _sid=sid, **kwargs):
+                async def tool_wrapper(_tool=raw_tool, _sid=sid, _tool_name=tool_name, **kwargs):
                     full_args = dict(kwargs)
                     full_args["session_id"] = _sid
-                    async with self.call_lock:
+                    try:
                         res = await _tool.ainvoke(full_args)
-                    if isinstance(res, str):
-                        return {"text": res}
-                    return normalize_result(res)
+                        if isinstance(res, str):
+                            return {"text": res}
+                        return normalize_result(res)
+                    except Exception as first_exc:
+                        log.warning(
+                            "MCP tool '%s' invoke failed once, attempting reconnect: %r",
+                            _tool_name,
+                            first_exc,
+                        )
+                        async with self.call_lock:
+                            await self.shutdown()
+                            await self.initialize()
+                            fresh_tool = self._find_raw_tool(_tool_name)
+                            if fresh_tool is None:
+                                raise RuntimeError(
+                                    f"Tool '{_tool_name}' unavailable after reconnect"
+                                ) from first_exc
+                            retry_res = await fresh_tool.ainvoke(full_args)
+                        if isinstance(retry_res, str):
+                            return {"text": retry_res}
+                        return normalize_result(retry_res)
 
                 try:
                     tool_instance = StructuredTool.from_function(
@@ -154,17 +178,45 @@ class MCPManager:
                     log.error(f"Failed to create MCP tool '{tool_name}': {e}")
                     continue
 
-        # 3. Add Local Graph Tool (FAQ)
-        # This is generally considered "Public"
+        # 3. Add Local Cognee graph-completion tool
         if is_auth or "mock_fintech_knowledge_base" in PUBLIC_TOOLS:
             try:
-                # Pass the key here (it might be None, which is fine if env var is set)
-                graph_tool = create_graph_tool(openrouter_api_key=openrouter_api_key)  # type: ignore
-                tools.append(graph_tool)
+                tools.append(self._build_cognee_tool())
             except Exception as e:
-                log.error(f"Failed to attach Graph Tool: {e}")
+                log.error(f"Failed to attach Cognee tool: {e}")
 
         return tools
+
+    def _build_cognee_tool(self) -> StructuredTool:
+        class CogneeQueryInput(BaseModel):
+            query: str = Field(
+                description="Natural language query to search the fintech knowledge graph."
+            )
+
+        async def mock_fintech_knowledge_base(query: str) -> dict[str, Any]:
+            import cognee
+
+            try:
+                # Latest Cognee docs use query_text/query_type.
+                result = await cognee.search(
+                    query_text=query,
+                    query_type=cognee.SearchType.GRAPH_COMPLETION,
+                )
+            except TypeError:
+                # Backward compatibility for older Cognee API variants.
+                result = await cognee.search(
+                    query=query,
+                    search_type=cognee.SearchType.GRAPH_COMPLETION,
+                )
+            return normalize_result(result)
+
+        return StructuredTool.from_function(
+            func=None,
+            coroutine=mock_fintech_knowledge_base,
+            name="mock_fintech_knowledge_base",
+            description="Query fintech knowledge using Cognee graph completion.",
+            args_schema=CogneeQueryInput,
+        )
 
 
 mcp_manager = MCPManager()

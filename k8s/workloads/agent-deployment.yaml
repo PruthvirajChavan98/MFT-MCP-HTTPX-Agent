@@ -138,10 +138,14 @@ spec:
             - name: geoip-data
               mountPath: /app/data/geoip
               readOnly: true
+            - name: prometheus-multiproc
+              mountPath: /tmp/prometheus_multiproc
       volumes:
         - name: geoip-data
           persistentVolumeClaim:
             claimName: geoip-data
+        - name: prometheus-multiproc
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

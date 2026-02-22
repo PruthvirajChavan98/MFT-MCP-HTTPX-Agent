@@ -1,6 +1,7 @@
 """Agent streaming endpoint with SSE."""
 
 import asyncio
+import json
 import logging
 from typing import Any, Dict
 
@@ -12,6 +13,7 @@ from src.agent_service.core.config import (
     AGENT_INLINE_ROUTER_EXPOSE,
     AGENT_STREAM_EXPOSE_INTERNAL_EVENTS,
     AGENT_STREAM_EXPOSE_REASONING,
+    SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS,
 )
 from src.agent_service.core.cost import calculate_run_cost_detailed
 from src.agent_service.core.rate_limiter_manager import (
@@ -27,9 +29,11 @@ from src.agent_service.core.schemas import AgentRequest
 from src.agent_service.core.session_cost import get_session_cost_tracker
 from src.agent_service.core.session_utils import session_utils
 from src.agent_service.core.streaming_utils import StreamingState, sse_formatter, streaming_utils
+from src.agent_service.eval_store.shadow_queue import trace_queue
 from src.agent_service.features.kb_first import kb_first_payload
 from src.agent_service.features.nbfc_router import nbfc_router_service
 from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_shadow_eval_commit
+from src.agent_service.security.inline_guard import evaluate_prompt_safety
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent-stream"])
@@ -436,6 +440,43 @@ async def stream_agent(request: AgentRequest, http_request: Request):
         )
         collector.case_id = app_id
 
+        prompt_is_safe = await evaluate_prompt_safety(request.question)
+        if not prompt_is_safe:
+
+            async def blocked_event_generator():
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": "Prompt violates security policy"}),
+                }
+                yield sse_formatter.done_event()
+
+            return EventSourceResponse(
+                blocked_event_generator(), headers={"Cache-Control": "no-cache"}
+            )
+
+        def schedule_shadow_trace_enqueue(latest_output: str) -> None:
+            async def _enqueue() -> None:
+                try:
+                    trace_data = collector.build_trace_dict()
+                    response_text = str(trace_data.get("final_output") or latest_output or "")
+                    async with asyncio.timeout(SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS):
+                        await trace_queue.enqueue_trace(
+                            session_id=sid,
+                            user_prompt=request.question,
+                            agent_response=response_text,
+                            trace_id=str(trace_data.get("trace_id") or collector.trace_id),
+                            status=str(trace_data.get("status") or collector.status),
+                            metadata={
+                                "endpoint": "/agent/stream",
+                                "provider": resources.provider,
+                                "model": resources.model_name,
+                            },
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("Failed to enqueue shadow trace for session %s: %s", sid, exc)
+
+            asyncio.create_task(_enqueue())
+
         kb_payload = await kb_first_payload(request.question, resources.tools)
         if kb_payload:
 
@@ -496,6 +537,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                             provider=resources.provider,
                         )
                     )
+                    schedule_shadow_trace_enqueue(output if "output" in locals() else "")
 
             return EventSourceResponse(kb_event_generator(), headers={"Cache-Control": "no-cache"})
 
@@ -687,23 +729,12 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                 yield sse_formatter.trace_event(collector.trace_id)
                 yield sse_formatter.done_event()
 
-                asyncio.create_task(
-                    maybe_shadow_eval_commit(
-                        collector,
-                        openrouter_api_key=resources.openrouter_api_key,
-                        nvidia_api_key=resources.nvidia_api_key,
-                        groq_api_key=resources.groq_api_key,
-                        model_name=resources.model_name,
-                        provider=resources.provider,
-                    )
-                )
-
             except Exception as e:
                 err = str(e)
                 log.error(f"Stream error: {err}")
                 collector.on_done(final_output="", error=err)
                 yield sse_formatter.error_event(err)
-
+            finally:
                 asyncio.create_task(
                     maybe_shadow_eval_commit(
                         collector,
@@ -714,6 +745,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         provider=resources.provider,
                     )
                 )
+                schedule_shadow_trace_enqueue(final_output)
 
         return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})
 

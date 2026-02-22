@@ -5,7 +5,6 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
@@ -14,7 +13,6 @@ from pydantic import BaseModel
 
 from src.agent_service.core.config import (  # Thresholds
     NBFC_ROUTER_ANSWERABILITY_ENABLED,
-    NBFC_ROUTER_CACHE_DIR,
     NBFC_ROUTER_CHAT_MODEL,
     NBFC_ROUTER_EMBED_MODEL,
     NBFC_ROUTER_ENABLED,
@@ -25,6 +23,7 @@ from src.agent_service.core.config import (  # Thresholds
     NBFC_ROUTER_SENTIMENT_MARGIN,
     NBFC_ROUTER_SENTIMENT_THRESHOLD,
 )
+from src.agent_service.core.session_utils import get_redis
 from src.agent_service.features.answerability import QueryAnswerabilityClassifier
 
 # Enterprise Imports (Use Factory, not raw classes)
@@ -153,26 +152,42 @@ def _tone_override(text: str) -> Optional[Tuple[SentimentLabel, str]]:
 
 
 class _ProtoCache:
-    def __init__(self, root: str):
-        self.root = Path(root)
-        self.root.mkdir(parents=True, exist_ok=True)
+    def _key(self, model: str, fp: str) -> str:
+        return f"agent:router:proto:{model}:{fp}"
 
-    def _path(self, model: str, fp: str) -> Path:
-        safe_model = re.sub(r"[^a-zA-Z0-9_.-]+", "_", model)
-        return self.root / f"router_proto_{safe_model}_{fp}.json"
-
-    def load(self, model: str, fp: str) -> Optional[Dict[str, List[List[float]]]]:
-        p = self._path(model, fp)
-        if not p.exists():
+    async def load(self, model: str, fp: str) -> Optional[Dict[str, List[List[float]]]]:
+        redis = await get_redis()
+        payload = await redis.get(self._key(model, fp))
+        if not payload:
             return None
         try:
-            return json.loads(p.read_text(encoding="utf-8"))
+            raw = json.loads(payload)
+            if not isinstance(raw, dict):
+                return None
+            out: Dict[str, List[List[float]]] = {}
+            for label, vecs in raw.items():
+                if not isinstance(label, str) or not isinstance(vecs, list):
+                    continue
+                norm_vecs: List[List[float]] = []
+                for vec in vecs:
+                    if isinstance(vec, list):
+                        norm_vecs.append([float(x) for x in vec])
+                out[label] = norm_vecs
+            return out
         except Exception:
             return None
 
-    def save(self, model: str, fp: str, data: Dict[str, List[List[float]]]) -> None:
-        p = self._path(model, fp)
-        p.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    async def save(self, model: str, fp: str, data: Dict[str, List[List[float]]]) -> None:
+        redis = await get_redis()
+        # Redis can only store serialized strings. Ensure ndarray-like inputs are cast to plain lists.
+        serializable = {
+            label: [[float(x) for x in vec] for vec in vecs] for label, vecs in data.items()
+        }
+        await redis.set(
+            self._key(model, fp),
+            json.dumps(serializable, ensure_ascii=False),
+            ex=30 * 24 * 60 * 60,
+        )
 
 
 @dataclass
@@ -188,7 +203,7 @@ class _ProtoBank:
 class EmbeddingsRouter:
     def __init__(self, embed_model: str):
         self.embed_model = embed_model
-        self.cache = _ProtoCache(NBFC_ROUTER_CACHE_DIR)
+        self.cache = _ProtoCache()
         self._lock = asyncio.Lock()
         self._ready = False
         self._sent_bank: Optional[_ProtoBank] = None
@@ -198,7 +213,7 @@ class EmbeddingsRouter:
         self, protos: Dict[str, List[str]], cache_prefix: str, api_key: str
     ) -> _ProtoBank:
         fp = _sha256_json({"prefix": cache_prefix, "protos": protos})
-        cached = self.cache.load(self.embed_model, fp)
+        cached = await self.cache.load(self.embed_model, fp)
         if cached is not None:
             out = {k: [np.asarray(v, dtype=np.float32) for v in vecs] for k, vecs in cached.items()}
             return _ProtoBank(vectors=out)
@@ -221,7 +236,7 @@ class EmbeddingsRouter:
             ser.setdefault(lab, []).append(v)
             out2.setdefault(lab, []).append(np.asarray(v, dtype=np.float32))
 
-        self.cache.save(self.embed_model, fp, ser)
+        await self.cache.save(self.embed_model, fp, ser)
         return _ProtoBank(vectors=out2)
 
     async def ensure_ready(self, api_key: str) -> None:

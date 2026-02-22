@@ -1,0 +1,27 @@
+---
+description: User non-negotiables for enterprise-grade execution
+alwaysApply: true
+---
+
+# Enterprise Non-Negotiables
+
+These instructions are mandatory for all substantial tasks in this project.
+
+- Do not deliver patchwork or temporary fixes.
+- Prefer durable, production-grade architecture and operational safety.
+- Every significant technical decision must be research-backed using current docs/findings.
+- Verify external APIs/libraries against latest references before coding.
+- If latest findings cannot be verified, stop and explicitly report the verification gap.
+
+## Planning First (Required)
+
+- Always produce a clear plan before implementation work.
+- Do not start coding until the user approves the plan.
+- For ambiguous requirements, ask clarifying questions before implementation.
+
+## Implementation Quality Bar
+
+- Align with existing `.cursor/rules` standards (backend, testing, architecture, deployment).
+- Include migration-safe updates across all dependent files (no orphan imports/usages).
+- Add or update tests for changed behavior and run project-standard test commands.
+- Report what was verified (research + tests) and what remains unverified.

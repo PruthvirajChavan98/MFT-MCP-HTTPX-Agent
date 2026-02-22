@@ -1,0 +1,78 @@
+generate_otp: |
+  Purpose: Generate and send an OTP using the provided identifier.
+  Input variables:
+    - user_input: 10-digit Indian WhatsApp number (without country code) or app_id.
+  Returns:
+    - CSV string with columns: status,phone_number,app_id,message
+
+validate_otp: |
+  Purpose: Validate OTP for the current session and finalize authentication.
+  Input variables:
+    - otp: One-time password entered by the user.
+  Returns:
+    - CSV string with columns:
+      status,message,app_id,user_details.id,user_details.phone_number,user_details.firstname,user_details.lastname
+
+is_logged_in: |
+  Purpose: Check whether the current session is authenticated.
+  Input variables:
+    - none
+  Returns:
+    - JSON: {"logged_in": <bool>}
+
+dashboard_home: |
+  Purpose: Fetch dashboard summary for the authenticated session.
+  Input variables:
+    - none
+  Returns:
+    - Structured response with loan and account summary fields.
+
+loan_details: |
+  Purpose: Fetch detailed loan information for the authenticated session.
+  Input variables:
+    - none
+  Returns:
+    - Structured response including loan summary, payment summary, and overdue breakup.
+
+foreclosure_details: |
+  Purpose: Fetch foreclosure and closure eligibility details.
+  Input variables:
+    - none
+  Returns:
+    - Structured response with closure date, NOC status, and related metadata.
+
+overdue_details: |
+  Purpose: Fetch overdue summary for the current loan.
+  Input variables:
+    - none
+  Returns:
+    - Structured response with total overdue, bucket, and charge breakup.
+
+noc_details: |
+  Purpose: Fetch No Objection Certificate (NOC) availability details.
+  Input variables:
+    - none
+  Returns:
+    - Structured response with NOC eligibility and generated date metadata.
+
+repayment_schedule: |
+  Purpose: Fetch full repayment schedule for the current loan.
+  Input variables:
+    - none
+  Returns:
+    - Structured response with installments and schedule summary.
+
+download_welcome_letter: |
+  Purpose: Generate or fetch Welcome Letter download details.
+  Input variables:
+    - none
+  Returns:
+    - Structured response with download URL and password hint metadata.
+
+download_soa: |
+  Purpose: Generate or fetch Statement of Account (SOA) for a date range.
+  Input variables:
+    - start_date: Start date (DD/MM/YYYY).
+    - end_date: End date (DD/MM/YYYY).
+  Returns:
+    - Structured response with download URL, date range, and generation metadata.

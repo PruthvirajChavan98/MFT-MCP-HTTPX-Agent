@@ -79,6 +79,7 @@ data:
 
   # ── Monitoring ──────────────────────────────────────────────────────────
   PROMETHEUS_METRICS_ENABLED: "true"
+  PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus_multiproc"
   GEOIP_DB_PATH: "/app/data/geoip/GeoLite2-City.mmdb"
 
   # ── CRM Integration ────────────────────────────────────────────────────

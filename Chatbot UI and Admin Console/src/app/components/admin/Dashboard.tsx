@@ -32,7 +32,7 @@ export function Dashboard() {
 
   const { data: guardrails = [] } = useQuery({
     queryKey: ['guardrail-events', auth.adminKey],
-    queryFn: () => fetchGuardrailEvents(auth.adminKey, 100),
+    queryFn: async () => (await fetchGuardrailEvents(auth.adminKey, { limit: 100 })).items,
     enabled: !!auth.adminKey,
   });
 

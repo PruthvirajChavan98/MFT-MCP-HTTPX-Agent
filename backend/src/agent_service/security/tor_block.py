@@ -22,6 +22,7 @@ from src.agent_service.security.metrics import (
     TOR_LIST_REFRESH_FAILURES_TOTAL,
     TOR_LIST_STALENESS_SECONDS,
     TOR_MONITORED_TOTAL,
+    normalize_path_for_metrics,
 )
 from src.agent_service.security.tor_exit_nodes import TorExitNodes
 
@@ -252,12 +253,15 @@ class BlockTorMiddleware(BaseHTTPMiddleware):
 
         is_tor = tor_blocker.is_tor_ip(client_ip)
         if is_tor:
+            route = request.scope.get("route")
+            route_path = getattr(route, "path", None)
+            path_pattern = normalize_path_for_metrics(path, route_path=route_path)
             if mode == "critical":
-                TOR_BLOCKS_TOTAL.labels(path=path).inc()
+                TOR_BLOCKS_TOTAL.labels(path_pattern=path_pattern).inc()
                 _audit_event("tor_blocked", ip=client_ip, path=path, mode=mode)
                 return self._blocked_response()
 
-            TOR_MONITORED_TOTAL.labels(path=path).inc()
+            TOR_MONITORED_TOTAL.labels(path_pattern=path_pattern).inc()
             _audit_event("tor_monitored", ip=client_ip, path=path, mode=mode)
 
         if self.anonymizer and client_ip:

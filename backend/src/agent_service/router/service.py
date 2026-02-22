@@ -9,6 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import OpenAIEmbeddings
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.llm.client import get_llm
 
 from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
@@ -144,28 +145,13 @@ class RouterService:
         )
 
         parser = JsonOutputParser()
+        classification_template = prompt_manager.get_template("router", "classification_prompt")
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", "You are a strict classifier. Return ONLY JSON."),
-                (
-                    "human",
-                    """
-Classify this NBFC customer message into:
-- sentiment: positive|neutral|negative
-- reason: one of: application_status_approval, lead_intent_new_loan, disbursal, emi_payment_reflecting, charges_fees_penalty,
-  statement_receipt, otp_login_app_tech, kyc_verification, nach_autodebit_bounce, collections_harassment, foreclosure_partpayment,
-  fraud_security, customer_support, unknown
-Return JSON:
-{{
-  "sentiment": {{"label":"...", "score":0.0-1.0}},
-  "reason": {{"label":"...", "score":0.0-1.0}},
-  "rationale": "optional"
-}}
-
-Text: {text}
-""",
-                ),
-            ]
+                ("human", classification_template),
+            ],
+            template_format="jinja2",
         )
         chain = prompt | llm | parser
         out = await chain.ainvoke({"text": text})

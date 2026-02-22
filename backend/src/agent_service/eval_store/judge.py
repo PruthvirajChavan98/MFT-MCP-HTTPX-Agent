@@ -9,6 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from src.agent_service.core.config import JUDGE_MODEL_NAME
+from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.llm.client import get_llm
 
 log = logging.getLogger("eval_judge")
@@ -25,56 +26,6 @@ class PairwiseVerdict(BaseModel):
     winner: Literal["A", "B", "Tie"] = Field(description="Which response is better?")
     reasoning: str = Field(description="Comparison logic explaining the verdict.")
 
-
-# --- Prompts (G-Eval Style) ---
-
-G_EVAL_POINTWISE_PROMPT = """
-You are an expert AI Evaluator. Your task is to evaluate the generated response based on the following criteria.
-
-### Evaluation Criteria: {metric_name}
-{criteria_description}
-
-### Scoring Steps
-{scoring_steps}
-
-### Context
-User Input: {question}
-Retrieval Context (Evidence): {context}
-Generated Response: {answer}
-
-### Instructions
-1. Read the Input, Context, and Response carefully.
-2. Think step-by-step using the Scoring Steps.
-3. Assign a score from 1 to 5.
-4. Provide a concise reasoning for your score.
-
-Return JSON format: {{ "score": <int>, "reasoning": "<string>" }}
-"""
-
-PAIRWISE_PROMPT = """
-You are an impartial judge comparing two AI responses to the same user input.
-
-### Task
-Determine which response is better based on: **{metric_name}**.
-Criteria: {criteria_description}
-
-### Data
-User Input: {question}
-
-[Response A]
-{response_a}
-
-[Response B]
-{response_b}
-
-### Instructions
-1. Analyze both responses against the criteria.
-2. Ignore stylistic differences unless they affect the criteria.
-3. Decide if A is better, B is better, or if they are a Tie.
-4. Explain your reasoning.
-
-Return JSON format: {{ "winner": "A" | "B" | "Tie", "reasoning": "<string>" }}
-"""
 
 # --- Criteria Definitions ---
 
@@ -156,8 +107,10 @@ class LLMJudge:
                 "metric_name": metric,
             }
 
+        pointwise_template = prompt_manager.get_template("eval", "pointwise_prompt")
         prompt = ChatPromptTemplate.from_messages(
-            [("system", "You are a precise AI Judge."), ("human", G_EVAL_POINTWISE_PROMPT)]
+            [("system", "You are a precise AI Judge."), ("human", pointwise_template)],
+            template_format="jinja2",
         )
 
         llm = self._get_model()
@@ -195,8 +148,10 @@ class LLMJudge:
         """
         defn = METRICS.get(metric.lower()) or METRICS["helpfulness"]
 
+        pairwise_template = prompt_manager.get_template("eval", "pairwise_prompt")
         prompt = ChatPromptTemplate.from_messages(
-            [("system", "You are a precise AI Judge."), ("human", PAIRWISE_PROMPT)]
+            [("system", "You are a precise AI Judge."), ("human", pairwise_template)],
+            template_format="jinja2",
         )
 
         llm = self._get_model()

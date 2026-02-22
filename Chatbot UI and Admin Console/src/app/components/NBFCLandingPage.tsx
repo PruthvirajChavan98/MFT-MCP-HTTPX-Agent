@@ -1,6 +1,6 @@
 import { motion, useInView } from 'motion/react'
 import { useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { ChatWidget } from './ChatWidget'
 
 // ─── Loan product data ────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import uuid_utils  # Added dependency
 from fastapi import APIRouter, HTTPException, Query
 
 from src.agent_service.core.config import MODEL_NAME
-from src.agent_service.core.prompts import SYSTEM_PROMPT
+from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.core.resource_resolver import ResourceResolver
 from src.agent_service.core.schemas import SessionConfig, SessionInitResponse
 from src.agent_service.core.session_cost import get_session_cost_tracker
@@ -27,7 +27,7 @@ async def initialize_session():
         # Generate time-ordered UUIDv7
         sid = str(uuid_utils.uuid7())
 
-        default_prompt = SYSTEM_PROMPT.strip()
+        default_prompt = prompt_manager.get_default_system_prompt()
         default_model = MODEL_NAME
         default_provider = ResourceResolver.infer_provider_from_model_name(default_model)
 
@@ -87,7 +87,8 @@ async def get_session_config(session_id: str):
 
         return {
             "session_id": sid,
-            "system_prompt": stored.get("system_prompt") or SYSTEM_PROMPT.strip(),
+            "system_prompt": stored.get("system_prompt")
+            or prompt_manager.get_default_system_prompt(),
             "model_name": stored.get("model_name") or MODEL_NAME,
             "reasoning_effort": stored.get("reasoning_effort"),
             "has_openrouter_key": bool(stored.get("openrouter_api_key")),

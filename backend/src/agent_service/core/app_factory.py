@@ -42,6 +42,7 @@ from src.agent_service.core.config import (
     SECURITY_TRUST_PROXY_HEADERS,
 )
 from src.agent_service.core.event_bus import event_bus
+from src.agent_service.core.http_client import close_http_client, initialize_http_client
 from src.agent_service.core.session_utils import close_redis, get_redis
 from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.catalog import model_service
@@ -74,12 +75,23 @@ class AppFactory:
         postgres_pool: PostgresPoolManager | None = None
 
         try:
-            async with AsyncRedisSaver.from_conn_string(REDIS_URL) as checkpointer:
+            async with AsyncRedisSaver.from_conn_string(
+                REDIS_URL,
+                ttl={"default_ttl": 10080, "refresh_on_read": True},
+            ) as checkpointer:
                 self.checkpointer = checkpointer
                 app.state.checkpointer = checkpointer
 
+                await initialize_http_client()
+                log.info("✅ Shared HTTP client initialized")
+
                 await mcp_manager.initialize()
                 log.info("✅ MCP Manager initialized")
+
+                from src.agent_service.core.prompts import prompt_manager
+
+                prompt_manager.load()
+                app.state.prompt_manager = prompt_manager
 
                 from src.common.neo4j_mgr import neo4j_mgr
 
@@ -112,6 +124,7 @@ class AppFactory:
                 if postgres_pool:
                     await postgres_pool.stop()
                 await mcp_manager.shutdown()
+                await close_http_client()
                 await config_manager.close()
                 await neo4j_mgr.close()
 

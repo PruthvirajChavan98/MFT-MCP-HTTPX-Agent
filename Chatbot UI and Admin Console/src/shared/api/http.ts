@@ -1,4 +1,16 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
+type RuntimeConfig = {
+  API_BASE_URL?: string
+  APP_ENV?: string
+}
+
+declare global {
+  interface Window {
+    __RUNTIME_CONFIG__?: RuntimeConfig
+  }
+}
+
+const runtimeApiBase = window.__RUNTIME_CONFIG__?.API_BASE_URL?.trim()
+export const API_BASE_URL = runtimeApiBase || '/api'
 
 export class ApiError extends Error {
   status: number

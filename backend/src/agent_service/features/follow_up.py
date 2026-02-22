@@ -11,6 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import StructuredTool
 
 # Enterprise Imports
+from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.llm.client import get_embeddings
 from src.common.neo4j_mgr import neo4j_mgr
 
@@ -26,19 +27,13 @@ class FollowUpAngle(str, Enum):
     RELATED_TOPIC = "Related Feature"
 
 
-ANGLE_PROMPTS = {
-    FollowUpAngle.DIRECT_NEXT_STEP: "Ask for the immediate logical next step based on the assistant's answer.",
-    FollowUpAngle.MISSING_INFO: "Ask for specific details or clarification that wasn't fully explained.",
-    FollowUpAngle.ALTERNATIVE_OPTION: "Ask about a different way to achieve the goal or a different product option.",
-    FollowUpAngle.HUMAN_SUPPORT: "Ask how to contact support, raise a ticket, or speak to a human.",
-    FollowUpAngle.RELATED_TOPIC: "Ask about a related feature or policy mentioned in the context (e.g., fees, timelines).",
+ANGLE_PROMPT_KEYS = {
+    FollowUpAngle.DIRECT_NEXT_STEP: "direct_next_step",
+    FollowUpAngle.MISSING_INFO: "missing_info",
+    FollowUpAngle.ALTERNATIVE_OPTION: "alternative_option",
+    FollowUpAngle.HUMAN_SUPPORT: "human_support",
+    FollowUpAngle.RELATED_TOPIC: "related_topic",
 }
-
-BASE_SYSTEM_PROMPT = """
-You are a helpful user assistant.
-Your task is to generate EXACTLY ONE short follow-up question (max 10 words) from the USER'S perspective ("I", "Me").
-Do not output anything else. No bullets, no numbering, no JSON. Just the text.
-"""
 
 # --- 2. Service Class ---
 
@@ -184,17 +179,20 @@ class FollowUpQuestionGenerator:
         llm: BaseChatModel,
         queue: asyncio.Queue,
     ):
+        system_template = prompt_manager.get_template("follow_up", "base_system_prompt")
+        angle_template = prompt_manager.get_template("follow_up", ANGLE_PROMPT_KEYS[angle])
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", BASE_SYSTEM_PROMPT),
-                ("human", f"Context:\n{context}\n\nTask: {ANGLE_PROMPTS[angle]}\n\nQuestion:"),
-            ]
+                ("system", system_template),
+                ("human", angle_template),
+            ],
+            template_format="jinja2",
         )
 
         chain = prompt | llm | StrOutputParser()
 
         try:
-            async for chunk in chain.astream({}):
+            async for chunk in chain.astream({"context": context}):
                 if chunk:
                     token = chunk.replace("\n", " ")
                     await queue.put({"index": index, "token": token})
