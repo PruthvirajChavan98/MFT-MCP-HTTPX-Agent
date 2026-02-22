@@ -16,6 +16,21 @@ exhaustion, missing edge-layer rate limiting, and single-replica tunnel ingress.
 
 34 files changed, 2,286 lines added.
 
+### Database & State Management Hardening
+
+#### Cross-Tenant Data Leakage (PostgreSQL RLS)
+- **`backend/src/agent_service/api/admin_analytics.py`** -- Replaced implicit RLS reliance with explicit `async with conn.transaction():` blocks and `set_config('app.tenant_id', $1, true)` to guarantee tenant isolation and preserve `asyncpg` prepared statement caching without resorting to `DISCARD ALL`. Added `tenant_id` query parameter to the `/guardrails` endpoint.
+
+#### Event Loop Starvation (Neo4j)
+- **`backend/src/common/neo4j_mgr.py`** -- Completely rewrote `Neo4jManager` from a synchronous singleton using `threading.Lock` to an async instance `neo4j_mgr` using `neo4j.AsyncGraphDatabase` and `AsyncDriver`.
+- **`backend/src/agent_service/core/app_factory.py`** -- Bound the new `neo4j_mgr` connection lifecycle (init, verify, close) directly to the FastAPI `@asynccontextmanager` lifespan hook, eliminating module-level `asyncio.Lock()` cross-loop attachment bugs.
+- **Multiple Files** -- Upgraded all Neo4j call sites (`admin_analytics.py`, `worker.py`, `answerability.py`, `follow_up.py`, `graph_rag.py`, `knowledge.py`, `embedder.py`, `eval_read.py`, `neo4j_store.py`) to `await` the new async driver, removing legacy `run_in_threadpool` wrappers.
+
+#### "Lost Update" Race Conditions (Redis)
+- **`backend/src/mcp_service/session_store.py`** -- Refactored `RedisSessionStore` to eliminate JSON Read-Modify-Write race conditions by migrating to Redis Hashes (`HSET`/`HGETALL`).
+- Implemented **Pipelining** to ensure `HSET` and `EXPIRE` commands execute atomically, preventing permanent memory leaks if a worker crashes before TTL application.
+- Developed **Hybrid Serialization** to handle nested session payload objects (automatically `json.dumps()` for nested dicts/lists and stringifying primitives) since Redis Hashes are strictly flat.
+
 ---
 
 ### Critical Fixes
