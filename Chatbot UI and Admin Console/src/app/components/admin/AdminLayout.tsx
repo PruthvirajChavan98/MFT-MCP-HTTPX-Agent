@@ -1,6 +1,6 @@
 // src/app/components/admin/AdminLayout.tsx
 import { useState, useEffect } from "react";
-import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard, Database, DollarSign, Activity, MessageSquare,
   Shield as ShieldIcon, Gauge, Cpu, Heart, ChevronLeft, Menu,
@@ -84,7 +84,7 @@ function AdminShell() {
               <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gradient-to-r from-cyan-500 to-teal-500">
                 <ShieldIcon className="w-4 h-4 text-white" />
               </div>
-              <span className="font-bold text-slate-900 truncate" style={{ fontSize: 15 }}>HFCL Admin</span>
+              <span className="font-bold text-slate-900 truncate" style={{ fontSize: 15 }}>MFT Admin</span>
             </div>
           )}
           <button
