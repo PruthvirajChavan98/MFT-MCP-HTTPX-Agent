@@ -1,0 +1,55 @@
+# Nginx Ingress Controller configuration overrides.
+# Apply via: helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+#   --set controller.config.use-forwarded-headers=true \
+#   -f <this-file-values-section> -n mft
+#
+# This ConfigMap is consumed by the Nginx Ingress Controller for
+# cluster-wide rate limiting and security headers.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-controller
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/component: controller
+data:
+  use-forwarded-headers: "true"
+  compute-full-forwarded-for: "true"
+  use-proxy-protocol: "false"
+  enable-real-ip: "true"
+
+  proxy-read-timeout: "300"
+  proxy-send-timeout: "300"
+  proxy-connect-timeout: "10"
+  proxy-buffering: "off"
+
+  limit-req-status-code: "429"
+  limit-conn-status-code: "429"
+
+  ssl-protocols: "TLSv1.3"
+  ssl-prefer-server-ciphers: "false"
+
+  hsts: "true"
+  hsts-max-age: "31536000"
+  hsts-include-subdomains: "true"
+
+  server-tokens: "false"
+  hide-headers: "X-Powered-By"
+
+  keep-alive: "75"
+  keep-alive-requests: "1000"
+
+  worker-processes: "auto"
+  max-worker-connections: "65536"
+
+  gzip-level: "5"
+  gzip-min-length: "256"
+  gzip-types: "application/json application/javascript text/css text/plain text/xml application/xml image/svg+xml"
+
+  # Custom Nginx snippet for volumetric rate limiting
+  http-snippet: |
+    limit_conn_zone $binary_remote_addr zone=conn_per_ip:10m;
+    limit_req_zone $binary_remote_addr zone=req_per_ip:10m rate=30r/s;
+    limit_req_zone $binary_remote_addr zone=stream_new_per_ip:10m rate=5r/s;

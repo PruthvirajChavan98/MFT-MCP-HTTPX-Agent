@@ -10,6 +10,8 @@ from .utils import JsonConverter, ToonOptions
 conv = JsonConverter(sep=".")
 log = logging.getLogger(name="mft_api")
 
+_CRM_TIMEOUT = httpx.Timeout(connect=5.0, read=25.0, write=10.0, pool=5.0)
+
 
 def _valid_session_id(session_id: object) -> str:
     sid = str(session_id).strip() if session_id is not None else ""
@@ -79,14 +81,14 @@ class MockFinTechAPIs:
             return ctx_err
 
         try:
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=_CRM_TIMEOUT) as client:
                 resp = client.request(
                     method, self._url(path), headers=self._headers(), json=json_body
                 )
                 self.logger.info(f"{method} {path} - {resp.status_code}")
                 try:
                     return resp.json()
-                except:
+                except Exception:
                     return {"status_code": resp.status_code, "raw": resp.text[:1000]}
         except Exception as e:
             return {"error": str(e)}

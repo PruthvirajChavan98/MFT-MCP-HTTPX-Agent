@@ -1,0 +1,37 @@
+# ServiceMonitor CRDs for Prometheus Operator auto-discovery.
+# If using kube-prometheus-stack Helm chart, these are picked up automatically.
+# If using standalone Prometheus, the pod annotations (prometheus.io/scrape)
+# handle discovery via the kubernetes_sd_configs in prometheus.yml.
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agent-monitor
+  namespace: mft
+  labels:
+    app.kubernetes.io/part-of: mft-platform
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cloudflared-monitor
+  namespace: mft
+  labels:
+    app.kubernetes.io/part-of: mft-platform
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  endpoints:
+    - port: metrics
+      interval: 30s

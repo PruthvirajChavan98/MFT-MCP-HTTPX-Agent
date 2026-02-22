@@ -19,11 +19,13 @@ class TorExitNodes:
 
     DEFAULT_URL = "https://check.torproject.org/exit-addresses"
 
+    _DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
+
     def __init__(
         self,
         *,
         url: str = DEFAULT_URL,
-        timeout: float = 20.0,
+        timeout: httpx.Timeout | float = _DEFAULT_TIMEOUT,
         headers: Optional[dict[str, str]] = None,
         verify: bool = True,
         http2: bool = True,
@@ -31,7 +33,7 @@ class TorExitNodes:
         retry_backoff_seconds: tuple[float, float, float] = (1.0, 2.0, 4.0),
     ) -> None:
         self.url = url
-        self.timeout = timeout
+        self.timeout = timeout if isinstance(timeout, httpx.Timeout) else httpx.Timeout(timeout)
         self.verify = verify
         self.http2 = http2
         self.retry_attempts = max(1, retry_attempts)

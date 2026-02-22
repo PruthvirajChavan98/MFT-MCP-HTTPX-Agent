@@ -11,7 +11,12 @@ worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
 max_requests = 1000
 max_requests_jitter = 50
-timeout = 0
+
+# Hard ceiling for LLM streaming requests; prevents silent upstream
+# network partitions from permanently consuming workers.
+timeout = 180
+graceful_timeout = 120
+
 keepalive = 5
 
 # Logging

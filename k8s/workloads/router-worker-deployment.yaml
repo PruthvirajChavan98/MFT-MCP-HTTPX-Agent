@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router-worker
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: router-worker
+    app.kubernetes.io/component: background-worker
+    app.kubernetes.io/part-of: mft-platform
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: router-worker
+  template:
+    metadata:
+      labels:
+        app: router-worker
+        app.kubernetes.io/name: router-worker
+        app.kubernetes.io/component: background-worker
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: router-worker
+          image: mft_router_worker:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - -m
+            - src.agent_service.router.worker
+          envFrom:
+            - configMapRef:
+                name: mft-app-config
+          env:
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mft-secrets
+                  key: NEO4J_PASSWORD
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import sys; sys.exit(0)"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3

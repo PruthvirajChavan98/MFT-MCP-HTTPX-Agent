@@ -11,6 +11,8 @@ from .utils import JsonConverter
 conv = JsonConverter(sep=".")
 log = logging.getLogger(name="mft_auth")
 
+_AUTH_TIMEOUT = httpx.Timeout(connect=5.0, read=25.0, write=10.0, pool=5.0)
+
 
 def _valid_session_id(session_id: object) -> str:
     sid = str(session_id).strip() if session_id is not None else ""
@@ -52,7 +54,7 @@ class MockFinTechAuthAPIs:
         headers = {"Accept": "application/json"}
         try:
             with httpx.Client(
-                auth=self.auth, headers=headers, follow_redirects=True, timeout=20.0
+                auth=self.auth, headers=headers, follow_redirects=True, timeout=_AUTH_TIMEOUT
             ) as client:
                 resp = client.get(self._url(f"/mockfin-service/get-contact-hint/{app_id}/"))
                 self.session_store.update(
@@ -97,7 +99,7 @@ class MockFinTechAuthAPIs:
 
         try:
             with httpx.Client(
-                auth=self.auth, headers=headers, follow_redirects=True, timeout=30.0
+                auth=self.auth, headers=headers, follow_redirects=True, timeout=_AUTH_TIMEOUT
             ) as client:
                 phone_number: Optional[str] = None
                 app_id: Optional[str] = None
@@ -127,7 +129,7 @@ class MockFinTechAuthAPIs:
 
                 try:
                     resp_json = resp.json() if resp.text else {}
-                except:
+                except Exception:
                     resp_json = {}
 
                 if isinstance(resp_json, dict):
@@ -177,7 +179,7 @@ class MockFinTechAuthAPIs:
         payload = {"phone_number": phone_number, "app_id": app_id, "otp": otp}
         try:
             with httpx.Client(
-                auth=self.auth, headers=headers, follow_redirects=True, timeout=30.0
+                auth=self.auth, headers=headers, follow_redirects=True, timeout=_AUTH_TIMEOUT
             ) as client:
                 resp = client.post(self._url("/mockfin-service/otp/validate_new/"), json=payload)
                 self.logger.info(f"POST otp/validate_new - {resp.status_code}")

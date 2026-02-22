@@ -1,0 +1,257 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/alerts.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ["alertmanager.mft.svc.cluster.local:9093"]
+
+    scrape_configs:
+      - job_name: "agent_service"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["mft"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: (.+)
+            replacement: "${1}"
+          - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: (.+);(.+)
+            replacement: "$1:$2"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
+
+      - job_name: "cloudflared"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["mft"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: cloudflared
+          - source_labels: [__meta_kubernetes_pod_ip]
+            action: replace
+            target_label: __address__
+            replacement: "${1}:2000"
+
+  alerts.yml: |
+    groups:
+      - name: security-alerts
+        rules:
+          - alert: TorListStale
+            expr: tor_list_staleness_seconds > 7200
+            for: 5m
+            labels:
+              severity: critical
+              service: agent
+            annotations:
+              summary: "Tor exit list is stale"
+              description: "Tor exit list refresh age is above 2 hours."
+
+          - alert: TorBlocksSpike
+            expr: increase(tor_blocks_total[5m]) > 50
+            for: 2m
+            labels:
+              severity: warning
+              service: agent
+            annotations:
+              summary: "Tor blocks spiking"
+              description: "More than 50 Tor-blocked requests in 5 minutes."
+
+          - alert: SessionDenySpike
+            expr: increase(session_decisions_total{decision="deny"}[5m]) > 20
+            for: 2m
+            labels:
+              severity: warning
+              service: agent
+            annotations:
+              summary: "Session risk denies increased"
+              description: "More than 20 deny decisions in 5 minutes."
+
+          - alert: HighStepUpRate
+            expr: increase(session_decisions_total{decision="step_up"}[10m]) > 100
+            for: 5m
+            labels:
+              severity: warning
+              service: agent
+            annotations:
+              summary: "High step-up authentication rate"
+              description: "Session security step-up decisions are elevated."
+
+      - name: infrastructure-alerts
+        rules:
+          - alert: PodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total{namespace="mft"}[15m]) > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.pod }} is crash-looping"
+
+          - alert: HighMemoryUsage
+            expr: container_memory_working_set_bytes{namespace="mft"} / container_spec_memory_limit_bytes{namespace="mft"} > 0.85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.pod }} memory usage above 85%"
+
+          - alert: AgentHighLatency
+            expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="agent_service"}[5m])) > 10
+            for: 3m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Agent p99 latency exceeds 10s"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: mft-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        app.kubernetes.io/name: prometheus
+    spec:
+      serviceAccountName: prometheus
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.1
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --web.enable-lifecycle
+            - --storage.tsdb.retention.time=15d
+          ports:
+            - name: http
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 750m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: mft
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: mft
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+  selector:
+    app: prometheus
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: mft
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-mft
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "endpoints", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-mft
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-mft
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: mft

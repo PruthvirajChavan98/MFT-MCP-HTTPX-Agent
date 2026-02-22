@@ -1,0 +1,85 @@
+# OT-Container-Kit Redis Operator — install first:
+#   helm repo add ot-helm https://ot-container-kit.github.io/helm-charts
+#   helm install redis-operator ot-helm/redis-operator -n mft
+#
+# Alternative: Bitnami Redis Helm chart with Sentinel topology:
+#   helm install redis bitnami/redis \
+#     --set architecture=replication \
+#     --set sentinel.enabled=true \
+#     --set replica.replicaCount=1 \
+#     --set sentinel.quorum=2 \
+#     -n mft
+#
+# This manifest uses the OT-Container-Kit CRDs.
+---
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: Redis
+metadata:
+  name: redis
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: mft-platform
+spec:
+  kubernetesConfig:
+    image: redis/redis-stack-server:latest
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: local-path
+  redisExporter:
+    enabled: true
+    image: oliver006/redis_exporter:latest
+---
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: RedisSentinel
+metadata:
+  name: redis-sentinel
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: redis-sentinel
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: mft-platform
+spec:
+  clusterSize: 3
+  kubernetesConfig:
+    image: redis/redis-stack-server:latest
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+  selector:
+    app: redis

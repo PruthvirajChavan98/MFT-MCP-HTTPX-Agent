@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: mft
+
+resources:
+  - namespace.yaml
+  - ../secrets/sealed-secrets.yaml
+  - ../configmaps/app-config.yaml
+  - ../stateful/postgres-cluster.yaml
+  - ../stateful/redis-sentinel.yaml
+  - ../stateful/neo4j-statefulset.yaml
+  - ../workloads/agent-deployment.yaml
+  - ../workloads/mcp-deployment.yaml
+  - ../workloads/router-worker-deployment.yaml
+  - ../workloads/frontend-deployment.yaml
+  - ../workloads/geoip-cronjob.yaml
+  - ../ingress/cloudflared-deployment.yaml
+  - ../ingress/nginx-configmap.yaml
+  - ../ingress/ingress-resource.yaml
+  - ../monitoring/prometheus-deployment.yaml
+  - ../monitoring/alertmanager-deployment.yaml
+  - ../monitoring/grafana-deployment.yaml
+  - ../monitoring/servicemonitor.yaml
+  - ../network-policies/default-deny.yaml
+  - ../network-policies/allow-ingress.yaml
+  - ../network-policies/allow-agent-to-data.yaml
+  - ../hpa/agent-hpa.yaml
+  - ../hpa/frontend-hpa.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: mft-platform
+  app.kubernetes.io/managed-by: kustomize

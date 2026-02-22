@@ -1,0 +1,62 @@
+# CloudNativePG Operator — install first:
+#   kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.1.yaml
+#
+# This Cluster CR provides:
+#   - Automated failover with leader election
+#   - WAL archiving for point-in-time recovery
+#   - Continuous backup support
+#   - Rolling updates with zero downtime
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: mft
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: mft-platform
+spec:
+  instances: 2
+
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.4
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+      effective_cache_size: "768MB"
+      work_mem: "4MB"
+      maintenance_work_mem: "64MB"
+      wal_buffers: "16MB"
+      log_min_duration_statement: "1000"
+
+  bootstrap:
+    initdb:
+      database: mft_security
+      owner: mft
+      secret:
+        name: mft-secrets
+      postInitSQL:
+        - |
+          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+  storage:
+    size: 10Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  monitoring:
+    enablePodMonitor: true
+
+  affinity:
+    topologyKey: kubernetes.io/hostname
+
+  primaryUpdateStrategy: unsupervised

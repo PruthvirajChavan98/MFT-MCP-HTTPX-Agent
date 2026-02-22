@@ -21,7 +21,7 @@ exec gunicorn src.main_agent:app \
     --bind 0.0.0.0:$PORT \
     --workers $WORKERS \
     --worker-class uvicorn.workers.UvicornWorker \
-    --timeout 120 \
+    --timeout 180 \
     --access-logfile - \
     --error-logfile - \
     --log-level info

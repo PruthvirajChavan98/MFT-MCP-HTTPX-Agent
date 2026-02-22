@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mft-app-config
+  namespace: mft
+  labels:
+    app.kubernetes.io/part-of: mft-platform
+data:
+  # ── Database ────────────────────────────────────────────────────────────
+  POSTGRES_DB: "mft_security"
+  POSTGRES_USER: "mft"
+  POSTGRES_DSN: "postgresql://mft:$(POSTGRES_PASSWORD)@postgres-rw.mft.svc.cluster.local:5432/mft_security"
+  POSTGRES_POOL_MIN: "10"
+  POSTGRES_POOL_MAX: "50"
+
+  NEO4J_URI: "bolt://neo4j.mft.svc.cluster.local:7687"
+  NEO4J_USER: "neo4j"
+  NEO4J_HEAP_INITIAL_SIZE: "512m"
+  NEO4J_HEAP_MAX_SIZE: "512m"
+  NEO4J_PAGECACHE_SIZE: "512m"
+
+  # ── Redis ───────────────────────────────────────────────────────────────
+  REDIS_URL: "redis://redis.mft.svc.cluster.local:6379/0"
+  REDIS_MAX_CONNECTIONS: "50"
+
+  # ── Application ─────────────────────────────────────────────────────────
+  PORT: "8000"
+  GUNICORN_WORKERS: "4"
+  PYTHONUNBUFFERED: "1"
+  MCP_SERVER_URL: "http://mcp.mft.svc.cluster.local:8050/sse"
+
+  # ── OpenRouter ──────────────────────────────────────────────────────────
+  OPENROUTER_SITE_URL: "https://frontend.pruthvirajchavan.codes"
+  OPENROUTER_APP_TITLE: "MFT Agent Console"
+
+  # ── NBFC Router ─────────────────────────────────────────────────────────
+  NBFC_ROUTER_ENABLED: "true"
+  NBFC_ROUTER_MODE: "hybrid"
+  NBFC_ROUTER_CHAT_MODEL: "z-ai/glm-4.7"
+  NBFC_ROUTER_EMBED_MODEL: "openai/text-embedding-3-small"
+  NBFC_ROUTER_CACHE_DIR: ".cache_nbfc_router"
+  NBFC_ROUTER_ANSWERABILITY_ENABLED: "true"
+  NBFC_ROUTER_ANSWERABILITY_KB_THRESHOLD: "0.58"
+  NBFC_ROUTER_ANSWERABILITY_KB_HEURISTIC_THRESHOLD: "0.38"
+  NBFC_ROUTER_ANSWERABILITY_MCP_THRESHOLD: "0.52"
+  NBFC_ROUTER_ANSWERABILITY_MARGIN: "0.04"
+  NBFC_ROUTER_ANSWERABILITY_MAX_TOOLS: "60"
+  NBFC_ROUTER_ANSWERABILITY_VECTOR_CACHE_SIZE: "64"
+  AGENT_INLINE_ROUTER_ENABLED: "false"
+  AGENT_INLINE_ROUTER_EXPOSE: "false"
+  AGENT_STREAM_EXPOSE_INTERNAL_EVENTS: "false"
+  AGENT_STREAM_EXPOSE_REASONING: "true"
+
+  # ── Shadow Eval ─────────────────────────────────────────────────────────
+  SHADOW_EVAL_ENABLED: "1"
+  SHADOW_EVAL_SAMPLE_RATE: "0.1"
+  SHADOW_EVAL_CAPTURE: "light"
+
+  # ── Security ────────────────────────────────────────────────────────────
+  SECURITY_ENABLED: "true"
+  SECURITY_TRUST_PROXY_HEADERS: "true"
+  SECURITY_PREFER_IP_HEADER: "x-forwarded-for"
+  SECURITY_CRITICAL_PATHS: "/agent,/graphql,/eval"
+  SECURITY_MONITORED_PATHS: "/health,/metrics"
+  TOR_REFRESH_SECONDS: "1800"
+  TOR_STALE_AFTER_SECONDS: "7200"
+  TOR_NEGATIVE_CACHE_TTL_SECONDS: "300"
+  TOR_NEGATIVE_CACHE_CLEANUP_INTERVAL: "1000"
+
+  SECURITY_IMPOSSIBLE_TRAVEL_KMH: "900"
+  SECURITY_CONCURRENT_IP_WINDOW_SECONDS: "300"
+  SECURITY_CONCURRENT_IP_THRESHOLD: "3"
+  SECURITY_RISK_IMPOSSIBLE_TRAVEL: "0.6"
+  SECURITY_RISK_CONCURRENT_IP: "0.5"
+  SECURITY_RISK_DEVICE_MISMATCH: "0.4"
+  SECURITY_RISK_GEO_ANOMALY: "0.3"
+  SECURITY_RISK_ALLOW_THRESHOLD: "0.4"
+  SECURITY_RISK_STEP_UP_THRESHOLD: "0.7"
+
+  # ── Monitoring ──────────────────────────────────────────────────────────
+  PROMETHEUS_METRICS_ENABLED: "true"
+  GEOIP_DB_PATH: "/app/data/geoip/GeoLite2-City.mmdb"
+
+  # ── CRM Integration ────────────────────────────────────────────────────
+  CRM_BASE_URL: "https://test-mock-crm.pruthvirajchavan.codes"
+
+  # ── Eval & Judging ─────────────────────────────────────────────────────
+  ENABLE_LLM_JUDGE: "1"
+  JUDGE_MODEL_NAME: "gpt-oss-120b"
+  SHADOW_EVAL_MAX_PER_MIN: "20"
+
+  # ── GeoIP ───────────────────────────────────────────────────────────────
+  GEOIP_FREE_ONLY: "true"
+  GEOIP_DATA_DIR: "/app/data/geoip"
+
+  # ── Grafana ─────────────────────────────────────────────────────────────
+  GRAFANA_ADMIN_USER: "admin"

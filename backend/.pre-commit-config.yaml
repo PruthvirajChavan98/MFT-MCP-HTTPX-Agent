@@ -33,7 +33,8 @@ repos:
         exclude: '\.md$'
       - id: end-of-file-fixer
       - id: check-yaml
-        exclude: 'templates/.*\.yaml'
+        exclude: '(templates/.*\.yaml|k8s/.*\.yaml)'
+        args: ['--allow-multiple-documents']
       - id: check-json
       - id: check-toml
       - id: check-added-large-files

@@ -1,0 +1,13 @@
+# Zero-trust baseline: deny all ingress and egress by default.
+# Each workload must explicitly declare what it needs.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: mft
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

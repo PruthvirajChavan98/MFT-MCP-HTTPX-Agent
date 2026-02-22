@@ -19,6 +19,9 @@ from src.agent_service.core.config import (
 
 log = logging.getLogger("model_service")
 
+_CATALOG_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+_CATALOG_LIMITS = httpx.Limits(max_connections=100, max_keepalive_connections=20)
+
 # --- STATIC FALLBACK CATALOG (Server-Side Source of Truth) ---
 # Used when live API calls fail so the system remains usable.
 FALLBACK_MODELS = {
@@ -267,7 +270,9 @@ class ModelService:
 
         try:
             url = f"{GROQ_BASE_URL}/openai/v1/models"
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(
+                timeout=_CATALOG_TIMEOUT, limits=_CATALOG_LIMITS
+            ) as client:
                 resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
                 if resp.status_code != 200:
                     return self._hydrate_fallback("groq")
@@ -302,7 +307,9 @@ class ModelService:
         self,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, float]]]:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(
+                timeout=_CATALOG_TIMEOUT, limits=_CATALOG_LIMITS
+            ) as client:
                 resp = await client.get(self.OPENROUTER_MODELS_URL)
                 if resp.status_code != 200:
                     return [], {}
@@ -320,7 +327,7 @@ class ModelService:
                     try:
                         p_float = float(raw_p.get("prompt", "0"))
                         c_float = float(raw_p.get("completion", "0"))
-                    except:
+                    except (TypeError, ValueError):
                         p_float = c_float = 0.0
 
                     pricing_map[mid] = {"prompt": p_float, "completion": c_float}
@@ -361,7 +368,9 @@ class ModelService:
             return self._hydrate_fallback("nvidia")
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(
+                timeout=_CATALOG_TIMEOUT, limits=_CATALOG_LIMITS
+            ) as client:
                 resp = await client.get(
                     f"{NVIDIA_BASE_URL}/models", headers={"Authorization": f"Bearer {api_key}"}
                 )
