@@ -50,7 +50,7 @@ async def generate_follow_up(request: AgentRequest):
         return {"questions": questions, "provider": resources.provider}
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         log.error(f"Follow-up generation error: {e}")
         return {"questions": []}
@@ -96,6 +96,6 @@ async def generate_follow_up_stream(request: AgentRequest):
         return EventSourceResponse(event_generator())
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

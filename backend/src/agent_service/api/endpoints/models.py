@@ -19,4 +19,4 @@ async def list_models():
         return {"count": total_models, "categories": data}
     except Exception as e:
         log.error(f"Model fetch error: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e

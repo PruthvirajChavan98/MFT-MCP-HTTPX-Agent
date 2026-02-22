@@ -7,7 +7,7 @@ from langchain_neo4j import Neo4jVector
 from pydantic import BaseModel, Field
 
 from src.agent_service.llm.client import get_embeddings
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 
 class GraphQueryInput(BaseModel):
@@ -15,8 +15,7 @@ class GraphQueryInput(BaseModel):
 
 
 def create_graph_tool(openrouter_api_key: str) -> StructuredTool:
-
-    def query_faq(query: str) -> str:
+    async def query_faq(query: str) -> str:
         try:
             embeddings = get_embeddings(api_key=openrouter_api_key)
 
@@ -36,16 +35,15 @@ def create_graph_tool(openrouter_api_key: str) -> StructuredTool:
                 return "No relevant information found."
 
             response = "Relevant FAQs:\n\n"
-            driver = Neo4jManager.get_driver()
-
-            with driver.session() as session:
+            async with neo4j_mgr._driver.session() as session:
                 for doc, score in results:
                     q_text = doc.page_content.replace("text: ", "").strip()
 
-                    record = session.run(
+                    result = await session.run(
                         "MATCH (q:Question {text: $q})-[:HAS_ANSWER]->(a:Answer) RETURN a.text as a",
-                        q=q_text,
-                    ).single()
+                        {"q": q_text},
+                    )
+                    record = await result.single()
 
                     ans = record["a"] if record else "No answer."
                     response += f"Q: {q_text}\nA: {ans}\n(Score: {score:.2f})\n\n"

@@ -30,6 +30,8 @@ from src.agent_service.features.answerability import QueryAnswerabilityClassifie
 # Enterprise Imports (Use Factory, not raw classes)
 from src.agent_service.llm.client import get_embeddings, get_llm
 
+from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
+
 # =============================================================================
 # Labels & Constants
 # =============================================================================
@@ -94,9 +96,6 @@ OPS_INTENT_RE = re.compile(
 
 # ... (Prototypes imported from module or defined here.
 # For brevity in this fix, we assume they are imported or re-defined.
-# We'll re-define simpler versions to ensure standalone function)
-
-from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
 
 REASON_BOOSTS: List[Tuple[str, re.Pattern, float]] = [
     (
@@ -168,7 +167,7 @@ class _ProtoCache:
             return None
         try:
             return json.loads(p.read_text(encoding="utf-8"))
-        except:
+        except Exception:
             return None
 
     def save(self, model: str, fp: str, data: Dict[str, List[List[float]]]) -> None:
@@ -281,7 +280,7 @@ class EmbeddingsRouter:
                     bumps[lab] = max(bumps.get(lab, 0.0), bump)
 
             if bumps:
-                scored_r = [(l, s + bumps.get(l, 0.0)) for l, s in scored_r]
+                scored_r = [(lab, sc + bumps.get(lab, 0.0)) for lab, sc in scored_r]
                 scored_r.sort(key=lambda x: x[1], reverse=True)
 
             best_r, score_r = scored_r[0]
@@ -292,7 +291,7 @@ class EmbeddingsRouter:
             reason_res = {
                 "label": label_r,
                 "score": float(score_r),
-                "topk": [(l, float(s)) for l, s in scored_r[:3]],
+                "topk": [(lab, float(sc)) for lab, sc in scored_r[:3]],
             }
 
         return (
@@ -491,9 +490,11 @@ class NBFCClassifierService:
         )
 
         if mode == "llm" or force_llm or (mode == "hybrid" and low_conf):
-            l = await self.llm.classify(t, openrouter_api_key)
-            l["backend"] = f"hybrid->{l['backend']}" if mode == "hybrid" else l["backend"]
-            result = l
+            llm_result = await self.llm.classify(t, openrouter_api_key)
+            llm_result["backend"] = (
+                f"hybrid->{llm_result['backend']}" if mode == "hybrid" else llm_result["backend"]
+            )
+            result = llm_result
         else:
             result = e
 
@@ -536,10 +537,10 @@ class NBFCClassifierService:
             }
 
         try:
-            l = await self.llm.classify(t, openrouter_api_key)
+            llm_result = await self.llm.classify(t, openrouter_api_key)
         except Exception as exc:
             errors["llm"] = str(exc)
-            l = {
+            llm_result = {
                 "sentiment": {"label": "unknown", "score": 0.0},
                 "reason": {"label": "unknown", "score": 0.0},
                 "backend": f"llm_{self.llm.chat_model}",
@@ -548,7 +549,7 @@ class NBFCClassifierService:
 
         result = {
             "embeddings": e,
-            "llm": l,
+            "llm": llm_result,
             "answerability": await self._safe_answerability(
                 t,
                 tools=tools,

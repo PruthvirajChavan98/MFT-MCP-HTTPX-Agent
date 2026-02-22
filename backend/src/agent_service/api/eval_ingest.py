@@ -117,7 +117,7 @@ async def ingest(
         trace_id = str(bundle.trace.get("trace_id") or "").strip() or None
         if not trace_id:
             raise HTTPException(status_code=400, detail="trace.trace_id missing")
-        STORE.upsert_trace(bundle.trace)
+        await STORE.upsert_trace(bundle.trace)
 
     if not trace_id and bundle.events:
         trace_id = str(bundle.events[0].get("trace_id") or "").strip() or None
@@ -152,7 +152,7 @@ async def ingest(
             continue
 
     if norm_events:
-        STORE.upsert_events(trace_id, norm_events)
+        await STORE.upsert_events(trace_id, norm_events)
 
     # Normalize evals; compute evidence_event_keys for graph links
     norm_evals: List[Dict[str, Any]] = []
@@ -182,7 +182,7 @@ async def ingest(
             continue
 
     if norm_evals:
-        STORE.upsert_evals(trace_id, norm_evals)
+        await STORE.upsert_evals(trace_id, norm_evals)
 
     # Background embeddings (optional; won’t block ingest)
     if bundle.trace:

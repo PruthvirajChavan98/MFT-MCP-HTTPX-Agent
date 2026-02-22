@@ -9,11 +9,10 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from langchain_openai import OpenAIEmbeddings
 from neo4j.exceptions import DriverError, Neo4jError, ServiceUnavailable, SessionExpired
 from pydantic import BaseModel
-from starlette.concurrency import run_in_threadpool
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 log = logging.getLogger("eval_read_api")
 router = APIRouter()
@@ -33,21 +32,22 @@ def _json_load_maybe(s: Any) -> Any:
     if (ss.startswith("{") and ss.endswith("}")) or (ss.startswith("[") and ss.endswith("]")):
         try:
             return json.loads(ss)
-        except:
+        except Exception:
             return s
     return s
 
 
-def _rows(q: str, params: dict) -> List[dict]:
-    driver = Neo4jManager.get_driver()
-    with driver.session() as session:
-        return [dict(r) for r in session.run(q, **params)]  # type: ignore
+async def _rows(q: str, params: dict) -> List[dict]:
+    async with neo4j_mgr._driver.session() as session:
+        result = await session.run(q, params)
+        records = await result.data()
+        return [dict(r) for r in records]
 
 
-def _one(q: str, params: dict) -> Optional[dict]:
-    driver = Neo4jManager.get_driver()
-    with driver.session() as session:
-        r = session.run(q, **params).single()  # type: ignore
+async def _one(q: str, params: dict) -> Optional[dict]:
+    async with neo4j_mgr._driver.session() as session:
+        result = await session.run(q, params)
+        r = await result.single()
         return dict(r) if r else None
 
 
@@ -107,7 +107,7 @@ def _raise_eval_http_error(exc: Exception, operation: str) -> None:
 
 async def _run_rows_query(q: str, params: dict, operation: str) -> List[dict]:
     try:
-        return await run_in_threadpool(_rows, q, params)
+        return await _rows(q, params)
     except Exception as exc:
         _raise_eval_http_error(exc, operation)
         raise  # pragma: no cover
@@ -115,15 +115,15 @@ async def _run_rows_query(q: str, params: dict, operation: str) -> List[dict]:
 
 async def _run_one_query(q: str, params: dict, operation: str) -> Optional[dict]:
     try:
-        return await run_in_threadpool(_one, q, params)
+        return await _one(q, params)
     except Exception as exc:
         _raise_eval_http_error(exc, operation)
         raise  # pragma: no cover
 
 
-def _ensure_eval_schema(operation: str) -> None:
+async def _ensure_eval_schema(operation: str) -> None:
     try:
-        _EVAL_STORE.ensure_schema()
+        await _EVAL_STORE.ensure_schema()
     except Exception as exc:
         _raise_eval_http_error(exc, f"{operation}_ensure_schema")
 
@@ -207,7 +207,7 @@ async def eval_search(
     max_score: Optional[float] = None,
     order: Literal["desc", "asc"] = "desc",
 ):
-    _ensure_eval_schema("eval_search")
+    await _ensure_eval_schema("eval_search")
     order_dir = "DESC" if order.lower() == "desc" else "ASC"
     if metric_name:
         metric_name = metric_name.strip()
@@ -255,7 +255,7 @@ async def eval_search(
     )
 
     q_items = f"""
-    MATCH (t:EvalTrace) WHERE {' AND '.join(where)} {metric_clause}
+    MATCH (t:EvalTrace) WHERE {" AND ".join(where)} {metric_clause}
     OPTIONAL MATCH (t)-[:HAS_EVENT]->(ev:EvalEvent)
     WITH t, evals, count(ev) AS event_count
     RETURN t.trace_id AS trace_id, t.case_id AS case_id, t.session_id AS session_id, t.provider AS provider, t.model AS model, t.endpoint AS endpoint, t.started_at AS started_at, t.ended_at AS ended_at, t.latency_ms AS latency_ms, t.status AS status, t.error AS error, event_count, size(evals) AS eval_count, reduce(p = 0, x IN evals | p + CASE WHEN x.passed = true THEN 1 ELSE 0 END) AS pass_count, [e IN evals | {{name: e.metric_name, score: e.score, passed: e.passed}}] as scores
@@ -275,7 +275,7 @@ async def eval_search(
 async def eval_sessions(
     limit: int = Query(25), offset: int = Query(0), app_id: Optional[str] = None
 ):
-    _ensure_eval_schema("eval_sessions")
+    await _ensure_eval_schema("eval_sessions")
     where_clause = ""
     params = {"limit": limit, "offset": offset}
     if app_id and app_id.strip():
@@ -317,7 +317,7 @@ async def eval_sessions(
 # -----------------------------
 @router.get("/trace/{trace_id}")
 async def eval_trace(trace_id: str):
-    _ensure_eval_schema("eval_trace")
+    await _ensure_eval_schema("eval_trace")
     q = "MATCH (t:EvalTrace {trace_id: $trace_id}) OPTIONAL MATCH (t)-[:HAS_EVENT]->(e:EvalEvent) WITH t, e ORDER BY e.seq ASC WITH t, [x IN collect(CASE WHEN e IS NULL THEN null ELSE {event_key: e.event_key, trace_id: e.trace_id, seq: e.seq, ts: e.ts, event_type: e.event_type, name: e.name, text: e.text, payload_json: e.payload_json, meta_json: e.meta_json} END) WHERE x IS NOT NULL] AS events OPTIONAL MATCH (t)-[:HAS_EVAL]->(r:EvalResult) OPTIONAL MATCH (r)-[:EVIDENCE]->(ev:EvalEvent) WITH t, events, r, collect(ev.event_key) AS evidence_event_keys WITH t, events, [x IN collect(CASE WHEN r IS NULL THEN null ELSE {eval_id: r.eval_id, trace_id: r.trace_id, metric_name: r.metric_name, score: r.score, passed: r.passed, reasoning: r.reasoning, evaluator_id: r.evaluator_id, meta_json: r.meta_json, evidence_json: r.evidence_json, evidence_event_keys: evidence_event_keys} END) WHERE x IS NOT NULL] AS evals RETURN {trace_id: t.trace_id, case_id: t.case_id, session_id: t.session_id, provider: t.provider, model: t.model, endpoint: t.endpoint, started_at: t.started_at, ended_at: t.ended_at, latency_ms: t.latency_ms, status: t.status, error: t.error, inputs_json: t.inputs_json, final_output: t.final_output, tags_json: t.tags_json, meta_json: t.meta_json} AS trace, events AS events, evals AS evals"
     row = await _run_one_query(q, {"trace_id": trace_id}, "eval_trace")
     if not row:
@@ -348,7 +348,7 @@ async def eval_fulltext(
     offset: int = 0,
     trace_id: Optional[str] = None,
 ):
-    _ensure_eval_schema("eval_fulltext")
+    await _ensure_eval_schema("eval_fulltext")
     index = {"event": "evalevent_text", "trace": "evaltrace_text", "result": "evalresult_text"}[
         kind
     ]
@@ -369,7 +369,7 @@ async def eval_vector_search(
     req: VectorSearchRequest,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
-    _ensure_eval_schema("eval_vector_search")
+    await _ensure_eval_schema("eval_vector_search")
     if not req.vector and not req.text:
         raise HTTPException(status_code=400, detail="Provide either 'vector' or 'text'")
 
@@ -492,7 +492,7 @@ async def eval_metrics_summary(
     model: Optional[str] = None,
     status: Optional[str] = None,
 ):
-    _ensure_eval_schema("eval_metrics_summary")
+    await _ensure_eval_schema("eval_metrics_summary")
     # 1. Fetch grouped items via Cypher
     q = """
     MATCH (r:EvalResult)
@@ -546,7 +546,7 @@ async def eval_metrics_failures(
     model: Optional[str] = None,
     status: Optional[str] = None,
 ):
-    _ensure_eval_schema("eval_metrics_failures")
+    await _ensure_eval_schema("eval_metrics_failures")
     if metric_name is not None:
         metric_name = metric_name.strip() or None
 
@@ -597,7 +597,7 @@ async def eval_metrics_failures(
         MATCH (r:EvalResult)
         WHERE r.passed = false
           AND r.updated_at IS NOT NULL
-          {' AND r.metric_name = $metric_name' if metric_filter else ''}
+          {" AND r.metric_name = $metric_name" if metric_filter else ""}
         WITH r
         ORDER BY r.updated_at DESC
         SKIP $offset LIMIT $limit
@@ -641,7 +641,7 @@ async def eval_metrics_failures(
 
 @router.get("/question-types")
 async def question_types(limit: int = 200):
-    _ensure_eval_schema("eval_question_types")
+    await _ensure_eval_schema("eval_question_types")
     rows = await _run_rows_query(
         """
         MATCH (t:EvalTrace)

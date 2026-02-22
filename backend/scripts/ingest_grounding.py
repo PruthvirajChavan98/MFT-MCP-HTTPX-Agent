@@ -70,7 +70,7 @@ def ingest_grounding_data(openrouter_key: str):
         if not q:
             continue
 
-        print(f"Processing [{i+1}/{len(data)}]: {q[:40]}...")
+        print(f"Processing [{i + 1}/{len(data)}]: {q[:40]}...")
 
         # 2. Generate Vector
         try:

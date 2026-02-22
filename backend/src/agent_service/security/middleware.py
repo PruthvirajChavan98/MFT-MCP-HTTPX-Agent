@@ -98,15 +98,16 @@ class SessionRiskMiddleware(BaseHTTPMiddleware):
                 reasons=assessment.reasons,
             )
 
-            from src.agent_service.core.event_bus import event_bus
             import asyncio
+
+            from src.agent_service.core.event_bus import event_bus
 
             # Fire and forget without blocking the middleware
             asyncio.create_task(
                 event_bus.publish(
                     channel="live:global:security",
                     event_type="risk_denied",
-                    data={"ip": client_ip, "session_id": session_id, "path": request.url.path}
+                    data={"ip": client_ip, "session_id": session_id, "path": request.url.path},
                 )
             )
 

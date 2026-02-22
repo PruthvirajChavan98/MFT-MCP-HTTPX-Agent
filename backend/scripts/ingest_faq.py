@@ -117,7 +117,7 @@ async def ingest_data_async(api_key: str, extraction_model: str):
         if not q_text or not a_text:
             continue
 
-        log.info(f"Processing [{i+1}/{len(data)}]: {q_text[:40]}...")
+        log.info(f"Processing [{i + 1}/{len(data)}]: {q_text[:40]}...")
 
         # 2. Generate Vector
         try:

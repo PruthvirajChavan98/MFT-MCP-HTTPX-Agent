@@ -213,5 +213,5 @@ Text: {text}
     async def compare(self, text: str, openrouter_api_key: Optional[str] = None) -> Any:
         # Debug tool to run both
         e = await self.classify_embeddings(text, openrouter_api_key=openrouter_api_key)
-        l = await self.classify_llm_glm47(text, openrouter_api_key=openrouter_api_key)
-        return {"embeddings": e, "llm": l}
+        llm_result = await self.classify_llm_glm47(text, openrouter_api_key=openrouter_api_key)
+        return {"embeddings": e, "llm": llm_result}

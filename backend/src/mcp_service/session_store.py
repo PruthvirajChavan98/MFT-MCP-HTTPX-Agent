@@ -33,7 +33,7 @@ class RedisSessionStore:
             log.info(f"✅ Connected to Redis: {_redact_uri(self.redis_uri)}")
         except Exception as e:
             log.error(f"❌ Redis connect failed: {e}")
-            raise RuntimeError(f"Could not connect to Redis: {e}")
+            raise RuntimeError(f"Could not connect to Redis: {e}") from e
 
     def _valid_session_id(self, session_id: object) -> Optional[str]:
         if session_id is None:

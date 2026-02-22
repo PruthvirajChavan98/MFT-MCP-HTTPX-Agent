@@ -81,6 +81,11 @@ class AppFactory:
                 await mcp_manager.initialize()
                 log.info("✅ MCP Manager initialized")
 
+                from src.common.neo4j_mgr import neo4j_mgr
+
+                await neo4j_mgr.connect()
+                app.state.neo4j_mgr = neo4j_mgr
+
                 if POSTGRES_DSN:
                     postgres_pool = PostgresPoolManager(
                         dsn=POSTGRES_DSN,
@@ -108,6 +113,7 @@ class AppFactory:
                     await postgres_pool.stop()
                 await mcp_manager.shutdown()
                 await config_manager.close()
+                await neo4j_mgr.close()
 
                 # Graceful EventBus Shutdown
                 await event_bus.close()

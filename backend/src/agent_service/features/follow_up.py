@@ -12,7 +12,7 @@ from langchain_core.tools import StructuredTool
 
 # Enterprise Imports
 from src.agent_service.llm.client import get_embeddings
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 log = logging.getLogger("follow_up_gen")
 
@@ -89,7 +89,6 @@ class FollowUpQuestionGenerator:
         openrouter_key: Optional[str] = None,
         nvidia_key: Optional[str] = None,
     ) -> AsyncGenerator[dict, None]:
-
         if not messages:
             yield {"event": "done", "data": "[DONE]"}
             return
@@ -212,13 +211,13 @@ class FollowUpQuestionGenerator:
             embeddings = get_embeddings(api_key=api_key)
             vector = await embeddings.aembed_query(context_text)
 
-            Neo4jManager.execute_write(
+            await neo4j_mgr.execute_write(
                 "CREATE VECTOR INDEX followup_context_embeddings IF NOT EXISTS "
                 "FOR (c:FollowUpContext) ON (c.embedding) "
                 "OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}"
             )
 
-            result = Neo4jManager.execute_read(
+            result = await neo4j_mgr.execute_read(
                 "CALL db.index.vector.queryNodes('followup_context_embeddings', 1, $vector) "
                 "YIELD node, score "
                 "WHERE score >= 0.95 "
@@ -238,7 +237,7 @@ class FollowUpQuestionGenerator:
             embeddings = get_embeddings(api_key=api_key)
             vector = await embeddings.aembed_query(context_text)
 
-            Neo4jManager.execute_write(
+            await neo4j_mgr.execute_write(
                 """
                 MERGE (c:FollowUpContext {text: $context})
                 ON CREATE SET c.embedding = $vector, c.created_at = datetime()
@@ -255,7 +254,7 @@ class FollowUpQuestionGenerator:
     async def get_all_cached_questions(self) -> List[dict]:
         """Admin method to fetch all cached follow-up pairs."""
         try:
-            result = Neo4jManager.execute_read(
+            result = await neo4j_mgr.execute_read(
                 "MATCH (c:FollowUpContext)-[:HAS_SUGGESTION]->(q:SuggestedQuestion) "
                 "RETURN c.text as context, collect(q.text) as questions "
                 "ORDER BY c.created_at DESC LIMIT 100"

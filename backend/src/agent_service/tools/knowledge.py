@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from src.agent_service.llm.client import get_embeddings, get_llm
 
 # Enterprise Imports
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 log = logging.getLogger("knowledge_base")
 
@@ -65,7 +65,6 @@ class KnowledgeBaseService:
             yield {"event": "error", "data": "OpenRouter API Key required for Embeddings"}
             return
 
-        driver = Neo4jManager.get_driver()
         total_items = len(items)
         success_count = 0
         errors = []
@@ -83,17 +82,17 @@ class KnowledgeBaseService:
 
         # 1. Ensure Constraints
         try:
-            with driver.session() as session:
-                session.run(
+            async with neo4j_mgr._driver.session() as session:
+                await session.run(
                     "CREATE CONSTRAINT question_uniq IF NOT EXISTS FOR (q:Question) REQUIRE q.text IS UNIQUE"
                 )
-                session.run(
+                await session.run(
                     "CREATE CONSTRAINT topic_uniq IF NOT EXISTS FOR (t:Topic) REQUIRE t.name IS UNIQUE"
                 )
-                session.run(
+                await session.run(
                     "CREATE CONSTRAINT product_uniq IF NOT EXISTS FOR (p:Product) REQUIRE p.name IS UNIQUE"
                 )
-                session.run("""
+                await session.run("""
                     CREATE VECTOR INDEX question_embeddings IF NOT EXISTS
                     FOR (q:Question) ON (q.embedding)
                     OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
@@ -119,7 +118,7 @@ class KnowledgeBaseService:
                 "data": json.dumps(
                     {
                         "percent": percent,
-                        "message": f"Processing {i+1}/{total_items}: {q_text[:30]}...",
+                        "message": f"Processing {i + 1}/{total_items}: {q_text[:30]}...",
                     }
                 ),
             }
@@ -139,7 +138,9 @@ class KnowledgeBaseService:
                 MERGE (a:Answer {text: $a})
                 MERGE (q)-[:HAS_ANSWER]->(a)
                 """
-                Neo4jManager.execute_write(query_base, {"q": q_text, "a": a_text, "vector": vector})
+                await neo4j_mgr.execute_write(
+                    query_base, {"q": q_text, "a": a_text, "vector": vector}
+                )
 
                 # C. Extract & Link Metadata
                 try:
@@ -150,18 +151,16 @@ class KnowledgeBaseService:
                         }
                     )
 
-                    with driver.session() as session:
+                    async with neo4j_mgr._driver.session() as session:
                         for t in meta.topics:
-                            session.run(
+                            await session.run(
                                 "MATCH (q:Question {text: $q}) MERGE (top:Topic {name: $t}) MERGE (q)-[:ABOUT]->(top)",
-                                q=q_text,
-                                t=t,
+                                {"q": q_text, "t": t},
                             )
                         for p in meta.products:
-                            session.run(
+                            await session.run(
                                 "MATCH (q:Question {text: $q}) MERGE (prod:Product {name: $p}) MERGE (q)-[:RELATES_TO]->(prod)",
-                                q=q_text,
-                                p=p,
+                                {"q": q_text, "p": p},
                             )
                 except Exception as e:
                     log.warning(f"Metadata extraction failed for '{q_text[:10]}': {e}")
@@ -187,7 +186,7 @@ class KnowledgeBaseService:
         SKIP $skip LIMIT $limit
         """
         try:
-            results = Neo4jManager.execute_read(query, {"skip": skip, "limit": limit})
+            results = await neo4j_mgr.execute_read(query, {"skip": skip, "limit": limit})
             return [{"question": r["question"], "answer": r["answer"]} for r in results]
         except Exception as e:
             log.error(f"Failed to fetch FAQs: {e}")
@@ -230,19 +229,19 @@ class KnowledgeBaseService:
 
         cypher = f"""
         MATCH (q:Question {{text: $orig_q}})-[:HAS_ANSWER]->(a:Answer)
-        { " ".join(updates) }
+        {" ".join(updates)}
         RETURN q.text as q
         """
 
         try:
-            Neo4jManager.execute_write(cypher, params)
+            await neo4j_mgr.execute_write(cypher, params)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
     async def delete_faq(self, question: str) -> dict:
         try:
-            Neo4jManager.execute_write(
+            await neo4j_mgr.execute_write(
                 "MATCH (q:Question {text: $q}) DETACH DELETE q", {"q": question}
             )
             return {"status": "success", "question": question}
@@ -251,8 +250,8 @@ class KnowledgeBaseService:
 
     async def clear_all_faqs(self) -> dict:
         try:
-            Neo4jManager.execute_write("MATCH (q:Question) DETACH DELETE q")
-            Neo4jManager.execute_write(
+            await neo4j_mgr.execute_write("MATCH (q:Question) DETACH DELETE q")
+            await neo4j_mgr.execute_write(
                 "MATCH (a:Answer) WHERE NOT (a)<-[:HAS_ANSWER]-(:Question) DETACH DELETE a"
             )
             return {"status": "success"}
@@ -274,7 +273,7 @@ class KnowledgeBaseService:
             MATCH (node)-[:HAS_ANSWER]->(a:Answer)
             RETURN node.text as question, a.text as answer, score
             """
-            return Neo4jManager.execute_read(cypher, {"vector": vector, "limit": limit})
+            return await neo4j_mgr.execute_read(cypher, {"vector": vector, "limit": limit})
         except Exception as e:
             log.error(f"Search failed: {e}")
             raise e
@@ -287,7 +286,7 @@ class KnowledgeBaseService:
         RETURN topics, products
         """
         try:
-            result = Neo4jManager.execute_read(query)
+            result = await neo4j_mgr.execute_read(query)
             if not result:
                 return {"topics": [], "products": []}
             row = result[0]
@@ -313,7 +312,7 @@ class KnowledgeBaseService:
             YIELD node, score WHERE score > $threshold
             RETURN node.text as question
             """
-            match = Neo4jManager.execute_read(
+            match = await neo4j_mgr.execute_read(
                 find_query, {"vector": vector, "threshold": threshold}
             )
             if not match:

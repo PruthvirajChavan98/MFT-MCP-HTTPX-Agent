@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 from langchain_core.messages import BaseMessage, HumanMessage
-from starlette.concurrency import run_in_threadpool
 
 from src.agent_service.core.config import ENABLE_LLM_JUDGE, JUDGE_MODEL_NAME
 from src.agent_service.eval_store.embedder import EvalEmbedder
@@ -96,7 +95,7 @@ def _clip(s: Optional[str], n: int) -> str:
     if not s:
         return ""
     s = str(s)
-    return s if len(s) <= n else s[:n] + f"…(truncated {len(s)-n} chars)"
+    return s if len(s) <= n else s[:n] + f"…(truncated {len(s) - n} chars)"
 
 
 def _strip_html(s: str) -> str:
@@ -405,7 +404,7 @@ def compute_non_llm_metrics(
             try:
                 if not re.search(when, question, flags=re.I):
                     continue
-            except:
+            except Exception:
                 continue
 
         req_tool = str(r.get("require_tool") or "").strip()
@@ -451,7 +450,6 @@ async def compute_llm_metrics(
     model_name: Optional[str] = None,  # ← ADD THIS
     provider: Optional[str] = None,  # ← ADD THIS
 ) -> List[Dict[str, Any]]:
-
     if not ENABLE_LLM_JUDGE:
         return []
 
@@ -533,11 +531,11 @@ async def compute_llm_metrics(
 async def _commit_bundle(
     trace: Dict[str, Any], events: List[Dict[str, Any]], evals: List[Dict[str, Any]]
 ) -> None:
-    await run_in_threadpool(STORE.upsert_trace, trace)
+    await STORE.upsert_trace(trace)
     if events:
-        await run_in_threadpool(STORE.upsert_events, trace["trace_id"], events)
+        await STORE.upsert_events(trace["trace_id"], events)
     if evals:
-        await run_in_threadpool(STORE.upsert_evals, trace["trace_id"], evals)
+        await STORE.upsert_evals(trace["trace_id"], evals)
 
 
 async def maybe_shadow_eval_commit(

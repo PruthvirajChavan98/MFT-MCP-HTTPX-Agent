@@ -6,7 +6,7 @@ import logging
 from redis.asyncio import Redis
 
 from src.agent_service.core.config import REDIS_URL
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 from .service import RouterService
 
@@ -25,6 +25,7 @@ async def ensure_group(r: Redis):
 
 
 async def run_worker():
+    await neo4j_mgr.connect()
     r = Redis.from_url(REDIS_URL, decode_responses=True)
     await ensure_group(r)
 
@@ -51,7 +52,7 @@ async def run_worker():
                         result = await router.classify_embeddings(text)
 
                         # persist on EvalTrace as TOP-LEVEL props
-                        Neo4jManager.execute_write(
+                        await neo4j_mgr.execute_write(
                             """
                             MATCH (t:EvalTrace {trace_id:$trace_id})
                             SET t.router_backend = $backend,

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from langchain_openai import OpenAIEmbeddings
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 log = logging.getLogger("eval_embedder")
 
@@ -139,11 +139,12 @@ class EvalEmbedder:
         # Hash to prevent re-embedding identical content
         h = _sha256(doc2)
 
-        driver = Neo4jManager.get_driver()
-        with driver.session() as session:
-            existing = session.run(
-                "MATCH (t:EvalTrace {trace_id:$trace_id}) RETURN t.doc_hash as h", trace_id=trace_id
-            ).single()
+        async with neo4j_mgr._driver.session() as session:
+            result = await session.run(
+                "MATCH (t:EvalTrace {trace_id:$trace_id}) RETURN t.doc_hash as h",
+                {"trace_id": trace_id},
+            )
+            existing = await result.single()
             if existing and existing.get("h") == h:
                 log.debug(f"[eval_embedder] Trace {trace_id} already embedded (hash match)")
                 return
@@ -156,8 +157,8 @@ class EvalEmbedder:
             return
 
         # Save to Neo4j
-        with driver.session() as session:
-            session.run(
+        async with neo4j_mgr._driver.session() as session:
+            await session.run(
                 """
                 MATCH (t:EvalTrace {trace_id:$trace_id})
                 SET t.doc = $doc,
@@ -166,11 +167,13 @@ class EvalEmbedder:
                     t.embedding_model = $m,
                     t.embedding_updated_at = datetime()
                 """,
-                trace_id=trace_id,
-                doc=doc2,
-                h=h,
-                vec=vec,
-                m=EMBED_MODEL,
+                {
+                    "trace_id": trace_id,
+                    "doc": doc2,
+                    "h": h,
+                    "vec": vec,
+                    "m": EMBED_MODEL,
+                },
             )
             log.info(f"[eval_embedder] Embedded trace {trace_id}")
 
@@ -189,29 +192,28 @@ class EvalEmbedder:
         ev_events: List[Dict[str, Any]] = []
 
         if seqs:
-            driver = Neo4jManager.get_driver()
-            with driver.session() as session:
-                rows = session.run(
+            async with neo4j_mgr._driver.session() as session:
+                result = await session.run(
                     """
                     MATCH (e:EvalEvent {trace_id:$trace_id})
                     WHERE e.seq IN $seqs
                     RETURN e.seq as seq, e.event_type as event_type, e.name as name, e.text as text
                     ORDER BY e.seq ASC
                     """,
-                    trace_id=trace_id,
-                    seqs=seqs,
+                    {"trace_id": trace_id, "seqs": seqs},
                 )
-                ev_events = [dict(r) for r in rows]
+                ev_events = await result.data()
 
         doc = _build_eval_doc(ev, ev_events)
         doc2 = _truncate(doc)
         h = _sha256(doc2)
 
-        driver = Neo4jManager.get_driver()
-        with driver.session() as session:
-            existing = session.run(
-                "MATCH (r:EvalResult {eval_id:$eval_id}) RETURN r.doc_hash as h", eval_id=eval_id
-            ).single()
+        async with neo4j_mgr._driver.session() as session:
+            result = await session.run(
+                "MATCH (r:EvalResult {eval_id:$eval_id}) RETURN r.doc_hash as h",
+                {"eval_id": eval_id},
+            )
+            existing = await result.single()
             if existing and existing.get("h") == h:
                 log.debug(f"[eval_embedder] Eval {eval_id} already embedded (hash match)")
                 return
@@ -222,8 +224,8 @@ class EvalEmbedder:
             log.error(f"[eval_embedder] Failed to embed eval {eval_id}: {e}")
             return
 
-        with driver.session() as session:
-            session.run(
+        async with neo4j_mgr._driver.session() as session:
+            await session.run(
                 """
                 MATCH (r:EvalResult {eval_id:$eval_id})
                 SET r.doc = $doc,
@@ -232,10 +234,12 @@ class EvalEmbedder:
                     r.embedding_model = $m,
                     r.embedding_updated_at = datetime()
                 """,
-                eval_id=eval_id,
-                doc=doc2,
-                h=h,
-                vec=vec,
-                m=EMBED_MODEL,
+                {
+                    "eval_id": eval_id,
+                    "doc": doc2,
+                    "h": h,
+                    "vec": vec,
+                    "m": EMBED_MODEL,
+                },
             )
             log.debug(f"[eval_embedder] Embedded eval {eval_id}")

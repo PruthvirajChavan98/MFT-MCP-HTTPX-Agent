@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 log = logging.getLogger("eval_store_neo4j")
 
@@ -26,57 +26,60 @@ class EvalNeo4jStore:
 
     _schema_ready: bool = False
 
-    def ensure_schema(self) -> None:
+    async def ensure_schema(self) -> None:
         if self.__class__._schema_ready:
             return
 
-        driver = Neo4jManager.get_driver()
-        with driver.session() as session:
+        async with neo4j_mgr._driver.session() as session:
             # constraints (all single-field -> Community safe)
-            session.run(
+            await session.run(
                 "CREATE CONSTRAINT evaltrace_uniq IF NOT EXISTS FOR (t:EvalTrace) REQUIRE t.trace_id IS UNIQUE"
             )
-            session.run(
+            await session.run(
                 "CREATE CONSTRAINT evalresult_uniq IF NOT EXISTS FOR (r:EvalResult) REQUIRE r.eval_id IS UNIQUE"
             )
-            session.run(
+            await session.run(
                 "CREATE CONSTRAINT evalevent_key_uniq IF NOT EXISTS FOR (e:EvalEvent) REQUIRE e.event_key IS UNIQUE"
             )
 
             # indexes for dashboard filters
-            session.run(
+            await session.run(
                 "CREATE INDEX evaltrace_session IF NOT EXISTS FOR (t:EvalTrace) ON (t.session_id)"
             )
-            session.run(
+            await session.run(
                 "CREATE INDEX evaltrace_status IF NOT EXISTS FOR (t:EvalTrace) ON (t.status)"
             )
-            session.run("CREATE INDEX evaltrace_model IF NOT EXISTS FOR (t:EvalTrace) ON (t.model)")
-            session.run(
+            await session.run(
+                "CREATE INDEX evaltrace_model IF NOT EXISTS FOR (t:EvalTrace) ON (t.model)"
+            )
+            await session.run(
                 "CREATE INDEX evalevent_trace_id IF NOT EXISTS FOR (e:EvalEvent) ON (e.trace_id)"
             )
-            session.run("CREATE INDEX evalevent_seq IF NOT EXISTS FOR (e:EvalEvent) ON (e.seq)")
-            session.run(
+            await session.run(
+                "CREATE INDEX evalevent_seq IF NOT EXISTS FOR (e:EvalEvent) ON (e.seq)"
+            )
+            await session.run(
                 "CREATE INDEX evalresult_metric IF NOT EXISTS FOR (r:EvalResult) ON (r.metric_name)"
             )
 
             # --- ADDED: Composite index for faster metric filtering/sorting ---
-            session.run("""
+            await session.run("""
                 CREATE INDEX evalresult_metric_passed_updated_at_idx IF NOT EXISTS
                 FOR (r:EvalResult) ON (r.metric_name, r.passed, r.updated_at)
             """)
 
             # fulltext search over event text
-            session.run(
+            await session.run(
                 "CREATE FULLTEXT INDEX evalevent_text IF NOT EXISTS FOR (e:EvalEvent) ON EACH [e.text]"
             )
 
             # vector indexes (safe even if embedding missing for now)
-            session.run("""
+            await session.run("""
                 CREATE VECTOR INDEX evaltrace_embeddings IF NOT EXISTS
                 FOR (t:EvalTrace) ON (t.embedding)
                 OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
             """)
-            session.run("""
+            await session.run("""
                 CREATE VECTOR INDEX evalresult_embeddings IF NOT EXISTS
                 FOR (r:EvalResult) ON (r.embedding)
                 OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}
@@ -85,8 +88,8 @@ class EvalNeo4jStore:
         self.__class__._schema_ready = True
         log.info("[eval_store] Neo4j schema ready")
 
-    def upsert_trace(self, trace: Dict[str, Any]) -> None:
-        self.ensure_schema()
+    async def upsert_trace(self, trace: Dict[str, Any]) -> None:
+        await self.ensure_schema()
         trace_id = str(trace.get("trace_id") or "").strip()
         if not trace_id:
             raise ValueError("trace.trace_id missing")
@@ -128,12 +131,11 @@ class EvalNeo4jStore:
           t.meta_json = $meta_json,
           t.updated_at = datetime()
         """
-        driver = Neo4jManager.get_driver()
-        with driver.session() as session:
-            session.run(q, **props)
+        async with neo4j_mgr._driver.session() as session:
+            await session.run(q, props)
 
-    def upsert_events(self, trace_id: str, events: List[Dict[str, Any]]) -> None:
-        self.ensure_schema()
+    async def upsert_events(self, trace_id: str, events: List[Dict[str, Any]]) -> None:
+        await self.ensure_schema()
         if not events:
             return
 
@@ -170,12 +172,11 @@ class EvalNeo4jStore:
             ev.meta_json = e.meta_json
           MERGE (t)-[:HAS_EVENT]->(ev)
         """
-        driver = Neo4jManager.get_driver()
-        with driver.session() as session:
-            session.run(q, trace_id=trace_id, events=norm)
+        async with neo4j_mgr._driver.session() as session:
+            await session.run(q, {"trace_id": trace_id, "events": norm})
 
-    def upsert_evals(self, trace_id: str, evals: List[Dict[str, Any]]) -> None:
-        self.ensure_schema()
+    async def upsert_evals(self, trace_id: str, evals: List[Dict[str, Any]]) -> None:
+        await self.ensure_schema()
         if not evals:
             return
 
@@ -217,6 +218,5 @@ class EvalNeo4jStore:
             MATCH (ev:EvalEvent {event_key: ek})
             MERGE (er)-[:EVIDENCE]->(ev)
         """
-        driver = Neo4jManager.get_driver()
-        with driver.session() as session:
-            session.run(q, trace_id=trace_id, evals=norm)
+        async with neo4j_mgr._driver.session() as session:
+            await session.run(q, {"trace_id": trace_id, "evals": norm})

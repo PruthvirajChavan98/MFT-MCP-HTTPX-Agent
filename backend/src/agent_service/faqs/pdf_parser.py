@@ -30,7 +30,7 @@ class PDFQAParser:
                     if text:
                         full_text.append(text)
         except Exception as e:
-            raise RuntimeError(f"Error reading PDF: {e}")
+            raise RuntimeError(f"Error reading PDF: {e}") from e
 
         return "\n".join(full_text)
 

@@ -5,10 +5,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from starlette.concurrency import run_in_threadpool
 
 from src.agent_service.api.admin_auth import require_admin_key
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 router = APIRouter(
     prefix="/agent/admin/analytics",
@@ -35,7 +34,7 @@ def _json_load_maybe(value: Any) -> Any:
 
 async def _neo4j_read(query: str, params: dict[str, Any]) -> list[dict[str, Any]]:
     try:
-        return await run_in_threadpool(Neo4jManager.execute_read, query, params)
+        return await neo4j_mgr.execute_read(query, params)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Neo4j unavailable: {exc}") from exc
 
@@ -69,7 +68,7 @@ async def overview():
 @router.get("/conversations")
 async def conversations(request: Request, limit: int = Query(default=120, ge=1, le=1000)):
     """List all sessions from the LangGraph Redis Checkpointer.
-    
+
     Uses the public checkpointer.alist() API — no private attributes,
     no Redis key parsing, no fragile patterns.
     """
@@ -123,14 +122,16 @@ async def conversations(request: Request, limit: int = Query(default=120, ge=1, 
             if not last_ts:
                 last_ts = checkpoint.get("ts")
 
-            items.append({
-                "session_id": tid,
-                "started_at": last_ts,
-                "model": model,
-                "provider": provider,
-                "message_count": len(messages),
-                "first_question": first_question,
-            })
+            items.append(
+                {
+                    "session_id": tid,
+                    "started_at": last_ts,
+                    "model": model,
+                    "provider": provider,
+                    "message_count": len(messages),
+                    "first_question": first_question,
+                }
+            )
         except Exception:
             continue
 
@@ -144,7 +145,9 @@ async def conversations(request: Request, limit: int = Query(default=120, ge=1, 
 
 
 @router.get("/session/{session_id}")
-async def session_traces(request: Request, session_id: str, limit: int = Query(default=500, ge=1, le=2000)):
+async def session_traces(
+    request: Request, session_id: str, limit: int = Query(default=500, ge=1, le=2000)
+):
     """Return all messages for a session with sequential trace IDs."""
     checkpointer = getattr(request.app.state, "checkpointer", None)
     if not checkpointer:
@@ -164,28 +167,32 @@ async def session_traces(request: Request, session_id: str, limit: int = Query(d
             content = getattr(msg, "content", "")
             add_kwargs = getattr(msg, "additional_kwargs", {})
             resp_meta = getattr(msg, "response_metadata", {})
-            role = "user" if msg_type == "human" else ("assistant" if msg_type == "ai" else msg_type)
+            role = (
+                "user" if msg_type == "human" else ("assistant" if msg_type == "ai" else msg_type)
+            )
 
             created = resp_meta.get("created")
             timestamp = int(created * 1000) if created else 0
 
             reasoning = (
-                add_kwargs.get("reasoning", "") or
-                add_kwargs.get("reasoning_content", "") or
-                resp_meta.get("reasoning", "")
+                add_kwargs.get("reasoning", "")
+                or add_kwargs.get("reasoning_content", "")
+                or resp_meta.get("reasoning", "")
             )
 
             seq_id = f"{session_id}~{idx}"
 
-            items.append({
-                "id": seq_id,
-                "role": role,
-                "content": content,
-                "reasoning": reasoning,
-                "timestamp": timestamp,
-                "status": "done",
-                "traceId": seq_id,
-            })
+            items.append(
+                {
+                    "id": seq_id,
+                    "role": role,
+                    "content": content,
+                    "reasoning": reasoning,
+                    "timestamp": timestamp,
+                    "status": "done",
+                    "traceId": seq_id,
+                }
+            )
 
     items = items[:limit]
     return {"items": items, "count": len(items)}
@@ -233,26 +240,29 @@ async def traces(request: Request, limit: int = Query(default=200, ge=1, le=2000
                     created = resp_meta.get("created")
                     started_at = (
                         datetime.fromtimestamp(created, tz=timezone.utc).isoformat()
-                        if created else checkpoint.get("ts")
+                        if created
+                        else checkpoint.get("ts")
                     )
                     reasoning = (
-                        add_kwargs.get("reasoning", "") or
-                        add_kwargs.get("reasoning_content", "") or
-                        resp_meta.get("reasoning", "")
+                        add_kwargs.get("reasoning", "")
+                        or add_kwargs.get("reasoning_content", "")
+                        or resp_meta.get("reasoning", "")
                     )
 
                     seq_id = f"{tid}~{idx}"
-                    all_traces.append({
-                        "trace_id": seq_id,
-                        "session_id": tid,
-                        "model": model,
-                        "provider": provider,
-                        "started_at": started_at,
-                        "status": "success",
-                        "inputs_json": {"question": current_question},
-                        "final_output": getattr(msg, "content", ""),
-                        "reasoning": reasoning,
-                    })
+                    all_traces.append(
+                        {
+                            "trace_id": seq_id,
+                            "session_id": tid,
+                            "model": model,
+                            "provider": provider,
+                            "started_at": started_at,
+                            "status": "success",
+                            "inputs_json": {"question": current_question},
+                            "final_output": getattr(msg, "content", ""),
+                            "reasoning": reasoning,
+                        }
+                    )
                     current_question = ""
         except Exception:
             continue
@@ -280,13 +290,18 @@ async def trace_detail(request: Request, trace_id: str):
 
     # Parse {session_id}~N
     if "~" not in trace_id:
-        raise HTTPException(status_code=400, detail=f"Invalid trace_id format: expected '{{session_id}}~N', got '{trace_id}'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid trace_id format: expected '{{session_id}}~N', got '{trace_id}'",
+        )
 
     session_id, idx_str = trace_id.rsplit("~", 1)
     try:
         target_idx = int(idx_str)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid index in trace_id: '{idx_str}'")
+    except ValueError as err:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid index in trace_id: '{idx_str}'"
+        ) from err
 
     config = {"configurable": {"thread_id": session_id}}
     ckp = await checkpointer.aget_tuple(config)
@@ -297,7 +312,10 @@ async def trace_detail(request: Request, trace_id: str):
     messages = state.get("messages", [])
 
     if target_idx < 1 or target_idx > len(messages):
-        raise HTTPException(status_code=404, detail=f"Message #{target_idx} not found in session '{session_id}' (has {len(messages)} messages)")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Message #{target_idx} not found in session '{session_id}' (has {len(messages)} messages)",
+        )
 
     msg = messages[target_idx - 1]
     msg_type = getattr(msg, "type", "")
@@ -315,34 +333,32 @@ async def trace_detail(request: Request, trace_id: str):
             break
 
     reasoning = (
-        add_kwargs.get("reasoning", "") or
-        add_kwargs.get("reasoning_content", "") or
-        resp_meta.get("reasoning", "")
+        add_kwargs.get("reasoning", "")
+        or add_kwargs.get("reasoning_content", "")
+        or resp_meta.get("reasoning", "")
     )
 
     # Build events for the trace tree (reasoning block + output block)
     events = []
     if reasoning:
-        events.append({
-            "event_type": "reasoning",
-            "name": "reasoning",
-            "text": reasoning,
-        })
+        events.append(
+            {
+                "event_type": "reasoning",
+                "name": "reasoning",
+                "text": reasoning,
+            }
+        )
     if content:
-        events.append({
-            "event_type": "token",
-            "name": "token",
-            "text": content,
-        })
+        events.append(
+            {
+                "event_type": "token",
+                "name": "token",
+                "text": content,
+            }
+        )
 
     created = resp_meta.get("created")
-    started_at = (
-        datetime.fromtimestamp(created, tz=timezone.utc).isoformat()
-        if created else None
-    )
-
-    usage = resp_meta.get("token_usage") or {}
-
+    started_at = datetime.fromtimestamp(created, tz=timezone.utc).isoformat() if created else None
     return {
         "trace": {
             "trace_id": trace_id,
@@ -385,7 +401,11 @@ async def users(limit: int = Query(default=120, ge=1, le=1000)):
 
 
 @router.get("/guardrails")
-async def guardrails(request: Request, limit: int = Query(default=120, ge=1, le=1000)):
+async def guardrails(
+    request: Request,
+    tenant_id: str = Query(..., description="Tenant ID to filter RLS policies"),
+    limit: int = Query(default=120, ge=1, le=1000),
+):
     pool_manager = getattr(request.app.state, "postgres_pool", None)
     pool = getattr(pool_manager, "pool", None) if pool_manager else None
 
@@ -395,21 +415,27 @@ async def guardrails(request: Request, limit: int = Query(default=120, ge=1, le=
             detail="PostgreSQL pool unavailable for guardrail analytics",
         )
 
-    rows = await pool.fetch(
-        """
-        SELECT
-          event_time,
-          session_id,
-          risk_score,
-          risk_decision,
-          request_path,
-          risk_reasons
-        FROM security.session_ip_events
-        ORDER BY event_time DESC
-        LIMIT $1
-        """,
-        limit,
-    )
+    # Use explicit transaction block to isolate tenant state and prevent cross-tenant data leakage
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Set the tenant_id for the duration of this transaction
+            await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tenant_id)
+
+            rows = await conn.fetch(
+                """
+                SELECT
+                  event_time,
+                  session_id,
+                  risk_score,
+                  risk_decision,
+                  request_path,
+                  risk_reasons
+                FROM security.session_ip_events
+                ORDER BY event_time DESC
+                LIMIT $1
+                """,
+                limit,
+            )
 
     items = []
     for row in rows:

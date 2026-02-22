@@ -36,7 +36,7 @@ async def router_classify(req: RouterClassifyRequest):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         log.error(f"Router classify error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/compare")
@@ -54,4 +54,4 @@ async def router_compare(req: RouterClassifyRequest):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         log.error(f"Router compare error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

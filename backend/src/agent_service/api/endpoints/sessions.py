@@ -49,7 +49,7 @@ async def initialize_session():
         )
     except Exception as e:
         log.error(f"Session initialization error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to initialize session")
+        raise HTTPException(status_code=500, detail="Failed to initialize session") from e
 
 
 @router.get("/sessions")
@@ -60,7 +60,7 @@ async def list_active_sessions():
         return {"count": len(sessions), "sessions": sessions}
     except Exception as e:
         log.error(f"List sessions error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/verify/{session_id}")
@@ -75,7 +75,7 @@ async def verify_session(session_id: str):
 
         return {"session_id": sid, "exists": True}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/config/{session_id}")
@@ -97,7 +97,7 @@ async def get_session_config(session_id: str):
             "is_customized": bool(stored),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/config")
@@ -124,7 +124,7 @@ async def config_session(config: SessionConfig):
             "provider": config.provider or "auto-detected",
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.delete("/logout/{session_id}")
@@ -137,7 +137,7 @@ async def logout_session(session_id: str):
         log.info(f"Session {sid} logged out")
         return {"status": "logged_out", "session_id": sid, "message": "Session cleared."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Cost tracking endpoints
@@ -172,7 +172,7 @@ async def get_session_cost(session_id: str):
 
         return cost_data
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/sessions/{session_id}/cost/history")
@@ -196,7 +196,7 @@ async def get_session_cost_history(
 
         return {"session_id": sid, "history": history, "count": len(history)}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.delete("/sessions/{session_id}/cost")
@@ -216,7 +216,7 @@ async def reset_session_cost(session_id: str):
 
         return {"session_id": sid, "status": "reset", "message": "Cost tracking reset successfully"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/sessions/summary")
@@ -270,4 +270,4 @@ async def cleanup_corrupted_cost_keys():
         }
     except Exception as e:
         log.error(f"Cleanup failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

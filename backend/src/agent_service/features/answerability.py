@@ -20,7 +20,7 @@ from src.agent_service.core.config import (
     NBFC_ROUTER_EMBED_MODEL,
 )
 from src.agent_service.llm.client import get_embeddings
-from src.common.neo4j_mgr import Neo4jManager
+from src.common.neo4j_mgr import neo4j_mgr
 
 log = logging.getLogger("nbfc.answerability")
 
@@ -215,11 +215,11 @@ class QueryAnswerabilityClassifier:
         return 0.45 if _KB_HINT_RE.search(query or "") else 0.0
 
     @staticmethod
-    def _kb_vector_lookup(
+    async def _kb_vector_lookup(
         query_vector: np.ndarray,
     ) -> tuple[Optional[float], Optional[str], Optional[str]]:
         try:
-            rows = Neo4jManager.execute_read(
+            rows = await neo4j_mgr.execute_read(
                 """
                 CALL db.index.vector.queryNodes('question_embeddings', 1, $vector)
                 YIELD node, score
@@ -305,7 +305,7 @@ class QueryAnswerabilityClassifier:
         kb_error = None
         kb_vector_score = None
         if kb_available and query_vec is not None:
-            kb_vector_score, kb_top_question, kb_error = self._kb_vector_lookup(query_vec)
+            kb_vector_score, kb_top_question, kb_error = await self._kb_vector_lookup(query_vec)
 
         kb_heur = self._kb_heuristic_score(q) if kb_available else 0.0
         if kb_vector_score is not None:

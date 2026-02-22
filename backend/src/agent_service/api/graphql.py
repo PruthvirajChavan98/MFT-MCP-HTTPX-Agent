@@ -59,7 +59,7 @@ REASONING_KEYS = {"reasoning", "reasoning_effort", "include_reasoning"}
 def _to_float(x) -> float:
     try:
         return float(x)
-    except:
+    except Exception:
         return 0.0
 
 
@@ -70,7 +70,6 @@ class Query:
         self,
         provider: Optional[str] = None,
     ) -> List[ProviderCategory]:
-
         # Fetch all raw data from catalog service
         all_data = await model_service.get_cached_data()
 
