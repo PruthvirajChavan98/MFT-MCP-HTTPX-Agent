@@ -1,0 +1,83 @@
+---
+description: Python coding standards and backend conventions
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Python Backend Standards
+
+This project follows strict enterprise Python standards for security, type safety, and async performance.
+
+## Async First
+- All I/O operations must be asynchronous (`async def`, `await`).
+- Use `asyncio.Lock()` for shared resource protection (e.g., in `mcp_manager.py`).
+- Avoid blocking the main event loop with synchronous long-running tasks.
+
+## File Headers and Typing
+- Every Python file must begin with:
+  ```python
+  from __future__ import annotations
+  ```
+- Type hints are mandatory.
+- Use Python 3.11+ syntax for typing:
+  - `dict[str, Any]` instead of `Dict[str, Any]`
+  - `list[str]` instead of `List[str]`
+  - `T | None` instead of `Optional[T]` where possible, though `Optional` is acceptable.
+
+## Imports Structure
+- Order: Future, Stdlib, Third-party, First-party (`src.*`), Local (`.`).
+- Example:
+  ```python
+  from __future__ import annotations
+
+  import asyncio
+  import logging
+
+  from fastapi import FastAPI
+
+  from src.agent_service.core.config import PORT
+  from .local_module import MyClass
+  ```
+
+## Configuration & Secrets
+- Never call `os.getenv()` directly within business logic.
+- All configurations must be defined in `src.agent_service.core.config` and imported as constants.
+- Example:
+  ```python
+  # ❌ BAD
+  url = os.getenv("API_URL", "http://localhost")
+
+  # ✅ GOOD
+  from src.agent_service.core.config import API_URL
+  url = API_URL
+  ```
+
+## Logging
+- Never use `print()`. Use the built-in `logging` module.
+- Always initialize module-level loggers:
+  ```python
+  import logging
+  log = logging.getLogger(__name__)
+  ```
+- Prefer structured logging or context-rich messages, e.g.:
+  ```python
+  log.info(f"Connecting to service {service_id}...")
+  ```
+
+## Error Handling
+- Never use bare `except:` clauses.
+- Always specify at minimum `except Exception as e:`.
+- Log the error before re-raising.
+- For API endpoints, raise `fastapi.HTTPException`.
+- Use `raise NewException(...) from e` to chain exceptions and preserve tracebacks.
+- Example:
+  ```python
+  try:
+      await execute_query()
+  except ValueError as e:
+      log.warning(f"Invalid input: {e}")
+      raise HTTPException(status_code=400, detail=str(e)) from e
+  except Exception as e:
+      log.error(f"Execution failed: {e}")
+      raise HTTPException(status_code=500, detail="Internal server error") from e
+  ```

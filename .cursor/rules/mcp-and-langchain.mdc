@@ -1,0 +1,44 @@
+---
+description: MCP tool lifecycle, LangChain and LangGraph conventions
+globs: backend/src/**/*.py
+alwaysApply: false
+---
+
+# MCP and LangChain Conventions
+
+This project integrates FinTech tools via FastMCP, managed by a LangGraph agent.
+
+## MCP Tools
+- **Registration**: All MCP tools are registered using the `@mcp.tool(name="...", description=_d("..."))` decorator in `backend/src/mcp_service/server.py`.
+- **Descriptions**: Descriptions are centralized in `description_utils.py` and accessed via `_d()`. Do not hardcode lengthy descriptions in the tool decorator.
+- **Session ID Required**: Every tool must accept a `session_id: str` parameter. The agent automatically injects this parameter, but the schema must specify it.
+- **Session Touch**: Every tool must track activity by calling `_touch(session_id, "tool_name")`.
+- Example Tool:
+  ```python
+  @mcp.tool(name="generate_otp", description=_d("generate_otp"))
+  def generate_otp(user_input: str, session_id: str) -> str:
+      _touch(session_id, "generate_otp")
+      return get_auth(session_id).generate_otp(user_input)
+  ```
+
+## MCP Tool Injection (Agent Service)
+- Tools are filtered and built dynamically for users based on authentication state in `MCPManager.rebuild_tools_for_user()`.
+- Public/unauthenticated tools are listed in `PUBLIC_TOOLS` in `backend/src/agent_service/tools/mcp_manager.py`.
+- Tool schemas are reconstructed safely using Pydantic `create_model()`, automatically omitting the internal `session_id` parameter from the LLM-facing schema.
+
+## LangGraph Patterns
+- **Checkpointer**: Use the `AsyncRedisSaver` for LangGraph persistence.
+- **State Keys**: The primary state key is `messages`, which is a list of LLM message objects.
+- **Thread IDs**: The LangGraph `thread_id` strictly maps to the user's `session_id`.
+- **Streaming Execution**: Use `graph.astream_events()` with `version="v2"`.
+- Example Stream Loop:
+  ```python
+  event_stream = graph.astream_events(
+      stream_input,
+      {"configurable": {"thread_id": sid}},
+      version="v2",
+  )
+  async for event in event_stream:
+      # Filter and emit SSE events based on sse_formatter
+  ```
+- **Reasoning Fields**: For models like DeepSeek, custom additional reasoning fields (`reasoning_content`, `reasoning`) must be explicitly extracted and handled from the streaming chunks.

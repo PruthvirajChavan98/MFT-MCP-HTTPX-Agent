@@ -1,0 +1,36 @@
+---
+description: Infrastructure, Docker, Compose, and Deployment patterns
+globs: "{docker-compose*.yml,**/Dockerfile,**/Makefile,**/gunicorn.conf.py}"
+alwaysApply: false
+---
+
+# Docker and Deployment Patterns
+
+The service is containerized and managed using Docker Compose for various environments.
+
+## Docker Compose Configurations
+- **Environment Interpolation**: All `.yml` Compose files use a central `.env` file at the root of the repository for variable interpolation. Never hardcode secrets.
+- **Service Profiles**:
+  - *Core Services*: `redis`, `postgres`, `neo4j`, `mcp`, `agent`.
+  - *Monitoring Profile*: `prometheus`, `alertmanager`, `grafana`.
+  - *Edge Profile*: `cloudflared`.
+  - *Other*: `router_worker`, `geoip_updater`.
+- Ensure new services are defined with resource limits (CPU and memory) and explicit health checks in the production `docker-compose.yml`.
+
+## Local Setup & Validation
+- Local compose stack validation is critical before pushing changes.
+- Always use the Makefile targets:
+  - `make local-validate`: Validates syntax.
+  - `make localsetup`: Starts the core local stack and runs setup checks.
+  - `make localsetup-full`: Starts core + profiles (monitoring, router, etc.).
+- Run `make local-env-audit` to detect duplicate keys in environment files.
+
+## Dockerfiles
+- Prefer multi-stage builds.
+- The default package manager is `uv`. Ensure `uv` is installed early and used for `pip install`.
+- Explicitly copy `.env` dependencies, but never commit the actual `.env` containing secrets.
+
+## Gunicorn Production Server
+- The FastAPI service in production uses Gunicorn with Uvicorn workers.
+- Configuration is centralized in `backend/gunicorn.conf.py`.
+- Keep worker counts and timeout limits tuned according to deployment infrastructure.

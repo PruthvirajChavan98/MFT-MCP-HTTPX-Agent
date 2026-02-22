@@ -1,0 +1,56 @@
+---
+description: Global project architecture and conventions for the enterprise AI agent service
+alwaysApply: true
+---
+
+# Project Architecture & Global Conventions
+
+This project is a production enterprise AI agent service. The architecture is modular and highly asynchronous.
+
+## Monorepo Layout
+- `backend/src/agent_service/`: The main FastAPI agent service providing GraphQL, streaming, and API endpoints.
+- `backend/src/mcp_service/`: The FastMCP server providing FinTech tools.
+- `backend/src/common/`: Shared utilities and data structures.
+
+## Entry Points
+- **Agent Service**: `backend/src/main_agent.py` creates the FastAPI app. Runs on port 8000 via Uvicorn/Gunicorn.
+- **MCP Server**: `backend/src/main_mcp.py` runs the FastMCP server with SSE transport on port 8050.
+
+## Key Singletons & Patterns
+The project heavily relies on the Factory pattern and Singletons for shared resources:
+- `app_factory`: Configures and creates the FastAPI application.
+- `mcp_manager`: Manages MCP connections and dynamic tool lifecycles.
+- `config_manager`: Centralized Redis-based config manager.
+- `model_service`: Manages the LLM catalog.
+- `event_bus`: Handles internal async pub/sub events.
+
+## Dependency Management & Execution
+- **Package Manager**: Use `uv` (Astral), not standard `pip`.
+- **Commands**:
+  - Install dependencies: `uv sync`
+  - Run commands: `uv run <command>` (e.g., `uv run pytest`)
+
+## Configuration
+- Configuration is strictly centralized in `backend/src/agent_service/core/config.py`.
+- Config variables are read from `os.getenv()` ONCE in this file and exported as module-level constants.
+- **NEVER** call `os.getenv()` in business logic. Always import the constants from `core.config`.
+
+## Code Formatting & Quality
+- **Formatter**: Black (line-length = 100).
+- **Import Sorter**: isort (profile = "black").
+- **Linter**: Ruff.
+- **Type Checker**: mypy.
+- Target Python version is 3.11+.
+
+## Infrastructure & Makefile Commands
+- **Docker Compose**:
+  - `docker-compose.yml`: Production configuration.
+  - `docker-compose.local.yml`: Local development configuration.
+  - `docker-compose.uat.yml`: UAT configuration.
+- **Common Make Commands**:
+  - `make install`: Install prod dependencies via uv.
+  - `make dev`: Run API in dev mode (Uvicorn reload).
+  - `make test`: Run pytest suite.
+  - `make format`: Format code with Black, isort, and Ruff.
+  - `make quality`: Run CI formatting and linting checks.
+  - `make local-up` / `make localsetup`: Start and validate local Docker stack.

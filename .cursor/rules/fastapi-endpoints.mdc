@@ -1,0 +1,64 @@
+---
+description: FastAPI endpoint conventions, routing, and rate limiting
+globs: backend/src/agent_service/api/**/*.py
+alwaysApply: false
+---
+
+# FastAPI Endpoint Standards
+
+Endpoints in the agent service must follow strict patterns for security, routing, and schema validation.
+
+## Router Setup
+- Every endpoint module creates an `APIRouter` with a specific prefix and tags.
+- Example:
+  ```python
+  from fastapi import APIRouter
+  router = APIRouter(prefix="/agent", tags=["agent-stream"])
+  ```
+- All routers are centrally mounted in `AppFactory._mount_routers()` within `src.agent_service.core.app_factory.py`.
+
+## Security & Session Validation
+- Never trust raw session IDs from requests. Validate them immediately.
+- Use `session_utils`:
+  ```python
+  from src.agent_service.core.session_utils import session_utils
+  sid = session_utils.validate_session_id(request.session_id)
+  ```
+- Security headers are automatically applied globally by the `security_headers_middleware` in the app factory.
+
+## Rate Limiting (Production-Grade)
+- Rate limiting must be explicitly enforced on critical endpoints (especially streaming and auth).
+- Use `rate_limiter_manager`:
+  ```python
+  from src.agent_service.core.rate_limiter_manager import get_rate_limiter_manager, enforce_rate_limit
+
+  manager = get_rate_limiter_manager()
+  limiter = await manager.get_agent_stream_limiter()
+  identifier = f"session:{sid}"
+  await enforce_rate_limit(http_request, limiter, identifier)
+  ```
+
+## Request and Response Schemas
+- Define all payload schemas using Pydantic in `src.agent_service.core.schemas.py`.
+- Do not define ad-hoc dictionaries for complex requests. Use strongly typed Pydantic models.
+
+## Streaming (Server-Sent Events)
+- For endpoints that stream (like the LangGraph agent), use `EventSourceResponse` from `sse_starlette`.
+- Enforce the public SSE event contract using the `sse_formatter` helper:
+  - `reasoning`
+  - `tool_call`
+  - `token`
+  - `cost`
+  - `done`
+- Example:
+  ```python
+  from sse_starlette.sse import EventSourceResponse
+  from src.agent_service.core.streaming_utils import sse_formatter
+
+  async def event_generator():
+      yield sse_formatter.token_event("Hello")
+      yield sse_formatter.done_event()
+
+  return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})
+  ```
+- Do not expose internal LangGraph lifecycle events to clients unless explicitly enabled via `AGENT_STREAM_EXPOSE_INTERNAL_EVENTS`.
