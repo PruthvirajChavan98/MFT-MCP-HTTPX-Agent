@@ -1,4 +1,6 @@
 window.__RUNTIME_CONFIG__ = window.__RUNTIME_CONFIG__ || {
   API_BASE_URL: "/api",
   APP_ENV: "production",
+  FEATURE_ADMIN_ENTERPRISE_REDESIGN: "true",
+  FEATURE_ADMIN_KNOWLEDGE_BASE_ENTERPRISE: "true",
 };

@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from src.agent_service.core.config import (
     GROQ_API_KEYS,
     GROQ_BASE_URL,
@@ -50,7 +52,12 @@ def _coerce_score(value: Any) -> float:
     return min(1.0, max(0.0, score))
 
 
-def _default_eval_row(item: dict[str, Any]) -> dict[str, Any]:
+def _default_eval_row(
+    item: dict[str, Any],
+    *,
+    summary: str = "Evaluation parsing fallback applied.",
+    model: str | None = None,
+) -> dict[str, Any]:
     return {
         "eval_id": uuid.uuid4().hex,
         "evaluated_at": _utc_iso_now(),
@@ -59,8 +66,8 @@ def _default_eval_row(item: dict[str, Any]) -> dict[str, Any]:
         "helpfulness": 0.0,
         "faithfulness": 0.0,
         "policy_adherence": 0.0,
-        "summary": "Evaluation parsing fallback applied.",
-        "model": SHADOW_JUDGE_MODEL,
+        "summary": summary,
+        "model": model or SHADOW_JUDGE_MODEL,
     }
 
 
@@ -163,7 +170,29 @@ class ShadowJudgeWorker:
             return await self._call_groq(batch, SHADOW_JUDGE_MODEL)
         except Exception as primary_exc:  # noqa: BLE001
             log.warning("Primary shadow judge model failed, retrying fallback: %s", primary_exc)
-            return await self._call_groq(batch, SHADOW_JUDGE_MODEL_FALLBACK)
+            try:
+                return await self._call_groq(batch, SHADOW_JUDGE_MODEL_FALLBACK)
+            except httpx.HTTPStatusError as fallback_exc:
+                status_code = fallback_exc.response.status_code
+                if 400 <= status_code < 500:
+                    log.error(
+                        "Shadow judge fallback model rejected request (status=%s). "
+                        "Persisting default eval rows to prevent queue backlog.",
+                        status_code,
+                    )
+                    summary = (
+                        f"Shadow judge unavailable (HTTP {status_code}); "
+                        "default evaluation recorded."
+                    )
+                    return [
+                        _default_eval_row(
+                            item,
+                            summary=summary,
+                            model=SHADOW_JUDGE_MODEL_FALLBACK,
+                        )
+                        for item in batch
+                    ]
+                raise
 
     async def _persist_rows(self, rows: list[dict[str, Any]]) -> None:
         if not rows:
@@ -176,9 +205,26 @@ class ShadowJudgeWorker:
         batch = await self.queue.pop_batch(limit=self.batch_size)
         if not batch:
             return 0
-        rows = await self._evaluate_batch(batch)
-        await self._persist_rows(rows)
-        return len(rows)
+        try:
+            rows = await self._evaluate_batch(batch)
+            await self._persist_rows(rows)
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            if hasattr(self.queue, "requeue_or_dead_letter_batch"):
+                try:
+                    requeued, dead_lettered = await self.queue.requeue_or_dead_letter_batch(  # type: ignore[attr-defined]
+                        batch,
+                        reason=str(exc),
+                    )
+                    log.warning(
+                        "Shadow judge batch failed; requeued=%s dead_lettered=%s error=%s",
+                        requeued,
+                        dead_lettered,
+                        exc,
+                    )
+                except Exception as queue_exc:  # noqa: BLE001
+                    log.exception("Failed to requeue/dead-letter shadow judge batch: %s", queue_exc)
+            raise
 
     async def run_forever(self) -> None:
         await neo4j_mgr.connect()
@@ -204,3 +250,7 @@ class ShadowJudgeWorker:
 async def run_worker() -> None:
     worker = ShadowJudgeWorker()
     await worker.run_forever()
+
+
+if __name__ == "__main__":
+    asyncio.run(run_worker())

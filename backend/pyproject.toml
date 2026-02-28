@@ -44,8 +44,16 @@ toon-format = { git = "https://github.com/toon-format/toon-python.git" }
 
 [dependency-groups]
 dev = [
+    "mypy>=1.8.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.0.0",
     "pre-commit>=3.5.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
 
 # =============================================================================
 # Code Formatting & Linting (Production Grade)

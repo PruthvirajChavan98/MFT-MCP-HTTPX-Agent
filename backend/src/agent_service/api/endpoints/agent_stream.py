@@ -32,8 +32,9 @@ from src.agent_service.core.streaming_utils import StreamingState, sse_formatter
 from src.agent_service.eval_store.shadow_queue import trace_queue
 from src.agent_service.features.kb_first import kb_first_payload
 from src.agent_service.features.nbfc_router import nbfc_router_service
+from src.agent_service.features.runtime_trace_store import persist_runtime_trace
 from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_shadow_eval_commit
-from src.agent_service.security.inline_guard import evaluate_prompt_safety
+from src.agent_service.security.inline_guard import evaluate_prompt_safety_decision
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent-stream"])
@@ -184,6 +185,27 @@ def _extract_text_from_event_data(data: Any) -> str:
             return _message_content_to_text(data.get("input"))
 
     return _message_content_to_text(data)
+
+
+def _extract_final_response_from_graph_state(graph_output: Any) -> str:
+    if graph_output is None:
+        return ""
+    if isinstance(graph_output, str):
+        return graph_output
+    if hasattr(graph_output, "content"):
+        return _message_content_to_text(getattr(graph_output, "content", ""))
+    if isinstance(graph_output, dict):
+        messages = graph_output.get("messages")
+        if isinstance(messages, list) and messages:
+            last = messages[-1]
+            if hasattr(last, "content"):
+                return _message_content_to_text(getattr(last, "content", ""))
+            if isinstance(last, dict):
+                return _message_content_to_text(last.get("content"))
+            return _message_content_to_text(last)
+        if "response" in graph_output:
+            return _message_content_to_text(graph_output.get("response"))
+    return _message_content_to_text(graph_output)
 
 
 def _reasoning_text(value: Any) -> str:
@@ -440,18 +462,54 @@ async def stream_agent(request: AgentRequest, http_request: Request):
         )
         collector.case_id = app_id
 
-        prompt_is_safe = await evaluate_prompt_safety(request.question)
-        if not prompt_is_safe:
+        inline_guard_decision = await evaluate_prompt_safety_decision(request.question)
+        collector.set_inline_guard_decision(inline_guard_decision.as_dict())
+        log.info(
+            "Inline guard evaluated session_id=%s trace_id=%s decision=%s reason=%s risk_score=%.2f",
+            sid,
+            collector.trace_id,
+            inline_guard_decision.decision,
+            inline_guard_decision.reason_code,
+            inline_guard_decision.risk_score,
+        )
+
+        if not inline_guard_decision.allow and inline_guard_decision.decision == "block":
 
             async def blocked_event_generator():
+                blocked_err = "Prompt violates security policy"
+                collector.on_done(final_output="", error=blocked_err)
+                persisted = await persist_runtime_trace(collector)
+                if not persisted:
+                    log.warning(
+                        "Runtime trace persistence failed for blocked prompt trace_id=%s",
+                        collector.trace_id,
+                    )
+                log.info(
+                    "Stream terminal session_id=%s trace_id=%s status=blocked persisted=%s inline_guard_decision=%s inline_guard_reason=%s",
+                    sid,
+                    collector.trace_id,
+                    persisted,
+                    inline_guard_decision.decision,
+                    inline_guard_decision.reason_code,
+                )
+                yield sse_formatter.trace_event(collector.trace_id)
                 yield {
                     "event": "error",
-                    "data": json.dumps({"error": "Prompt violates security policy"}),
+                    "data": json.dumps({"message": blocked_err}),
                 }
                 yield sse_formatter.done_event()
 
             return EventSourceResponse(
                 blocked_event_generator(), headers={"Cache-Control": "no-cache"}
+            )
+
+        if inline_guard_decision.decision == "degraded_allow":
+            log.warning(
+                "Inline guard degraded allow session_id=%s trace_id=%s reason=%s risk_score=%.2f",
+                sid,
+                collector.trace_id,
+                inline_guard_decision.reason_code,
+                inline_guard_decision.risk_score,
             )
 
         def schedule_shadow_trace_enqueue(latest_output: str) -> None:
@@ -513,12 +571,39 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         metadata={"endpoint": "/agent/stream", "cached": True},
                     )
 
+                    persisted = await persist_runtime_trace(collector)
+                    if not persisted:
+                        log.warning(
+                            "Runtime trace persistence failed for KB stream trace_id=%s",
+                            collector.trace_id,
+                        )
+                    log.info(
+                        "Stream terminal session_id=%s trace_id=%s status=success source=kb persisted=%s",
+                        sid,
+                        collector.trace_id,
+                        persisted,
+                    )
                     yield sse_formatter.trace_event(collector.trace_id)
                     yield sse_formatter.done_event()
 
                 except Exception as e:
                     collector.on_done(final_output="", error=str(e))
+                    persisted = await persist_runtime_trace(collector)
+                    if not persisted:
+                        log.warning(
+                            "Runtime trace persistence failed for KB stream error trace_id=%s",
+                            collector.trace_id,
+                        )
+                    log.info(
+                        "Stream terminal session_id=%s trace_id=%s status=error source=kb persisted=%s error=%s",
+                        sid,
+                        collector.trace_id,
+                        persisted,
+                        str(e),
+                    )
+                    yield sse_formatter.trace_event(collector.trace_id)
                     yield sse_formatter.error_event(str(e))
+                    yield sse_formatter.done_event()
                 finally:
                     if router_task is not None:
                         try:
@@ -695,6 +780,22 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     finally:
                         router_handled = True
 
+                if not final_output:
+                    try:
+                        cfg = {"configurable": {"thread_id": sid}}
+                        current_state = await graph.aget_state(cfg)
+                        fallback_text = _extract_final_response_from_graph_state(
+                            current_state.values if current_state is not None else None
+                        )
+                    except Exception as state_err:
+                        log.warning("Failed to derive final fallback stream output: %s", state_err)
+                        fallback_text = ""
+
+                    if fallback_text:
+                        final_output = fallback_text
+                        collector.on_token(fallback_text)
+                        yield sse_formatter.token_event(fallback_text)
+
                 collector.on_done(final_output=final_output, error=None)
 
                 yield sse_formatter.cost_event(
@@ -714,26 +815,77 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     metadata={"endpoint": "/agent/stream", "stream_version": "events_v2"},
                 )
 
-                if getattr(collector, "reasoning", ""):
-                    try:
-                        cfg = {"configurable": {"thread_id": sid}}
-                        current_state = await graph.aget_state(cfg)
-                        msgs = current_state.values.get("messages", [])
-                        if msgs and getattr(msgs[-1], "type", "") == "ai":
-                            # Mutate additional_kwargs to preserve reasoning natively in Checkpointer
-                            msgs[-1].additional_kwargs["reasoning"] = collector.reasoning
-                            await graph.aupdate_state(cfg, {"messages": [msgs[-1]]})
-                    except Exception as store_err:
-                        log.warning(f"Failed to save reasoning to checkpointer: {store_err}")
+                try:
+                    cfg = {"configurable": {"thread_id": sid}}
+                    current_state = await graph.aget_state(cfg)
+                    msgs = current_state.values.get("messages", [])
+                    if msgs and getattr(msgs[-1], "type", "") == "ai":
+                        # Persist canonical per-turn metadata for admin transcript rendering.
+                        add_kwargs = getattr(msgs[-1], "additional_kwargs", None)
+                        if not isinstance(add_kwargs, dict):
+                            add_kwargs = {}
+                            msgs[-1].additional_kwargs = add_kwargs
 
+                        if getattr(collector, "reasoning", ""):
+                            add_kwargs["reasoning"] = collector.reasoning
+
+                        add_kwargs["trace_id"] = collector.trace_id
+                        add_kwargs["provider"] = resources.provider
+                        add_kwargs["model"] = resources.model_name
+                        add_kwargs["total_tokens"] = int(
+                            (state.cumulative_usage or {}).get("total_tokens", 0) or 0
+                        )
+                        add_kwargs["cost"] = {
+                            "total_cost": float(state.total_cost or 0.0),
+                            "usage": state.cumulative_usage or {},
+                            "model": resources.model_name,
+                            "provider": resources.provider,
+                            "currency": "USD",
+                        }
+
+                        await graph.aupdate_state(cfg, {"messages": [msgs[-1]]})
+                except Exception as store_err:
+                    log.warning(
+                        "Failed to save assistant metadata to checkpointer: %s",
+                        store_err,
+                    )
+
+                persisted = await persist_runtime_trace(collector)
+                if not persisted:
+                    log.warning(
+                        "Runtime trace persistence failed for stream trace_id=%s",
+                        collector.trace_id,
+                    )
+                log.info(
+                    "Stream terminal session_id=%s trace_id=%s status=success persisted=%s tokens=%s",
+                    sid,
+                    collector.trace_id,
+                    persisted,
+                    len(final_output),
+                )
                 yield sse_formatter.trace_event(collector.trace_id)
                 yield sse_formatter.done_event()
 
             except Exception as e:
                 err = str(e)
                 log.error(f"Stream error: {err}")
-                collector.on_done(final_output="", error=err)
+                collector.on_done(final_output=final_output, error=err)
+                persisted = await persist_runtime_trace(collector)
+                if not persisted:
+                    log.warning(
+                        "Runtime trace persistence failed for stream error trace_id=%s",
+                        collector.trace_id,
+                    )
+                log.info(
+                    "Stream terminal session_id=%s trace_id=%s status=error persisted=%s error=%s",
+                    sid,
+                    collector.trace_id,
+                    persisted,
+                    err,
+                )
+                yield sse_formatter.trace_event(collector.trace_id)
                 yield sse_formatter.error_event(err)
+                yield sse_formatter.done_event()
             finally:
                 asyncio.create_task(
                     maybe_shadow_eval_commit(

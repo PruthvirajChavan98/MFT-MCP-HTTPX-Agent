@@ -1,5 +1,5 @@
 .PHONY: \
-	help install install-dev dev test lint format format-check quality pre-commit clean context-docs context-docs-check \
+	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard \
 	docker-build docker-up docker-down docker-logs docker-restart deploy \
 	local-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
@@ -38,6 +38,8 @@ help:
 	@echo "  pre-commit          - Run pre-commit hooks on all files"
 	@echo "  context-docs        - Generate leaf `_context.md` files and root `_main_context.md`"
 	@echo "  context-docs-check  - Verify context docs are up-to-date (CI mode)"
+	@echo "  backfill-question-categories - Backfill canonical business categories on EvalTrace nodes"
+	@echo "  backfill-inline-guard - Backfill canonical inline guard fields on EvalTrace nodes"
 	@echo ""
 	@echo "Docker (main compose):"
 	@echo "  docker-build        - Build images from $(COMPOSE_FILE)"
@@ -84,13 +86,29 @@ dev:
 	uv run uvicorn src.main_agent:app --reload --host 0.0.0.0 --port 8000
 
 test:
-	uv run pytest tests/ -v
+	uv run python -m pytest tests/ -v
+
+test-deprecation:
+	PYTHONWARNINGS='error::DeprecationWarning,error::PendingDeprecationWarning' uv run python -m pytest tests/ -v
+
+verify-deprecation: test-deprecation
+	@echo "Deprecation verification passed"
+
+backfill-question-categories:
+	uv run python -m scripts.backfill_question_categories --apply --batch-size $${BATCH_SIZE:-500}
+
+backfill-inline-guard:
+	uv run python -m scripts.backfill_inline_guard_fields --apply --batch-size $${BATCH_SIZE:-500}
 
 lint:
 	@echo "Running Ruff linter..."
 	ruff check .
 	@echo "Running mypy type checker..."
-	uv run mypy src/ || true
+	uv run mypy --explicit-package-bases --follow-imports=skip --ignore-missing-imports \
+		src/agent_service/api/admin.py \
+		src/agent_service/features/knowledge_base_repo.py \
+		src/agent_service/features/knowledge_base_service.py \
+		src/agent_service/features/faq_pdf_parser.py
 
 format:
 	@echo "Formatting code with Black..."

@@ -1,6 +1,8 @@
 type RuntimeConfig = {
   API_BASE_URL?: string
   APP_ENV?: string
+  FEATURE_ADMIN_ENTERPRISE_REDESIGN?: string | boolean
+  FEATURE_ADMIN_KNOWLEDGE_BASE_ENTERPRISE?: string | boolean
 }
 
 declare global {
@@ -11,6 +13,7 @@ declare global {
 
 const runtimeApiBase = window.__RUNTIME_CONFIG__?.API_BASE_URL?.trim()
 export const API_BASE_URL = runtimeApiBase || '/api'
+export const RUNTIME_CONFIG: RuntimeConfig = window.__RUNTIME_CONFIG__ ?? {}
 
 export class ApiError extends Error {
   status: number
@@ -49,6 +52,33 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+function resolveErrorMessage(parsed: unknown, status: number): string {
+  if (typeof parsed === 'string' && parsed.trim()) return parsed
+  if (typeof parsed !== 'object' || parsed === null) return `Request failed (${status})`
+
+  const payload = parsed as {
+    message?: string
+    detail?: string | { message?: string; detail?: string }
+  }
+  if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
+  if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail.trim()
+  if (payload.detail && typeof payload.detail === 'object') {
+    if (
+      typeof payload.detail.message === 'string' &&
+      payload.detail.message.trim()
+    ) {
+      return payload.detail.message.trim()
+    }
+    if (
+      typeof payload.detail.detail === 'string' &&
+      payload.detail.detail.trim()
+    ) {
+      return payload.detail.detail.trim()
+    }
+  }
+  return `Request failed (${status})`
+}
+
 interface RequestConfig {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   path: string
@@ -71,10 +101,7 @@ export async function requestJson<T>(config: RequestConfig): Promise<T> {
 
   const parsed = await parseBody(response)
   if (!response.ok) {
-    const message =
-      typeof parsed === 'string'
-        ? parsed
-        : (parsed as { detail?: string })?.detail ?? `Request failed (${response.status})`
+    const message = resolveErrorMessage(parsed, response.status)
     throw new ApiError(message, response.status, parsed)
   }
 

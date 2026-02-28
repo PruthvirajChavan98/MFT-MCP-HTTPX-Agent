@@ -33,4 +33,8 @@ export interface ChatMessage {
   cost?: CostEvent | null
   router?: Record<string, unknown> | null
   traceId?: string
+  followUps?: string[]
+  provider?: string
+  model?: string
+  totalTokens?: number
 }

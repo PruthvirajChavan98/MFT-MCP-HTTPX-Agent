@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_core.messages import RemoveMessage
 
 from src.agent_service.core.config import KEEP_LAST
+from src.agent_service.core.session_utils import valid_session_id
+from src.agent_service.core.utils import normalize_result as core_normalize_result
 
 
 def keep_only_last_n_messages(state: dict, _config: dict) -> dict[str, list[RemoveMessage]]:
@@ -24,3 +28,18 @@ def keep_only_last_n_messages(state: dict, _config: dict) -> dict[str, list[Remo
         if msg_id is not None:
             to_remove.append(RemoveMessage(id=str(msg_id)))
     return {"messages": to_remove}
+
+
+def normalize_result_compat(result: Any) -> Any:
+    """Compatibility wrapper for modules importing from src.agent_service.utils."""
+    return core_normalize_result(result)
+
+
+# Keep legacy import paths stable.
+normalize_result = normalize_result_compat
+
+__all__ = [
+    "keep_only_last_n_messages",
+    "normalize_result",
+    "valid_session_id",
+]

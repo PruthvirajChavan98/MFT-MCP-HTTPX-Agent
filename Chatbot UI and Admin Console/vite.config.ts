@@ -20,7 +20,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             'router-vendor': ['react-router'],
-            'react-vendor': ['react', 'react-dom'],
             'query-vendor': ['@tanstack/react-query', '@tanstack/react-query-devtools'],
             'charts-vendor': ['recharts'],
             'mui-vendor': ['@emotion/react', '@emotion/styled', '@mui/icons-material', '@mui/material'],

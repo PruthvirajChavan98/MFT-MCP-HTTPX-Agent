@@ -39,6 +39,8 @@ SHADOW_EVAL_ENABLED = (os.getenv("SHADOW_EVAL_ENABLED") or "0").strip() == "1"
 SHADOW_EVAL_SAMPLE_RATE = float((os.getenv("SHADOW_EVAL_SAMPLE_RATE") or "0.05").strip())
 SHADOW_EVAL_MAX_PER_MIN = int((os.getenv("SHADOW_EVAL_MAX_PER_MIN") or "20").strip())
 SHADOW_EVAL_CAPTURE = (os.getenv("SHADOW_EVAL_CAPTURE") or "light").strip().lower()
+# Runtime trace capture is independent of sampled shadow eval.
+RUNTIME_TRACE_CAPTURE = (os.getenv("RUNTIME_TRACE_CAPTURE") or "full").strip().lower()
 
 # Judge Settings
 JUDGE_REASONING_EFFORT = os.getenv("JUDGE_REASONING_EFFORT", "low")
@@ -182,6 +184,7 @@ class ShadowEvalCollector:
     # Optional fields
     case_id: Optional[str] = None
     _router_outcome: Optional[Dict[str, Any]] = None
+    _inline_guard_decision: Optional[Dict[str, Any]] = None
 
     def __init__(
         self,
@@ -221,10 +224,15 @@ class ShadowEvalCollector:
         self.error = None
         self.status = "success"
         self._router_outcome = None
+        self._inline_guard_decision = None
 
     def set_router_outcome(self, outcome: Dict[str, Any]) -> None:
         """Store the router result to be saved with the trace."""
         self._router_outcome = outcome
+
+    def set_inline_guard_decision(self, decision: Dict[str, Any]) -> None:
+        """Store inline guard decision metadata on the trace."""
+        self._inline_guard_decision = decision
 
     def _next_seq(self) -> int:
         self._seq += 1
@@ -265,12 +273,12 @@ class ShadowEvalCollector:
 
     # ---------- event helpers ----------
     def on_reasoning(self, token: str) -> None:
-        if SHADOW_EVAL_CAPTURE == "full":
+        if RUNTIME_TRACE_CAPTURE == "full":
             self._add_event("reasoning_token", "reasoning_token", text=token)
 
     def on_token(self, token: str) -> None:
         self._append_final(token)
-        if SHADOW_EVAL_CAPTURE == "full":
+        if RUNTIME_TRACE_CAPTURE == "full":
             self._add_event("token", "token", text=token)
 
     def on_tool_start(self, tool: str, tool_input: Any) -> None:
@@ -315,12 +323,19 @@ class ShadowEvalCollector:
             "error": self.error,
             "inputs": {"question": self.question},
             "final_output": final_output,
-            "tags": {"shadow_eval": True, "capture": SHADOW_EVAL_CAPTURE},
+            "tags": {
+                "runtime_trace": True,
+                "runtime_capture": RUNTIME_TRACE_CAPTURE,
+                "shadow_eval_capture": SHADOW_EVAL_CAPTURE,
+            },
             "meta": {
                 "system_prompt": self.system_prompt[:500],
                 "history_len": len(self.chat_history),
             },
         }
+
+        if self._inline_guard_decision:
+            trace_data["meta"]["inline_guard"] = self._inline_guard_decision
 
         # Bake Router Result directly into Trace
         if self._router_outcome:

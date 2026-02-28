@@ -1,7 +1,11 @@
-import { lazy } from 'react'
+import { createElement, lazy } from 'react'
 import { createBrowserRouter } from 'react-router'
-import { LandingPage } from './components/LandingPage'
+import { RouteErrorBoundary } from './components/RouteErrorBoundary'
 
+const LandingPage = lazy(async () => {
+  const module = await import('./components/LandingPage')
+  return { default: module.LandingPage }
+})
 const AdminLayout = lazy(async () => {
   const module = await import('./components/admin/AdminLayout')
   return { default: module.AdminLayout }
@@ -55,10 +59,12 @@ export const router = createBrowserRouter([
   {
     path: '/',
     Component: LandingPage,
+    errorElement: createElement(RouteErrorBoundary),
   },
   {
     path: '/admin',
     Component: AdminLayout,
+    errorElement: createElement(RouteErrorBoundary),
     children: [
       { index: true, Component: Dashboard },
       { path: 'knowledge-base', Component: KnowledgeBase },

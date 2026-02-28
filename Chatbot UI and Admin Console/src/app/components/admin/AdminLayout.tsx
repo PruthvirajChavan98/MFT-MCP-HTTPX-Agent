@@ -72,7 +72,7 @@ function AdminShell() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const missingKeys = !auth.adminKey || !auth.openrouterKey;
+  const missingAdminKey = !auth.adminKey.trim();
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
@@ -138,10 +138,10 @@ function AdminShell() {
             {/* Keys Popover */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all text-xs font-semibold ${missingKeys ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                <button className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all text-xs font-semibold ${missingAdminKey ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
                   <Key size={14} />
                   <span>API Keys</span>
-                  {missingKeys && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
+                  {missingAdminKey && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl">
@@ -149,10 +149,10 @@ function AdminShell() {
                   <h4 className="font-semibold text-sm text-slate-900">Authentication</h4>
                   <p className="text-xs text-slate-500">Required headers for accessing production backend endpoints.</p>
                 </div>
-                {missingKeys && (
+                {missingAdminKey && (
                   <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
                     <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                    <p>You must provide at least an Admin Key and an LLM Provider Key to load dashboard data.</p>
+                    <p>Admin API key is required for admin analytics endpoints. Provider keys are only required for model-dependent actions.</p>
                   </div>
                 )}
                 <KeyInput label="Admin API Key (X-Admin-Key)" value={auth.adminKey} onChange={auth.setAdminKey} />

@@ -53,6 +53,18 @@ class EvalNeo4jStore:
                 "CREATE INDEX evaltrace_model IF NOT EXISTS FOR (t:EvalTrace) ON (t.model)"
             )
             await session.run(
+                "CREATE INDEX evaltrace_question_category IF NOT EXISTS FOR (t:EvalTrace) ON (t.question_category)"
+            )
+            await session.run(
+                "CREATE INDEX evaltrace_inline_guard_decision IF NOT EXISTS FOR (t:EvalTrace) ON (t.inline_guard_decision)"
+            )
+            await session.run(
+                "CREATE INDEX evaltrace_inline_guard_risk_score IF NOT EXISTS FOR (t:EvalTrace) ON (t.inline_guard_risk_score)"
+            )
+            await session.run(
+                "CREATE INDEX evaltrace_router_reason IF NOT EXISTS FOR (t:EvalTrace) ON (t.router_reason)"
+            )
+            await session.run(
                 "CREATE INDEX evalevent_trace_id IF NOT EXISTS FOR (e:EvalEvent) ON (e.trace_id)"
             )
             await session.run(
@@ -110,6 +122,18 @@ class EvalNeo4jStore:
             "final_output": trace.get("final_output"),
             "tags_json": _json(trace.get("tags") or {}),
             "meta_json": _json(trace.get("meta") or {}),
+            "question_category": trace.get("question_category"),
+            "question_category_confidence": trace.get("question_category_confidence"),
+            "question_category_source": trace.get("question_category_source"),
+            "inline_guard_decision": trace.get("inline_guard_decision"),
+            "inline_guard_reason_code": trace.get("inline_guard_reason_code"),
+            "inline_guard_risk_score": trace.get("inline_guard_risk_score"),
+            "router_backend": trace.get("router_backend"),
+            "router_sentiment": trace.get("router_sentiment"),
+            "router_sentiment_score": trace.get("router_sentiment_score"),
+            "router_override": trace.get("router_override"),
+            "router_reason": trace.get("router_reason"),
+            "router_reason_score": trace.get("router_reason_score"),
         }
 
         q = """
@@ -129,6 +153,18 @@ class EvalNeo4jStore:
           t.final_output = $final_output,
           t.tags_json = $tags_json,
           t.meta_json = $meta_json,
+          t.question_category = $question_category,
+          t.question_category_confidence = $question_category_confidence,
+          t.question_category_source = $question_category_source,
+          t.inline_guard_decision = $inline_guard_decision,
+          t.inline_guard_reason_code = $inline_guard_reason_code,
+          t.inline_guard_risk_score = $inline_guard_risk_score,
+          t.router_backend = $router_backend,
+          t.router_sentiment = $router_sentiment,
+          t.router_sentiment_score = $router_sentiment_score,
+          t.router_override = $router_override,
+          t.router_reason = $router_reason,
+          t.router_reason_score = $router_reason_score,
           t.updated_at = datetime()
         """
         async with neo4j_mgr._driver.session() as session:

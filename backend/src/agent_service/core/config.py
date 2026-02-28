@@ -104,6 +104,7 @@ AGENT_STREAM_EXPOSE_REASONING = os.getenv("AGENT_STREAM_EXPOSE_REASONING", "true
     "true",
     "yes",
 )
+ADMIN_CURSOR_APIS_V2 = os.getenv("ADMIN_CURSOR_APIS_V2", "true").lower() in ("1", "true", "yes")
 
 # --- JUDGE CONFIGURATION ---
 JUDGE_MODEL_NAME = os.getenv("JUDGE_MODEL_NAME", "openai/gpt-4o")
@@ -226,13 +227,19 @@ PROMETHEUS_METRICS_ENABLED = os.getenv("PROMETHEUS_METRICS_ENABLED", "true").low
 )
 
 # =============================================================================
+# KNOWLEDGE BASE (FAQ INGEST)
+# =============================================================================
+KB_FAQ_BATCH_MAX_ITEMS = int(os.getenv("KB_FAQ_BATCH_MAX_ITEMS", "1000"))
+KB_FAQ_PDF_MAX_BYTES = int(os.getenv("KB_FAQ_PDF_MAX_BYTES", str(10 * 1024 * 1024)))
+
+# =============================================================================
 # INLINE PROMPT GUARDRAILS
 # =============================================================================
 INLINE_GUARD_ENABLED = os.getenv("INLINE_GUARD_ENABLED", "true").lower() in ("1", "true", "yes")
 INLINE_GUARD_SIMILARITY_THRESHOLD = float(os.getenv("INLINE_GUARD_SIMILARITY_THRESHOLD", "0.85"))
-INLINE_GUARD_TOTAL_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_TOTAL_TIMEOUT_MS", "1200"))
-INLINE_GUARD_VECTOR_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_VECTOR_TIMEOUT_MS", "250"))
-INLINE_GUARD_GROQ_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_GROQ_TIMEOUT_MS", "900"))
+INLINE_GUARD_TOTAL_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_TOTAL_TIMEOUT_MS", "3200"))
+INLINE_GUARD_VECTOR_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_VECTOR_TIMEOUT_MS", "1200"))
+INLINE_GUARD_GROQ_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_GROQ_TIMEOUT_MS", "2200"))
 INLINE_GUARD_PROMPT_GUARD_MODEL = os.getenv(
     "INLINE_GUARD_PROMPT_GUARD_MODEL", "meta-llama/llama-guard-4-12b"
 ).strip()
@@ -258,6 +265,9 @@ SHARED_HTTP_TIMEOUT_POOL_SECONDS = float(os.getenv("SHARED_HTTP_TIMEOUT_POOL_SEC
 # =============================================================================
 SHADOW_TRACE_QUEUE_KEY = os.getenv("SHADOW_TRACE_QUEUE_KEY", "agent:shadow:trace_queue").strip()
 SHADOW_TRACE_QUEUE_MAXLEN = int(os.getenv("SHADOW_TRACE_QUEUE_MAXLEN", "50000"))
+SHADOW_TRACE_DLQ_KEY = os.getenv("SHADOW_TRACE_DLQ_KEY", "agent:shadow:trace_dlq").strip()
+SHADOW_TRACE_QUEUE_DLQ_MAXLEN = int(os.getenv("SHADOW_TRACE_QUEUE_DLQ_MAXLEN", "20000"))
+SHADOW_TRACE_QUEUE_MAX_RETRIES = int(os.getenv("SHADOW_TRACE_QUEUE_MAX_RETRIES", "3"))
 SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS = float(
     os.getenv("SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS", "0.25")
 )

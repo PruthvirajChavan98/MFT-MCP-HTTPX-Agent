@@ -5,10 +5,16 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b && vite build",
+    "build:deprecation-check": "NODE_OPTIONS='--throw-deprecation --trace-deprecation --trace-warnings' npm run build",
+    "build:warning-check": "node ./scripts/verify-build-warnings.mjs",
+    "check:kb-no-any": "node ./scripts/check-kb-no-any.mjs",
     "dev": "vite",
     "preview": "vite preview",
+    "test:deprecation-check": "NODE_OPTIONS='--throw-deprecation --trace-deprecation --trace-warnings' npm run test",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:deprecation": "npm run test:deprecation-check && npm run build:deprecation-check",
+    "verify:quality": "npm run typecheck && npm run check:kb-no-any && npm run test && npm run verify:deprecation && npm run build:warning-check"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

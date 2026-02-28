@@ -18,6 +18,14 @@ interface SessionInitResponse {
   provider: string
 }
 
+interface ErrorEventPayload {
+  message?: string
+}
+
+interface TraceEventPayload {
+  trace_id?: string
+}
+
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
@@ -180,7 +188,10 @@ export function useChatStream() {
       abortRef.current = abort
       setIsStreaming(true)
 
-      let sawToken = false
+      let hadToken = false
+      let hadError = false
+      let hadDone = false
+      let hadTrace = false
 
       try {
         await streamSse(
@@ -198,7 +209,7 @@ export function useChatStream() {
             onEvent: (eventName, data, parsed) => {
               switch (eventName) {
                 case 'token':
-                  sawToken = true
+                  hadToken = true
                   appendAssistant('content', data)
                   break
                 case 'reasoning':
@@ -229,44 +240,78 @@ export function useChatStream() {
                   break
                 case 'trace':
                   if (parsed && typeof parsed === 'object' && 'trace_id' in parsed) {
+                    const payload = parsed as TraceEventPayload
+                    if (!payload.trace_id?.trim()) break
+                    hadTrace = true
                     patchAssistant((last) => ({
                       ...last,
-                      traceId: (parsed as { trace_id: string }).trace_id,
+                      traceId: payload.trace_id,
                     }))
                   }
                   break
                 case 'error':
-                  patchAssistant((last) => ({
-                    ...last,
-                    status: 'error',
-                    content:
-                      last.content || (typeof data === 'string' && data ? data : 'Stream error'),
-                  }))
-                  setError(typeof data === 'string' && data ? data : 'Stream error')
+                  hadError = true
+                  hadDone = true
+                  {
+                    const payload = parsed as ErrorEventPayload | undefined
+                    const parsedMessage =
+                      payload && typeof payload === 'object' && payload.message?.trim()
+                        ? payload.message.trim()
+                        : ''
+
+                    const dataMessage = (() => {
+                      if (typeof data !== 'string' || !data.trim()) return ''
+                      const parsedData = parsed as { message?: string } | undefined
+                      if (parsedData && typeof parsedData.message === 'string' && parsedData.message.trim()) {
+                        return parsedData.message.trim()
+                      }
+                      return data
+                    })()
+
+                    const message =
+                      parsedMessage ||
+                      dataMessage ||
+                      'Stream error'
+
+                    patchAssistant((last) => ({
+                      ...last,
+                      status: 'error',
+                      content: last.content || message,
+                    }))
+                    setError(message)
+                  }
                   break
                 case 'done':
-                  patchAssistant((last) => ({ ...last, status: 'done' }))
+                  hadDone = true
+                  patchAssistant((last) => ({ ...last, status: last.status === 'error' ? 'error' : 'done' }))
                   break
               }
             },
           },
         )
 
-        patchAssistant((last) => ({
-          ...last,
-          status: last.status === 'error' ? 'error' : 'done',
-        }))
-
-        if (!sawToken) {
-          const fallback = await requestJson<{ response: string }>({
-            method: 'POST',
-            path: '/agent/query',
-            body: { session_id: sessionId, question: trimmed },
-          })
+        if (!hadDone) {
           patchAssistant((last) => ({
             ...last,
-            content: fallback.response,
-            status: 'done',
+            status: last.status === 'error' ? 'error' : 'done',
+          }))
+        }
+
+        if (!hadToken && !hadError) {
+          const streamContractError = 'Streaming completed without response tokens.'
+          patchAssistant((last) => ({
+            ...last,
+            status: 'error',
+            content: last.content || streamContractError,
+          }))
+          setError(streamContractError)
+          hadError = true
+        }
+
+        if (!hadTrace && hadError) {
+          patchAssistant((last) => ({
+            ...last,
+            status: 'error',
           }))
         }
 
@@ -276,7 +321,11 @@ export function useChatStream() {
         if (err.name === 'AbortError') {
           patchAssistant((last) => ({ ...last, status: 'done' }))
         } else {
-          patchAssistant((last) => ({ ...last, status: 'error' }))
+          patchAssistant((last) => ({
+            ...last,
+            status: 'error',
+            content: last.content || err.message,
+          }))
           setError(err.message)
         }
       } finally {

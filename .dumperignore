@@ -6,3 +6,6 @@ Chatbot UI and Admin Console/dist
 Chatbot UI and Admin Console/.vite
 docker-compose.prod.snapshot.zip
 backend/notebook.ipynb
+.cursor/
+.ruff_cache
+.mypy_cache

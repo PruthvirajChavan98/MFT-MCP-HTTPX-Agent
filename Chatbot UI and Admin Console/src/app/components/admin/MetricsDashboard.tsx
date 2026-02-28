@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchMetricsSummary, fetchMetricFailures } from '../../../shared/api/admin';
+import { useAdminContext } from './AdminContext';
 import { Skeleton } from '../ui/skeleton';
 import { Alert, AlertDescription } from '../ui/alert';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from 'recharts';
@@ -9,20 +10,33 @@ import { formatDateTime } from '../../../shared/lib/format';
 const COLORS = ['#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fb923c', '#fbbf24', '#2dd4bf'];
 
 export function MetricsDashboard() {
+    const auth = useAdminContext();
+    const hasAdminKey = !!auth.adminKey.trim();
+
     const { data: summary, isLoading: sLoading, error: sError } = useQuery({
-        queryKey: ['eval-metrics-summary'],
-        queryFn: fetchMetricsSummary,
+        queryKey: ['eval-metrics-summary', auth.adminKey],
+        queryFn: () => fetchMetricsSummary(auth.adminKey),
         refetchInterval: 30000,
+        enabled: hasAdminKey,
     });
 
     const { data: failures, isLoading: fLoading, error: fError } = useQuery({
-        queryKey: ['eval-metrics-failures'],
-        queryFn: () => fetchMetricFailures(100),
+        queryKey: ['eval-metrics-failures', auth.adminKey],
+        queryFn: () => fetchMetricFailures(auth.adminKey, 100),
         refetchInterval: 30000,
+        enabled: hasAdminKey,
     });
 
     const loading = sLoading || fLoading;
     const error = sError || fError;
+
+    if (!hasAdminKey) {
+        return (
+            <Alert variant="destructive">
+                <AlertDescription>Admin API key is required to load evaluation metrics.</AlertDescription>
+            </Alert>
+        );
+    }
 
     if (error) {
         return (

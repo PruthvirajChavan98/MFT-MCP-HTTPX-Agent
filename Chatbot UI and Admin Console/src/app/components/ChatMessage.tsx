@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Bot, ChevronDown, ChevronUp, Copy, User, Wrench, ThumbsUp, ThumbsDown, ArrowUpRight } from 'lucide-react'
-import { Streamdown } from 'streamdown'
 import { cn } from './ui/utils'
 import { formatCurrency } from '../../shared/lib/format'
 import type { ChatMessage as ChatMessageType } from '../../shared/types/chat'
 import { submitFeedback } from '../../shared/api/chat'
 import { toast } from 'sonner'
+import { copyToClipboard } from '../../shared/lib/clipboard'
+import { ChatAssistantMarkdown } from './ChatAssistantMarkdown'
 
 interface Props {
   message: ChatMessageType
@@ -18,11 +19,20 @@ export function ChatMessage({ message, sessionId }: Props) {
   const [copied, setCopied] = useState(false)
   const [feedbackState, setFeedbackState] = useState<'idle' | 'thumbs_up' | 'thumbs_down'>('idle')
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(message.content).then(() => {
+  const handleCopy = async () => {
+    const result = await copyToClipboard(message.content)
+    if (result.status === 'success') {
       setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
+      window.setTimeout(() => setCopied(false), 1500)
+      return
+    }
+
+    if (result.status === 'manual') {
+      toast.error('Clipboard access is blocked in this environment.')
+      return
+    }
+
+    toast.error(result.message)
   }
 
   const handleFeedback = async (rating: 'thumbs_up' | 'thumbs_down') => {
@@ -54,7 +64,7 @@ export function ChatMessage({ message, sessionId }: Props) {
       </div>
 
       {/* Bubble */}
-      <div className={cn('max-w-[80%] group', isUser ? 'items-end' : 'items-start', 'flex flex-col gap-1')}>
+      <div className={cn('group flex flex-col gap-1', isUser ? 'max-w-[80%] items-end' : 'w-full items-start')}>
         <div
           className={cn(
             'px-4 py-3 rounded-2xl text-sm leading-relaxed',
@@ -64,13 +74,9 @@ export function ChatMessage({ message, sessionId }: Props) {
           )}
         >
           {isUser ? (
-            <p>{message.content}</p>
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
-            <div className="prose prose-sm max-w-none [&>*]:my-1">
-              {message.status === 'streaming' || message.content ? (
-                <Streamdown>{message.content || ' '}</Streamdown>
-              ) : null}
-            </div>
+            <ChatAssistantMarkdown content={message.content} status={message.status} />
           )}
         </div>
 
@@ -107,6 +113,19 @@ export function ChatMessage({ message, sessionId }: Props) {
           </div>
         )}
 
+        {!isUser && (message.followUps?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {message.followUps?.map((item, index) => (
+              <span
+                key={`${item}-${index}`}
+                className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-700"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Trace Link */}
         {!isUser && message.traceId && (
           <a
@@ -121,6 +140,11 @@ export function ChatMessage({ message, sessionId }: Props) {
             View trace
             <ArrowUpRight size={10} className="opacity-0 group-hover/trace:opacity-100 transition-opacity -ml-0.5" />
           </a>
+        )}
+        {!isUser && message.status === 'error' && !message.traceId && (
+          <span className="mt-1.5 inline-flex w-max items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-500">
+            Trace unavailable for this failed stream
+          </span>
         )}
 
         {/* Footer row: cost + copy + time + feedback */}

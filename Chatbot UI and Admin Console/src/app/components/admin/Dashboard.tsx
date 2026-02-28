@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { Activity, Users, DollarSign, MessageSquare, Shield, TrendingUp, Database, Clock, Zap, AlertTriangle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 import { fetchEvalTraces, fetchSessionCostSummary, fetchQuestionTypes, fetchGuardrailEvents } from '../../../shared/api/admin';
@@ -7,16 +8,19 @@ import { useAdminContext } from './AdminContext';
 import { Skeleton } from '../ui/skeleton';
 import { Alert, AlertDescription } from '../ui/alert';
 import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
+import { buildConversationHref, buildTraceHref } from '../../../shared/lib/admin-links';
 
 const PIE_COLORS = ["#5eead4", "#67e8f9", "#38bdf8", "#818cf8", "#c084fc", "#f472b6", "#fb923c", "#fbbf24", "#a3e635"];
 
 export function Dashboard() {
   const auth = useAdminContext();
+  const hasAdminKey = !!auth.adminKey.trim()
 
   const { data: traces = [], isLoading: tLoading, error: tError } = useQuery({
-    queryKey: ['eval-traces'],
-    queryFn: () => fetchEvalTraces(200),
+    queryKey: ['eval-traces', auth.adminKey],
+    queryFn: () => fetchEvalTraces(auth.adminKey, 200),
     refetchInterval: 30_000,
+    enabled: hasAdminKey,
   });
 
   const { data: costs, isLoading: cLoading, error: cError } = useQuery({
@@ -26,14 +30,15 @@ export function Dashboard() {
   });
 
   const { data: categories = [], isLoading: catLoading } = useQuery({
-    queryKey: ['question-types'],
-    queryFn: () => fetchQuestionTypes(50),
+    queryKey: ['question-types', auth.adminKey],
+    queryFn: () => fetchQuestionTypes(auth.adminKey, 50),
+    enabled: hasAdminKey,
   });
 
   const { data: guardrails = [] } = useQuery({
     queryKey: ['guardrail-events', auth.adminKey],
     queryFn: async () => (await fetchGuardrailEvents(auth.adminKey, { limit: 100 })).items,
-    enabled: !!auth.adminKey,
+    enabled: hasAdminKey,
   });
 
   const loading = tLoading || cLoading || catLoading;
@@ -54,6 +59,14 @@ export function Dashboard() {
   const successCount = traces.filter((t) => t.status === 'success' || !t.error).length;
   const successRate = traces.length ? ((successCount / traces.length) * 100).toFixed(1) : 0;
   const avgLatency = traces.length ? Math.round(traces.reduce((s, t) => s + (t.latency_ms ?? 0), 0) / traces.length) : 0;
+
+  if (!hasAdminKey) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>Admin API key is required to load dashboard analytics.</AlertDescription>
+      </Alert>
+    )
+  }
 
   if (error) return <Alert variant="destructive"><AlertDescription className="font-mono text-xs">{(error as Error).message}</AlertDescription></Alert>;
 
@@ -163,13 +176,13 @@ export function Dashboard() {
           <table className="w-full text-sm">
             <thead className="bg-white">
               <tr className="border-b border-gray-100">
-                {['Status', 'Trace ID', 'Model', 'Latency', 'Started'].map((h) => (
+                {['Status', 'Trace ID', 'Model', 'Latency', 'Started', 'Action'].map((h) => (
                   <th key={h} className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {loading ? Array.from({ length: 5 }).map((_, i) => <tr key={i}><td colSpan={5} className="p-4"><Skeleton className="h-8 w-full" /></td></tr>) :
+              {loading ? Array.from({ length: 5 }).map((_, i) => <tr key={i}><td colSpan={6} className="p-4"><Skeleton className="h-8 w-full" /></td></tr>) :
                 traces.slice(0, 8).map((t) => (
                   <tr key={t.trace_id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-4">
@@ -183,6 +196,28 @@ export function Dashboard() {
                     <td className="px-6 py-4 text-slate-700 font-medium">{t.model?.split('/').pop() ?? '—'}</td>
                     <td className="px-6 py-4 text-slate-700 font-mono">{t.latency_ms ? `${t.latency_ms}ms` : '—'}</td>
                     <td className="px-6 py-4 text-slate-500">{formatDateTime(t.started_at)}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {buildConversationHref(t.session_id) ? (
+                          <Link
+                            to={buildConversationHref(t.session_id)!}
+                            className="inline-flex items-center rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-100"
+                          >
+                            View Conversation
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-slate-400">No session</span>
+                        )}
+                        {buildTraceHref(t.trace_id) && (
+                          <Link
+                            to={buildTraceHref(t.trace_id)!}
+                            className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                          >
+                            Inspect Trace
+                          </Link>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
             </tbody>

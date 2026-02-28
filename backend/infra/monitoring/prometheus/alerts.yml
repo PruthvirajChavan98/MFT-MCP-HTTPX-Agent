@@ -40,3 +40,50 @@ groups:
         annotations:
           summary: "High step-up authentication rate"
           description: "Session security step-up decisions are elevated."
+
+  - name: trace-reliability-alerts
+    rules:
+      - alert: RuntimeTracePersistenceFailures
+        expr: increase(agent_runtime_trace_persist_total{status="failure"}[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "Runtime trace persistence failures detected"
+          description: "At least one runtime trace persistence failure occurred in the last 10 minutes."
+
+      - alert: RuntimeTracePersistenceFailureRateHigh
+        expr: |
+          (
+            increase(agent_runtime_trace_persist_total{status="failure"}[10m])
+            /
+            clamp_min(increase(agent_runtime_trace_persist_total{status="success"}[10m]) + increase(agent_runtime_trace_persist_total{status="failure"}[10m]), 1)
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          service: agent
+        annotations:
+          summary: "Runtime trace persistence failure rate is high"
+          description: "Runtime trace persistence failure rate exceeded 2% over the last 10 minutes."
+
+      - alert: ShadowTraceQueueBacklogHigh
+        expr: agent_shadow_trace_queue_depth > 500
+        for: 10m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "Shadow trace queue backlog is high"
+          description: "Shadow trace queue depth has remained above 500 for at least 10 minutes."
+
+      - alert: ShadowTraceDeadLetterQueueNonZero
+        expr: agent_shadow_trace_dlq_depth > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "Shadow trace dead-letter queue is non-empty"
+          description: "Dead-lettered shadow traces are present and require investigation."

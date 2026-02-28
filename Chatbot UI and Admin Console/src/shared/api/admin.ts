@@ -4,6 +4,7 @@ import type { ChatMessage as ChatMessageType } from '../types/chat'
 import type {
   EvalTraceDetail,
   EvalTraceSummary,
+  FaqCategory,
   FaqRecord,
   FeedbackRecord,
 } from '../types/admin'
@@ -45,6 +46,7 @@ export interface SessionSummaryRow {
 }
 
 export interface GuardrailEvent {
+  trace_id?: string
   event_time: string
   session_id: string
   risk_score: number
@@ -72,6 +74,8 @@ export interface GuardrailTrendPoint {
 export interface GuardrailQueueHealth {
   queue_key: string
   depth: number
+  dead_letter_queue_key: string
+  dead_letter_depth: number
   oldest_age_seconds: number | null
 }
 
@@ -112,6 +116,13 @@ export interface UserAnalyticsRow {
   error_count: number
   avg_latency_ms: number
   last_active?: string
+}
+
+export interface CursorPage<T> {
+  items: T[]
+  count: number
+  limit: number
+  next_cursor?: string | null
 }
 
 export interface VectorSearchItem {
@@ -157,23 +168,28 @@ export function extractTraceQuestion(trace: EvalTraceSummary): string {
 
 // ── Eval Traces ───────────────────────────────────────────────────────────────
 
-export async function fetchEvalTraces(limit = 100): Promise<EvalTraceSummary[]> {
+export async function fetchEvalTraces(
+  adminKey: string,
+  limit = 100,
+): Promise<EvalTraceSummary[]> {
   const response = await requestJson<{ items: EvalTraceSummary[] }>({
     method: 'GET',
     path: '/eval/search',
     query: { limit, order: 'desc' },
+    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchEvalTrace(traceId: string): Promise<EvalTraceDetail> {
+export async function fetchEvalTrace(adminKey: string, traceId: string): Promise<EvalTraceDetail> {
   return requestJson<EvalTraceDetail>({
     method: 'GET',
     path: `/eval/trace/${encodeURIComponent(traceId)}`,
+    headers: withAdminHeaders(adminKey),
   })
 }
 
-export async function fetchCheckpointTrace(adminKey: string, traceId: string): Promise<EvalTraceDetail> {
+export async function fetchAdminTrace(adminKey: string, traceId: string): Promise<EvalTraceDetail> {
   return requestJson<EvalTraceDetail>({
     method: 'GET',
     path: `/agent/admin/analytics/trace/${encodeURIComponent(traceId)}`,
@@ -181,7 +197,11 @@ export async function fetchCheckpointTrace(adminKey: string, traceId: string): P
   })
 }
 
+// Backward compatible alias for older imports.
+export const fetchCheckpointTrace = fetchAdminTrace
+
 export async function fetchVectorSearch(payload: {
+  adminKey: string
   kind: 'trace' | 'chunk'
   text: string
   k?: number
@@ -191,31 +211,46 @@ export async function fetchVectorSearch(payload: {
   min_score: number
   items: VectorSearchItem[]
 }> {
-  return requestJson({ method: 'POST', path: '/eval/vector-search', body: payload })
+  const { adminKey, ...body } = payload
+  return requestJson({
+    method: 'POST',
+    path: '/eval/vector-search',
+    body,
+    headers: withAdminHeaders(adminKey),
+  })
 }
 
-export async function fetchMetricsSummary(): Promise<MetricsSummaryItem[]> {
+export async function fetchMetricsSummary(adminKey: string): Promise<MetricsSummaryItem[]> {
   const response = await requestJson<{ items: MetricsSummaryItem[] }>({
     method: 'GET',
     path: '/eval/metrics/summary',
+    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchMetricFailures(limit = 100): Promise<MetricFailureItem[]> {
+export async function fetchMetricFailures(
+  adminKey: string,
+  limit = 100,
+): Promise<MetricFailureItem[]> {
   const response = await requestJson<{ items: MetricFailureItem[] }>({
     method: 'GET',
     path: '/eval/metrics/failures',
     query: { limit },
+    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchQuestionTypes(limit = 200): Promise<QuestionTypeItem[]> {
+export async function fetchQuestionTypes(
+  adminKey: string,
+  limit = 200,
+): Promise<QuestionTypeItem[]> {
   const response = await requestJson<{ items: QuestionTypeItem[] }>({
     method: 'GET',
     path: '/eval/question-types',
     query: { limit },
+    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
@@ -232,11 +267,12 @@ export async function fetchSessionCostSummary(): Promise<{
 }
 
 export async function fetchEvalSessions(
+  adminKey: string,
   limit = 100,
 ): Promise<Array<{ session_id: string; trace_count: number; last_active?: string }>> {
   const response = await requestJson<{
     items: Array<{ session_id: string; trace_count: number; last_active?: string }>
-  }>({ method: 'GET', path: '/eval/sessions', query: { limit } })
+  }>({ method: 'GET', path: '/eval/sessions', query: { limit }, headers: withAdminHeaders(adminKey) })
   return response.items ?? []
 }
 
@@ -258,7 +294,14 @@ export async function fetchFaqs(
 
 export async function updateFaq(
   adminKey: string,
-  payload: { original_question: string; new_question?: string; new_answer?: string },
+  payload: {
+    id?: string
+    original_question?: string
+    new_question?: string
+    new_answer?: string
+    new_category?: string
+    new_tags?: string[]
+  },
 ): Promise<{ status: string; message?: string }> {
   return requestJson({
     method: 'PUT',
@@ -270,19 +313,91 @@ export async function updateFaq(
 
 export async function deleteFaq(
   adminKey: string,
-  question: string,
+  target: string | { id?: string; question?: string },
 ): Promise<{ status: string; message?: string }> {
+  const query =
+    typeof target === 'string'
+      ? { question: target }
+      : {
+          ...(target.id ? { id: target.id } : {}),
+          ...(target.question ? { question: target.question } : {}),
+        }
   return requestJson({
     method: 'DELETE',
     path: '/agent/admin/faqs',
-    query: { question },
+    query,
     headers: withAdminHeaders(adminKey),
   })
 }
 
+export async function clearAllFaqs(
+  adminKey: string,
+): Promise<{ status: string; message?: string }> {
+  return requestJson({
+    method: 'DELETE',
+    path: '/agent/admin/faqs/all',
+    headers: withAdminHeaders(adminKey),
+  })
+}
+
+export async function fetchFaqCategories(adminKey: string): Promise<FaqCategory[]> {
+  const response = await requestJson<{ items: FaqCategory[] }>({
+    method: 'GET',
+    path: '/agent/admin/faq-categories',
+    headers: withAdminHeaders(adminKey),
+  })
+  return response.items ?? []
+}
+
+export async function searchFaqSemantic(
+  adminKey: string,
+  query: string,
+  limit = 5,
+  openrouterKey?: string,
+  groqKey?: string,
+): Promise<Array<{ question: string; answer: string; score: number }>> {
+  const response = await requestJson<{ status: string; results: Array<{ question: string; answer: string; score: number }> }>({
+    method: 'POST',
+    path: '/agent/admin/faqs/semantic-search',
+    headers: withAdminHeaders(adminKey, {
+      ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
+      ...(groqKey ? { 'X-Groq-Key': groqKey } : {}),
+    }),
+    body: { query, limit },
+  })
+  return response.results ?? []
+}
+
+function resolveSseErrorMessage(data: string, parsed?: unknown): string {
+  if (parsed && typeof parsed === 'object') {
+    const payload = parsed as {
+      message?: string
+      detail?: string | { message?: string; detail?: string }
+    }
+    if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
+    if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail.trim()
+    if (payload.detail && typeof payload.detail === 'object') {
+      if (
+        typeof payload.detail.message === 'string' &&
+        payload.detail.message.trim()
+      ) {
+        return payload.detail.message.trim()
+      }
+      if (
+        typeof payload.detail.detail === 'string' &&
+        payload.detail.detail.trim()
+      ) {
+        return payload.detail.detail.trim()
+      }
+    }
+  }
+  if (data.trim()) return data
+  return 'FAQ ingest failed'
+}
+
 export async function ingestFaqBatch(
   adminKey: string,
-  items: Array<{ question: string; answer: string }>,
+  items: Array<{ question: string; answer: string; category?: string; tags?: string[] }>,
   onProgress?: (message: string) => void,
   openrouterKey?: string,
   groqKey?: string,
@@ -300,8 +415,8 @@ export async function ingestFaqBatch(
       body: JSON.stringify({ items }),
     },
     {
-      onEvent: (eventName, data) => {
-        if (eventName === 'error') throw new Error(data || 'FAQ ingest failed')
+      onEvent: (eventName, data, parsed) => {
+        if (eventName === 'error') throw new Error(resolveSseErrorMessage(data, parsed))
         if (data) {
           lastMessage = data
           onProgress?.(data)
@@ -309,6 +424,41 @@ export async function ingestFaqBatch(
       },
     },
   )
+  return lastMessage
+}
+
+export async function ingestFaqPdf(
+  adminKey: string,
+  file: File,
+  onProgress?: (message: string) => void,
+  openrouterKey?: string,
+  groqKey?: string,
+): Promise<string> {
+  let lastMessage = 'PDF ingest complete'
+  const formData = new FormData()
+  formData.append('file', file)
+
+  await streamSse(
+    `${API_BASE_URL}/agent/admin/faqs/upload-pdf`,
+    {
+      method: 'POST',
+      headers: withAdminHeaders(adminKey, {
+        ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
+        ...(groqKey ? { 'X-Groq-Key': groqKey } : {}),
+      }),
+      body: formData,
+    },
+    {
+      onEvent: (eventName, data, parsed) => {
+        if (eventName === 'error') throw new Error(resolveSseErrorMessage(data, parsed))
+        if (data) {
+          lastMessage = data
+          onProgress?.(data)
+        }
+      },
+    },
+  )
+
   return lastMessage
 }
 
@@ -449,6 +599,12 @@ export interface SessionListItem {
   first_question?: string
 }
 
+export interface ConversationQuery {
+  limit?: number
+  cursor?: string | null
+  search?: string
+}
+
 export async function fetchConversations(
   adminKey: string,
   limit = 100,
@@ -460,6 +616,36 @@ export async function fetchConversations(
     headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
+}
+
+export async function fetchConversationsPage(
+  adminKey: string,
+  params: ConversationQuery = {},
+): Promise<CursorPage<SessionListItem>> {
+  const response = await requestJson<CursorPage<SessionListItem>>({
+    method: 'GET',
+    path: '/agent/admin/analytics/conversations',
+    query: {
+      limit: params.limit ?? 100,
+      cursor: params.cursor ?? undefined,
+      search: params.search?.trim() || undefined,
+    },
+    headers: withAdminHeaders(adminKey),
+  })
+  return {
+    items: response.items ?? [],
+    count: response.count ?? 0,
+    limit: response.limit ?? (params.limit ?? 100),
+    next_cursor: response.next_cursor ?? null,
+  }
+}
+
+export interface TraceQuery {
+  limit?: number
+  cursor?: string | null
+  search?: string
+  status?: string
+  model?: string
 }
 
 export async function fetchTraces(
@@ -475,6 +661,30 @@ export async function fetchTraces(
   return response.items ?? []
 }
 
+export async function fetchTracesPage(
+  adminKey: string,
+  params: TraceQuery = {},
+): Promise<CursorPage<EvalTraceSummary>> {
+  const response = await requestJson<CursorPage<EvalTraceSummary>>({
+    method: 'GET',
+    path: '/agent/admin/analytics/traces',
+    query: {
+      limit: params.limit ?? 200,
+      cursor: params.cursor ?? undefined,
+      search: params.search?.trim() || undefined,
+      status: params.status?.trim() || undefined,
+      model: params.model?.trim() || undefined,
+    },
+    headers: withAdminHeaders(adminKey),
+  })
+  return {
+    items: response.items ?? [],
+    count: response.count ?? 0,
+    limit: response.limit ?? (params.limit ?? 200),
+    next_cursor: response.next_cursor ?? null,
+  }
+}
+
 export async function fetchSessionTraces(
   adminKey: string,
   sessionId: string,
@@ -487,6 +697,21 @@ export async function fetchSessionTraces(
     headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
+}
+
+export async function fetchSessionCost(
+  sessionId: string,
+): Promise<{
+  session_id: string
+  total_cost: number
+  total_requests: number
+  total_tokens?: number
+  average_cost_per_request?: number
+}> {
+  return requestJson({
+    method: 'GET',
+    path: `/agent/sessions/${encodeURIComponent(sessionId)}/cost`,
+  })
 }
 
 // ── Feedback ──────────────────────────────────────────────────────────────────

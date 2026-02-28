@@ -5,17 +5,18 @@ import json
 import logging
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from langchain_openai import OpenAIEmbeddings
 from neo4j.exceptions import DriverError, Neo4jError, ServiceUnavailable, SessionExpired
 from pydantic import BaseModel
 
+from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
 from src.common.neo4j_mgr import neo4j_mgr
 
 log = logging.getLogger("eval_read_api")
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin_key)])
 _EVAL_STORE = EvalNeo4jStore()
 
 # -----------------------------
@@ -647,7 +648,30 @@ async def question_types(limit: int = 200):
         MATCH (t:EvalTrace)
         WHERE t.started_at IS NOT NULL
         WITH t ORDER BY t.started_at DESC LIMIT $limit
-        RETURN coalesce(t.router_reason, "Unknown") as reason, count(*) as n
+        WITH coalesce(
+          t.question_category,
+          CASE t.router_reason
+            WHEN 'lead_intent_new_loan' THEN 'loan_products_and_eligibility'
+            WHEN 'eligibility_offer' THEN 'loan_products_and_eligibility'
+            WHEN 'loan_terms_rates' THEN 'loan_products_and_eligibility'
+            WHEN 'application_status_approval' THEN 'application_status_and_approval'
+            WHEN 'disbursal' THEN 'disbursal_and_bank_credit'
+            WHEN 'kyc_verification' THEN 'profile_kyc_and_access'
+            WHEN 'otp_login_app_tech' THEN 'profile_kyc_and_access'
+            WHEN 'emi_payment_reflecting' THEN 'emi_payments_and_charges'
+            WHEN 'nach_autodebit_bounce' THEN 'emi_payments_and_charges'
+            WHEN 'charges_fees_penalty' THEN 'emi_payments_and_charges'
+            WHEN 'statement_receipt' THEN 'emi_payments_and_charges'
+            WHEN 'foreclosure_partpayment' THEN 'foreclosure_and_closure'
+            WHEN 'collections_harassment' THEN 'collections_and_recovery'
+            WHEN 'fraud_security' THEN 'fraud_and_security'
+            WHEN 'customer_support' THEN 'customer_support_channels'
+            WHEN 'unknown' THEN 'other'
+            ELSE null
+          END,
+          'Unknown'
+        ) as reason
+        RETURN reason, count(*) as n
         ORDER BY n DESC
         """,
         {"limit": limit},

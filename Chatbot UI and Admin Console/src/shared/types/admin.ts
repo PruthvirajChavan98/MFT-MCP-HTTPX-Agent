@@ -47,11 +47,27 @@ export interface EvalTraceDetail {
   }>
 }
 
+export type FaqVectorStatus = 'pending' | 'syncing' | 'synced' | 'failed'
+
 export interface FaqRecord {
+  id?: string
   question: string
   answer: string
+  category?: string
+  tags?: string[]
+  vector_status?: FaqVectorStatus
+  vectorized?: boolean
+  vector_error?: string | null
+  vector_updated_at?: string | null
   created_at?: string
   updated_at?: string
+}
+
+export interface FaqCategory {
+  id: string
+  slug: string
+  label: string
+  is_active: boolean
 }
 
 export interface FeedbackRecord {
