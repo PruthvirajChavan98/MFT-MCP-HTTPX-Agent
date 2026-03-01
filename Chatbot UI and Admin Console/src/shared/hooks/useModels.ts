@@ -1,6 +1,6 @@
 import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchModels } from '../api/admin';
+import { fetchModels } from '@features/admin/api/admin';
 
 export function useAvailableModels(
     provider: string,

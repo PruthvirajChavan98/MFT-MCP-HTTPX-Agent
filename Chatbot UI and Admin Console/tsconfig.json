@@ -24,9 +24,11 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*":           ["./src/*"],
+      "@features/*":   ["./src/features/*"],
+      "@shared/*":     ["./src/shared/*"],
+      "@components/*": ["./src/components/*"],
+      "@styles/*":     ["./src/styles/*"]
     }
   },
   "include": [
