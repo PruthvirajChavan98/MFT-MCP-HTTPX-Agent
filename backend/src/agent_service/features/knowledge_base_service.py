@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Iterable
@@ -110,7 +111,10 @@ class KnowledgeBaseService:
         )
         if updated:
             all_rows = await self.repo.dump_all(pool)
-            await self._sync_to_cognee(pool, all_rows)
+            asyncio.create_task(
+                self._sync_to_cognee(pool, all_rows),
+                name="cognee_sync_after_update",
+            )
         return updated
 
     async def delete_faq(
@@ -123,7 +127,10 @@ class KnowledgeBaseService:
         deleted = await self.repo.delete_one(pool, faq_id=faq_id, question=question)
         if deleted > 0:
             all_rows = await self.repo.dump_all(pool)
-            await self._sync_to_cognee(pool, all_rows)
+            asyncio.create_task(
+                self._sync_to_cognee(pool, all_rows),
+                name="cognee_sync_after_delete",
+            )
         return deleted
 
     async def clear_all(self, pool: Any) -> int:

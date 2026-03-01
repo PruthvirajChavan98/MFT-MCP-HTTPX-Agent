@@ -25,7 +25,9 @@ export type KnowledgeBaseCategoryOption = {
 export type KnowledgeBaseStats = {
   total: number
   vectorized: number
+  syncing: number
   pending: number
+  failed: number
   categories: number
 }
 
@@ -154,11 +156,16 @@ export function buildKnowledgeBaseViewModel(params: {
   const filteredRows = filterRows(normalizedRows, params.searchQuery, params.selectedCategory)
   const rows = sortRows(filteredRows, params.sortField, params.sortDir)
 
-  const vectorized = normalizedRows.filter((row) => row.vectorized).length
+  const vectorized = normalizedRows.filter((row) => row.vectorStatus === 'synced').length
+  const syncing = normalizedRows.filter((row) => row.vectorStatus === 'syncing').length
+  const failed = normalizedRows.filter((row) => row.vectorStatus === 'failed').length
+  const pending = normalizedRows.filter((row) => row.vectorStatus === 'pending').length
   const stats: KnowledgeBaseStats = {
     total: normalizedRows.length,
     vectorized,
-    pending: normalizedRows.length - vectorized,
+    syncing,
+    pending,
+    failed,
     categories: new Set(normalizedRows.map((row) => row.category)).size,
   }
 

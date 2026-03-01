@@ -542,7 +542,6 @@ export function KnowledgeBaseEnterprise() {
   const queryClient = useQueryClient()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [semanticMode, setSemanticMode] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [sortField, setSortField] = useState<KnowledgeBaseSortField>('createdAt')
   const [sortDir, setSortDir] = useState<KnowledgeBaseSortDir>('desc')
@@ -725,27 +724,42 @@ export function KnowledgeBaseEnterprise() {
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          {[
-            { label: 'Total FAQs', value: model.stats.total, color: 'text-gray-800' },
-            { label: 'Vectorized', value: model.stats.vectorized, color: 'text-teal-600' },
-            { label: 'Pending sync', value: model.stats.pending, color: 'text-amber-600' },
-            { label: 'Categories', value: model.stats.categories, color: 'text-blue-600' },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm"
-            >
-              {faqsQuery.isLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <p className={`text-2xl font-semibold ${s.color}`}>{s.value}</p>
-              )}
-              <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
-            </div>
-          ))}
+          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+            {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <p className="text-2xl font-semibold text-gray-800">{model.stats.total}</p>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">Total FAQs</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+            {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <p className="text-2xl font-semibold text-teal-600">{model.stats.vectorized}</p>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">Vectorized</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+            {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <span className="flex items-center gap-1.5">
+                <p className="text-2xl font-semibold text-amber-600">
+                  {model.stats.pending + model.stats.syncing}
+                </p>
+                {model.stats.syncing > 0 && (
+                  <Loader2 size={14} className="animate-spin text-amber-500 mt-1" />
+                )}
+              </span>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">Pending sync</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+            {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <p className={`text-2xl font-semibold ${model.stats.failed > 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+                {model.stats.failed}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">Failed</p>
+          </div>
         </div>
 
-        {/* Search + filter bar */}
+        {/* Search bar — always semantic */}
         <div className="flex items-center gap-3 mb-4">
           <div className="relative flex-1">
             <Search
@@ -756,48 +770,24 @@ export function KnowledgeBaseEnterprise() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && semanticMode) {
-                  void runSemanticSearch()
-                }
+                if (e.key === 'Enter') void runSemanticSearch()
               }}
-              placeholder={
-                semanticMode
-                  ? "Describe what you're looking for…"
-                  : "Search questions, answers, tags…"
-              }
+              placeholder="Describe what you're looking for…"
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all shadow-sm"
             />
           </div>
           <button
-            onClick={() => {
-              setSemanticMode((v) => !v)
-              toast.info(
-                !semanticMode
-                  ? "Semantic search enabled — using vector embeddings"
-                  : "Switched to exact search"
-              )
-            }}
-            className={[
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border transition-all shadow-sm whitespace-nowrap",
-              semanticMode
-                ? "bg-teal-500 border-teal-500 text-white shadow-teal-200"
-                : "bg-white border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600",
-            ].join(" ")}
+            type="button"
+            onClick={() => void runSemanticSearch()}
+            disabled={semanticQuery.isFetching}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border transition-all shadow-sm whitespace-nowrap bg-teal-500 border-teal-500 text-white shadow-teal-200 hover:bg-teal-600 disabled:opacity-60"
           >
-            <Sparkles size={15} />
+            {semanticQuery.isFetching
+              ? <Loader2 size={15} className="animate-spin" />
+              : <Sparkles size={15} />
+            }
             Semantic Search
           </button>
-          {semanticMode && (
-            <button
-              type="button"
-              onClick={() => void runSemanticSearch()}
-              disabled={semanticQuery.isFetching}
-              className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-50"
-            >
-              {semanticQuery.isFetching ? <Loader2 size={14} className="animate-spin" /> : null}
-              Search
-            </button>
-          )}
         </div>
 
         {categoriesQuery.error && (
@@ -808,28 +798,30 @@ export function KnowledgeBaseEnterprise() {
           </Alert>
         )}
 
-        {/* Category pills + sort */}
-        <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
-          {model.categoryOptions.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.label)}
-              className={[
-                "px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all border",
-                selectedCategory === category.label
-                  ? "bg-teal-500 text-white border-teal-500 shadow-sm"
-                  : "bg-white text-gray-500 border-gray-200 hover:border-teal-200 hover:text-teal-600",
-              ].join(" ")}
-            >
-              {category.label}
-              {category.label !== "All" && (
-                <span className="ml-1.5 opacity-60">
-                  {category.count}
-                </span>
-              )}
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+        {/* Category pills + sort — two independent rows, no layout conflict */}
+        <div className="mb-5 space-y-2">
+          {/* Row 1: scrollable category pills — isolated scroll context */}
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {model.categoryOptions.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => setSelectedCategory(category.label)}
+                className={[
+                  "px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all border",
+                  selectedCategory === category.label
+                    ? "bg-teal-500 text-white border-teal-500 shadow-sm"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-teal-200 hover:text-teal-600",
+                ].join(" ")}
+              >
+                {category.label}
+                {category.label !== "All" && (
+                  <span className="ml-1.5 opacity-60">{category.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          {/* Row 2: sort controls — always fully visible, right-aligned */}
+          <div className="flex items-center justify-end gap-2">
             <span className="text-xs text-gray-400">Sort by:</span>
             {(["question", "category", "createdAt"] as KnowledgeBaseSortField[]).map((f) => (
               <button
@@ -849,7 +841,7 @@ export function KnowledgeBaseEnterprise() {
           </div>
         </div>
 
-        {semanticMode && (
+        {(semanticQuery.isFetching || semanticMatches.length > 0) && (
           <div className="mb-5 rounded-2xl border border-violet-100 bg-violet-50/50 p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-violet-900">
               <Sparkles className="size-4" />
@@ -860,7 +852,7 @@ export function KnowledgeBaseEnterprise() {
                 <Skeleton className="h-16 rounded-lg" />
                 <Skeleton className="h-16 rounded-lg" />
               </div>
-            ) : semanticMatches.length > 0 ? (
+            ) : (
               <div className="space-y-3">
                 {semanticMatches.map((match, index) => (
                   <div key={`${match.question}:${index}`} className="flex items-start justify-between gap-4 rounded-lg border border-violet-100 bg-white p-4 shadow-sm">
@@ -874,8 +866,6 @@ export function KnowledgeBaseEnterprise() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-xs text-gray-500">No semantic matches yet. Run a semantic search query to inspect results.</p>
             )}
           </div>
         )}
@@ -926,7 +916,7 @@ export function KnowledgeBaseEnterprise() {
       </div>
 
       {/* ── Right panel ──────────────────────────────────────────────────── */}
-      <div className="w-[300px] flex-shrink-0 border-l border-gray-200 bg-white overflow-auto">
+      <div className="w-75 shrink-0 border-l border-gray-200 bg-white overflow-auto">
         <div className="px-6 py-6 space-y-8">
 
           {/* PDF FAQ Upload */}
@@ -970,7 +960,7 @@ export function KnowledgeBaseEnterprise() {
               {pdfFile ? (
                 <div className="flex items-center gap-2 justify-center text-teal-700">
                   <FileText size={18} className="text-teal-500" />
-                  <span className="text-sm truncate max-w-[160px]">{pdfFile.name}</span>
+                  <span className="text-sm truncate max-w-40">{pdfFile.name}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1026,7 +1016,7 @@ export function KnowledgeBaseEnterprise() {
                 "Semantic search requires at least 1 vectorized FAQ",
               ].map((tip, i) => (
                 <div key={i} className="flex gap-2 text-xs text-gray-500">
-                  <span className="flex-shrink-0 w-4 h-4 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center text-[10px] font-semibold mt-0.5">
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center text-[10px] font-semibold mt-0.5">
                     {i + 1}
                   </span>
                   {tip}

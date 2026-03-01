@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
+import type { FaqRecord } from '../../../../shared/types/admin'
 import {
   fetchAdminTrace,
   fetchFaqCategories,
@@ -128,6 +129,13 @@ export function faqListQueryOptions(adminKey: string, limit = 500, skip = 0) {
     queryKey: ['faqs', adminKey, limit, skip] as const,
     queryFn: () => fetchFaqs(adminKey, limit, skip),
     enabled: Boolean(adminKey.trim()),
+    refetchInterval(query) {
+      const data = query.state.data as FaqRecord[] | undefined
+      const hasActive = data?.some(
+        (f) => f.vector_status === 'pending' || f.vector_status === 'syncing',
+      )
+      return hasActive ? 5_000 : 30_000
+    },
   })
 }
 
