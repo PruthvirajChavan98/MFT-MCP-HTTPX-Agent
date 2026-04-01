@@ -1,5 +1,6 @@
 type RuntimeConfig = {
   API_BASE_URL?: string
+  CRM_API_BASE_URL?: string
   APP_ENV?: string
   FEATURE_ADMIN_ENTERPRISE_REDESIGN?: string | boolean
   FEATURE_ADMIN_KNOWLEDGE_BASE_ENTERPRISE?: string | boolean

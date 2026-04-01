@@ -42,89 +42,22 @@ class MockFinTechAuthAPIs:
         )
         return vsc
 
-    @staticmethod
-    def _is_phone(s: str) -> bool:
-        return s.isdigit() and len(s) == 10
-
-    def get_contact_hint(self, app_id: str) -> str:
-        app_id = (app_id or "").strip()
-        if not app_id:
-            return self._to_vsc({"error": "app_id is required"})
-
-        headers = {"Accept": "application/json"}
-        try:
-            with httpx.Client(
-                auth=self.auth, headers=headers, follow_redirects=True, timeout=_AUTH_TIMEOUT
-            ) as client:
-                resp = client.get(self._url(f"/mockfin-service/get-contact-hint/{app_id}/"))
-                self.session_store.update(
-                    self.session_id,
-                    {
-                        "last_contact_hint_app_id": app_id,
-                        "last_contact_hint_status": resp.status_code,
-                        "last_contact_hint_response": resp.text[:5000],
-                    },
-                )
-                if resp.status_code != 200:
-                    return self._to_vsc(
-                        {"status_code": resp.status_code, "error": resp.text[:5000]}
-                    )
-
-                data = resp.json()
-                phone = data.get("phone_number")
-                resolved_app_id = (
-                    data.get("app_id")
-                    or data.get("loan_application_id")
-                    or data.get("application_id")
-                    or app_id
-                )
-                resolved_loan_id = data.get("loan_id") or data.get("loanId")
-
-                updates: Dict[str, Any] = {"phone_number": phone, "app_id": resolved_app_id}
-                if resolved_loan_id:
-                    updates["loan_id"] = resolved_loan_id
-                self.session_store.update(self.session_id, updates)
-                return self._to_vsc(data)
-        except Exception as e:
-            self.logger.error(f"Contact hint error: {e}")
-            self.session_store.update(self.session_id, {"last_contact_hint_exception": str(e)})
-            return self._to_vsc({"error": str(e)})
-
     def generate_otp(self, user_input: str) -> str:
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        user_input = (user_input or "").strip()
-        self.session_store.update(self.session_id, {"last_generate_otp_input": user_input})
-        if not user_input:
-            return self._to_vsc({"error": "Provide phone_number or app_id"})
+        phone_number = (user_input or "").strip()
+        if not phone_number:
+            return self._to_vsc({"error": "phone_number is required"})
+
+        self.session_store.update(self.session_id, {"phone_number": phone_number})
 
         try:
             with httpx.Client(
                 auth=self.auth, headers=headers, follow_redirects=True, timeout=_AUTH_TIMEOUT
             ) as client:
-                phone_number: Optional[str] = None
-                app_id: Optional[str] = None
-
-                if self._is_phone(user_input):
-                    phone_number = user_input
-                    self.session_store.update(self.session_id, {"phone_number": phone_number})
-                else:
-                    app_id = user_input
-                    s = self.session_store.get(self.session_id) or {}
-                    phone_number = s.get("phone_number")
-                    # Intentionally removed the blocking check for phone_number here
-
-                payload: Dict[str, Any] = {}
-                if phone_number:
-                    payload["phone_number"] = phone_number
-                if app_id:
-                    payload["app_id"] = app_id
-
-                if not payload:
-                    return self._to_vsc(
-                        {"error": "Phone number unknown. Please provide phone number explicitly."}
-                    )
-
-                resp = client.post(self._url("/mockfin-service/otp/generate_new/"), json=payload)
+                resp = client.post(
+                    self._url("/mockfin-service/otp/generate_new/"),
+                    json={"phone_number": phone_number},
+                )
                 self.logger.info(f"POST otp/generate_new - {resp.status_code}")
 
                 try:
@@ -132,28 +65,11 @@ class MockFinTechAuthAPIs:
                 except Exception:
                     resp_json = {}
 
-                if isinstance(resp_json, dict):
-                    updates: Dict[str, Any] = {}
-
-                    # 1. Capture App ID if returned
-                    if resp_json.get("app_id"):
-                        updates["app_id"] = resp_json.get("app_id")
-                        app_id = app_id or resp_json.get("app_id")
-
-                    # 2. CRITICAL FIX: Capture Phone Number if returned
-                    if resp_json.get("phone_number"):
-                        updates["phone_number"] = resp_json.get("phone_number")
-                        phone_number = phone_number or resp_json.get("phone_number")
-
-                    if updates:
-                        self.session_store.update(self.session_id, updates)
-
                 if resp.status_code in (200, 201):
                     return self._to_vsc(
                         {
                             "status": "OTP Sent",
                             "phone_number": phone_number,
-                            "app_id": app_id,
                             "message": resp_json.get("message") or "OTP sent.",
                         }
                     )
@@ -165,18 +81,14 @@ class MockFinTechAuthAPIs:
     def validate_otp(self, otp: str) -> str:
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         otp = (otp or "").strip()
-        self.session_store.update(self.session_id, {"last_validate_otp_input": otp})
 
         session_data = self.session_store.get(self.session_id) or {}
         phone_number = (session_data.get("phone_number") or "").strip()
-        app_id = (session_data.get("app_id") or "").strip()
 
         if not phone_number:
-            return self._to_vsc({"error": "Phone number missing."})
-        if not app_id:
-            return self._to_vsc({"error": "app_id missing."})
+            return self._to_vsc({"error": "Phone number missing. Call generate_otp first."})
 
-        payload = {"phone_number": phone_number, "app_id": app_id, "otp": otp}
+        payload = {"phone_number": phone_number, "otp": otp}
         try:
             with httpx.Client(
                 auth=self.auth, headers=headers, follow_redirects=True, timeout=_AUTH_TIMEOUT
@@ -195,26 +107,34 @@ class MockFinTechAuthAPIs:
                 if not access_token:
                     return self._to_vsc({"status": "failed", "error": "No token in response."})
 
-                updates = {
+                loans: list = auth_data.get("loans") or []
+
+                updates: Dict[str, Any] = {
                     "access_token": access_token,
                     "phone_number": phone_number,
-                    "app_id": app_id,
                     "user_details": auth_data.get("user", {}),
+                    "loans": loans,
                 }
-                if auth_data.get("loan_id"):
-                    updates["loan_id"] = auth_data.get("loan_id")
+
+                # Auto-select the active loan when there is exactly one
+                if len(loans) == 1:
+                    updates["app_id"] = loans[0].get("loan_number")
 
                 self.session_store.update(self.session_id, updates)
                 self.logger.info(f"✅ Session {self.session_id} authenticated.")
 
-                return self._to_vsc(
-                    {
-                        "status": "success",
-                        "message": "Logged in.",
-                        "app_id": app_id,
-                        "user_details": updates["user_details"],
-                    }
-                )
+                result: Dict[str, Any] = {
+                    "status": "success",
+                    "message": "Logged in.",
+                    "user_details": updates["user_details"],
+                    "loans": loans,
+                }
+                if len(loans) == 1:
+                    result["active_loan"] = loans[0].get("loan_number")
+                elif len(loans) > 1:
+                    result["hint"] = "Multiple loans found. Call list_loans() then select_loan(loan_number)."
+
+                return self._to_vsc(result)
         except Exception as e:
             self.logger.error(f"OTP Validate Error: {e}")
             return self._to_vsc({"error": str(e)})

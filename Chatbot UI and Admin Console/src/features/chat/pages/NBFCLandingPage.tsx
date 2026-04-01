@@ -1,7 +1,8 @@
 import { motion, useInView } from 'motion/react'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ChatWidget } from '../components/ChatWidget'
+import { RegisterDialog } from '../components/RegisterDialog'
 
 // ─── Loan product data ────────────────────────────────────────────────────────
 
@@ -202,6 +203,8 @@ function FeatureCard({ icon, title, desc, index }: { icon: string; title: string
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export function NBFCLandingPage() {
+  const [registerOpen, setRegisterOpen] = useState(false)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* ── Nav ── */}
@@ -229,6 +232,14 @@ export function NBFCLandingPage() {
             >
               Admin
             </Link>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setRegisterOpen(true)}
+              className="hidden rounded-lg border border-teal-500/50 px-4 py-2 text-sm font-semibold text-teal-400 transition-colors hover:bg-teal-500/10 sm:inline-flex"
+            >
+              Register
+            </motion.button>
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
@@ -289,6 +300,7 @@ export function NBFCLandingPage() {
             <motion.button
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
+              onClick={() => setRegisterOpen(true)}
               className="w-full rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90 sm:w-auto"
             >
               Check Eligibility
@@ -446,6 +458,9 @@ export function NBFCLandingPage() {
 
       {/* ── Floating chat widget ── */}
       <ChatWidget />
+
+      {/* ── Registration dialog ── */}
+      <RegisterDialog open={registerOpen} onOpenChange={setRegisterOpen} />
     </div>
   )
 }

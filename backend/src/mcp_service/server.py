@@ -31,12 +31,6 @@ def get_api(session_id: str):
     return MockFinTechAPIs(session_id, session_store=session_store)
 
 
-# @mcp.tool(name="get_contact_hint", description=<description>)
-# def get_contact_hint(app_id: str, session_id: str) -> str:
-#     _touch(session_id, "get_contact_hint")
-#     return get_auth(session_id).get_contact_hint(app_id)
-
-
 @mcp.tool(name="generate_otp", description=_d("generate_otp"))
 def generate_otp(user_input: str, session_id: str) -> str:
     _touch(session_id, "generate_otp")
@@ -53,6 +47,35 @@ def validate_otp(otp: str, session_id: str) -> str:
 def is_logged_in(session_id: str) -> dict:
     _touch(session_id, "is_logged_in")
     return {"logged_in": get_auth(session_id).is_logged_in()}
+
+
+@mcp.tool(name="list_loans", description=_d("list_loans"))
+def list_loans(session_id: str) -> str:
+    _touch(session_id, "list_loans")
+    s = session_store.get(session_id) or {}
+    loans = s.get("loans") or []
+    active = s.get("app_id")
+    if not loans:
+        return "No loans found. Please log in first."
+    lines = ["loan_number|status|product_code|active"]
+    for loan in loans:
+        ln = loan.get("loan_number", "")
+        lines.append(
+            f"{ln}|{loan.get('status', '')}|{loan.get('product_code', '')}|{'yes' if ln == active else 'no'}"
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool(name="select_loan", description=_d("select_loan"))
+def select_loan(loan_number: str, session_id: str) -> str:
+    _touch(session_id, "select_loan")
+    s = session_store.get(session_id) or {}
+    loans = s.get("loans") or []
+    known = [loan.get("loan_number") for loan in loans]
+    if loan_number not in known:
+        return f"Loan '{loan_number}' not found. Available: {', '.join(str(x) for x in known)}"
+    session_store.update(session_id, {"app_id": loan_number})
+    return f"Active loan set to '{loan_number}'."
 
 
 @mcp.tool(name="dashboard_home", description=_d("dashboard_home"))

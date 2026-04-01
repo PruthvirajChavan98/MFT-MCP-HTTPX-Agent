@@ -1,9 +1,9 @@
 generate_otp: |
-  Purpose: Generate and send an OTP using the provided identifier.
+  Purpose: Generate and send an OTP to the user's WhatsApp number.
   Input variables:
-    - user_input: 10-digit Indian WhatsApp number (without country code) or app_id.
+    - user_input: 10-digit Indian mobile number (without country code).
   Returns:
-    - CSV string with columns: status,phone_number,app_id,message
+    - CSV string with columns: status,phone_number,message
 
 validate_otp: |
   Purpose: Validate OTP for the current session and finalize authentication.
@@ -11,7 +11,10 @@ validate_otp: |
     - otp: One-time password entered by the user.
   Returns:
     - CSV string with columns:
-      status,message,app_id,user_details.id,user_details.phone_number,user_details.firstname,user_details.lastname
+      status,message,user_details.*,loans,active_loan,hint
+  Notes:
+    - If the user has exactly one loan, active_loan is set automatically.
+    - If the user has multiple loans, call list_loans() then select_loan(loan_number).
 
 is_logged_in: |
   Purpose: Check whether the current session is authenticated.
@@ -63,16 +66,46 @@ repayment_schedule: |
     - Structured response with installments and schedule summary.
 
 download_welcome_letter: |
-  Purpose: Generate or fetch Welcome Letter download details.
+  Purpose: Generate a Welcome Letter PDF on-demand and return the password hint needed to open it.
   Input variables:
     - none
   Returns:
-    - Structured response with download URL and password hint metadata.
+    - status: "ready" on success
+    - document_type: "welcome-letter"
+    - password_hint: hint describing how to derive the document password
+    - filename: suggested filename
+  Notes:
+    - The PDF itself is not returned. The user must download it separately using
+      a bearer token at GET /mockfin-service/download/welcome-letter
+    - Tell the user the password_hint so they can derive the password themselves.
 
 download_soa: |
-  Purpose: Generate or fetch Statement of Account (SOA) for a date range.
+  Purpose: Generate a Statement of Account (SOA) PDF for a date range and return the password hint.
   Input variables:
-    - start_date: Start date (DD/MM/YYYY).
-    - end_date: End date (DD/MM/YYYY).
+    - start_date: Start date in YYYY-MM-DD format (e.g. "2025-01-01").
+    - end_date: End date in YYYY-MM-DD format (e.g. "2025-12-31").
   Returns:
-    - Structured response with download URL, date range, and generation metadata.
+    - status: "ready" on success
+    - document_type: "soa"
+    - password_hint: hint describing how to derive the document password
+    - filename: suggested filename
+  Notes:
+    - Requires an active loan to be selected (call select_loan first if needed).
+    - The PDF itself is not returned. The user must download it separately using
+      a bearer token at POST /mockfin-service/download/soa
+    - Tell the user the password_hint so they can derive the password themselves.
+
+list_loans: |
+  Purpose: List all loans linked to the authenticated user's account.
+  Input variables:
+    - none
+  Returns:
+    - Pipe-delimited table with columns: loan_number|status|product_code|active
+    - The active column shows which loan is currently selected for operations.
+
+select_loan: |
+  Purpose: Set the active loan for the current session.
+  Input variables:
+    - loan_number: The loan_number value from list_loans() output.
+  Returns:
+    - Confirmation string, or an error with the list of valid loan numbers.

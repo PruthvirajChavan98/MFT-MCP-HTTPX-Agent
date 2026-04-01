@@ -59,6 +59,9 @@ class MockFinTechAPIs:
         if not self.bearer_token:
             return {"error": "Auth token missing."}
         if not self.app_id:
+            s = self.session_store.get(self.session_id) or {}
+            if s.get("loans"):
+                return {"error": "No loan selected. Call list_loans() then select_loan(loan_number)."}
             return {"error": "app_id missing."}
         return None
 
@@ -73,6 +76,58 @@ class MockFinTechAPIs:
             import json
 
             return json.dumps(obj, indent=2)
+
+    def _download(
+        self,
+        method: str,
+        path: str,
+        doc_type: str,
+        json_body: Optional[dict] = None,
+        require_app_id: bool = False,
+    ) -> dict:
+        self._hydrate()
+        if not self.bearer_token:
+            return {"error": "Auth token missing."}
+        if require_app_id:
+            ctx_err = self._check_context()
+            if ctx_err:
+                return ctx_err
+
+        headers = {
+            "Authorization": f"Bearer {self.bearer_token}",
+            "Accept": "application/pdf",
+        }
+        if json_body:
+            headers["Content-Type"] = "application/json"
+
+        try:
+            with httpx.Client(timeout=_CRM_TIMEOUT) as client:
+                resp = client.request(
+                    method, self._url(path), headers=headers, json=json_body
+                )
+                self.logger.info(f"{method} {path} - {resp.status_code}")
+
+                if resp.status_code not in (200, 201):
+                    try:
+                        err = resp.json()
+                    except Exception:
+                        err = resp.text[:1000]
+                    return {"error": err, "status_code": resp.status_code}
+
+                hint = resp.headers.get("x-password-hint", "")
+                disposition = resp.headers.get("content-disposition", "")
+                filename = ""
+                if 'filename="' in disposition:
+                    filename = disposition.split('filename="')[1].rstrip('"')
+
+                return {
+                    "status": "ready",
+                    "document_type": doc_type,
+                    "password_hint": hint,
+                    "filename": filename,
+                }
+        except Exception as e:
+            return {"error": str(e)}
 
     def _request(self, method: str, path: str, json_body: Optional[dict] = None) -> Any:
         self._hydrate()
@@ -131,14 +186,19 @@ class MockFinTechAPIs:
         )
 
     def download_welcome_letter(self) -> str:
-        return self._to_toon(self._request("GET", "/mockfin-service/download/welcome-letter/"))
+        return self._to_toon(
+            self._download("GET", "/mockfin-service/download/welcome-letter/", doc_type="welcome-letter")
+        )
 
     def download_soa(self, start_date: str, end_date: str) -> str:
+        if not self.app_id:
+            return self._to_toon({"error": "No loan selected. Call list_loans() then select_loan(loan_number)."})
         return self._to_toon(
-            self._request(
+            self._download(
                 "POST",
                 "/mockfin-service/download/soa/",
-                json_body={"start_date": start_date, "end_date": end_date},
+                doc_type="soa",
+                json_body={"app_id": self.app_id, "start_date": start_date, "end_date": end_date},
             )
         )
 

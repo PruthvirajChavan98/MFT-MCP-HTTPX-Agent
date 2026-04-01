@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const apiTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:8000'
+  const crmTarget = env.VITE_CRM_PROXY_TARGET || 'http://localhost:8080'
 
   return {
     plugins: [react(), tailwindcss()],
@@ -68,6 +69,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           rewrite: (p) => p.replace(/^\/api/, ''),
+        },
+        '/crm-api': {
+          target: crmTarget,
+          changeOrigin: true,
+          secure: false,
+          rewrite: (p) => p.replace(/^\/crm-api/, ''),
         },
       },
     },
