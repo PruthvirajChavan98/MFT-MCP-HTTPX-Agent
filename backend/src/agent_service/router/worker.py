@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
+import asyncpg
 from redis.asyncio import Redis
 
-from src.agent_service.core.config import REDIS_URL
-from src.common.neo4j_mgr import neo4j_mgr
+from src.agent_service.core.config import POSTGRES_DSN, REDIS_URL
+from src.common.memgraph_mgr import memgraph_mgr
+from src.common.milvus_mgr import milvus_mgr
 
 from .service import RouterService
 
@@ -15,6 +17,18 @@ log = logging.getLogger("router_worker")
 JOBS_STREAM = "router:jobs"
 GROUP = "router_group"
 CONSUMER = "router_1"
+
+_UPDATE_ROUTER_SQL = """
+UPDATE eval_traces SET
+    router_backend         = $1,
+    router_sentiment       = $2,
+    router_sentiment_score = $3,
+    router_reason          = $4,
+    router_reason_score    = $5,
+    router_override        = $6,
+    updated_at             = NOW()
+WHERE trace_id = $7
+"""
 
 
 async def ensure_group(r: Redis):
@@ -25,7 +39,17 @@ async def ensure_group(r: Redis):
 
 
 async def run_worker():
-    await neo4j_mgr.connect()
+    await memgraph_mgr.connect()
+    await milvus_mgr.aconnect()
+    log.info("Router worker: Memgraph and Milvus connected.")
+
+    pool: asyncpg.Pool | None = None
+    if POSTGRES_DSN:
+        pool = await asyncpg.create_pool(POSTGRES_DSN, min_size=1, max_size=5, command_timeout=30)
+        log.info("Router worker: PostgreSQL pool connected.")
+    else:
+        log.warning("Router worker: POSTGRES_DSN not set; router result persistence disabled.")
+
     r = Redis.from_url(REDIS_URL, decode_responses=True)
     await ensure_group(r)
 
@@ -48,33 +72,19 @@ async def run_worker():
                     try:
                         trace_id = fields.get("trace_id")
                         text = fields.get("text") or ""
-                        # embeddings-first; upgrade to hybrid if you want
                         result = await router.classify_embeddings(text)
 
-                        # persist on EvalTrace as TOP-LEVEL props
-                        await neo4j_mgr.execute_write(
-                            """
-                            MATCH (t:EvalTrace {trace_id:$trace_id})
-                            SET t.router_backend = $backend,
-                                t.router_sentiment = $sentiment,
-                                t.router_sentiment_score = $sent_score,
-                                t.router_reason = $reason,
-                                t.router_reason_score = $reason_score,
-                                t.router_override = $override,
-                                t.router_updated_at = datetime()
-                            """,
-                            {
-                                "trace_id": trace_id,
-                                "backend": result.backend,
-                                "sentiment": result.sentiment.label,
-                                "sent_score": float(result.sentiment.score),
-                                "reason": (result.reason.label if result.reason else None),
-                                "reason_score": (
-                                    float(result.reason.score) if result.reason else None
-                                ),
-                                "override": result.override,
-                            },
-                        )
+                        if pool and trace_id:
+                            await pool.execute(
+                                _UPDATE_ROUTER_SQL,
+                                result.backend,
+                                result.sentiment.label,
+                                float(result.sentiment.score),
+                                (result.reason.label if result.reason else None),
+                                (float(result.reason.score) if result.reason else None),
+                                result.override,
+                                trace_id,
+                            )
 
                         await r.xack(JOBS_STREAM, GROUP, msg_id)
                     except Exception as e:

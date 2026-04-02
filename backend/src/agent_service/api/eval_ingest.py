@@ -6,18 +6,18 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 from src.agent_service.core.config import REDIS_URL
 from src.agent_service.eval_store.embedder import EvalEmbedder
-from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
+from src.agent_service.eval_store.pg_store import EvalPgStore
 
 log = logging.getLogger("eval_ingest")
 
 router = APIRouter()
-STORE = EvalNeo4jStore()
+STORE = EvalPgStore()
 EMBEDDER = EvalEmbedder()
 
 EVAL_INGEST_KEY = (os.getenv("EVAL_INGEST_KEY") or "").strip() or None
@@ -106,18 +106,20 @@ async def _publish_live(summary: Dict[str, Any]) -> None:
 
 @router.post("/ingest")
 async def ingest(
+    request: Request,
     bundle: IngestBundle,
     background_tasks: BackgroundTasks,
     x_eval_ingest_key: Optional[str] = Header(None, alias="X-Eval-Ingest-Key"),
 ):
     _auth_or_401(x_eval_ingest_key)
+    pool = request.app.state.pool
 
     trace_id: Optional[str] = None
     if bundle.trace:
         trace_id = str(bundle.trace.get("trace_id") or "").strip() or None
         if not trace_id:
             raise HTTPException(status_code=400, detail="trace.trace_id missing")
-        await STORE.upsert_trace(bundle.trace)
+        await STORE.upsert_trace(pool, bundle.trace)
 
     if not trace_id and bundle.events:
         trace_id = str(bundle.events[0].get("trace_id") or "").strip() or None
@@ -152,9 +154,9 @@ async def ingest(
             continue
 
     if norm_events:
-        await STORE.upsert_events(trace_id, norm_events)
+        await STORE.upsert_events(pool, trace_id, norm_events)
 
-    # Normalize evals; compute evidence_event_keys for graph links
+    # Normalize evals; compute evidence_event_keys for junction table
     norm_evals: List[Dict[str, Any]] = []
     for r in bundle.evals:
         try:
@@ -182,15 +184,15 @@ async def ingest(
             continue
 
     if norm_evals:
-        await STORE.upsert_evals(trace_id, norm_evals)
+        await STORE.upsert_evals(pool, trace_id, norm_evals)
 
-    # Background embeddings (optional; won’t block ingest)
+    # Background embeddings (optional; won't block ingest)
     if bundle.trace:
-        _schedule(EMBEDDER.embed_trace_if_needed(bundle.trace, norm_events))
+        _schedule(EMBEDDER.embed_trace_if_needed(pool, bundle.trace, norm_events))
     for ev in norm_evals:
-        _schedule(EMBEDDER.embed_eval_if_needed(trace_id, ev))
+        _schedule(EMBEDDER.embed_eval_if_needed(pool, trace_id, ev))
 
-    # LIVE publish (fire-and-forget; don’t fail ingest if Redis is down)
+    # LIVE publish (fire-and-forget; don't fail ingest if Redis is down)
     passed_count = sum(1 for r in norm_evals if r.get("passed") is True)
     eval_count = len(norm_evals)
     pass_rate = (passed_count / eval_count) if eval_count > 0 else None

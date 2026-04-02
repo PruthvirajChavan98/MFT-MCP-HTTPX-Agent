@@ -11,9 +11,10 @@ import { ChatAssistantMarkdown } from './ChatAssistantMarkdown'
 interface Props {
   message: ChatMessageType
   sessionId?: string
+  onFollowUpClick?: (text: string) => void
 }
 
-export function ChatMessage({ message, sessionId }: Props) {
+export function ChatMessage({ message, sessionId, onFollowUpClick }: Props) {
   const isUser = message.role === 'user'
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -116,12 +117,14 @@ export function ChatMessage({ message, sessionId }: Props) {
         {!isUser && (message.followUps?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {message.followUps?.map((item, index) => (
-              <span
+              <button
                 key={`${item}-${index}`}
-                className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-700"
+                type="button"
+                className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-700 hover:bg-cyan-100 transition-colors cursor-pointer"
+                onClick={() => onFollowUpClick?.(item)}
               >
                 {item}
-              </span>
+              </button>
             ))}
           </div>
         )}

@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
             'query-vendor': ['@tanstack/react-query', '@tanstack/react-query-devtools'],
             'charts-vendor': ['recharts'],
             'mui-vendor': ['@emotion/react', '@emotion/styled', '@mui/icons-material', '@mui/material'],
-            'admin-vendor': ['react-dnd', 'react-dnd-html5-backend', 'react-resizable-panels'],
+            'admin-vendor': ['react-resizable-panels'],
             'radix-vendor': [
               '@radix-ui/react-accordion',
               '@radix-ui/react-alert-dialog',

@@ -16,11 +16,11 @@ from langchain_core.messages import BaseMessage, HumanMessage
 
 from src.agent_service.core.config import ENABLE_LLM_JUDGE, JUDGE_MODEL_NAME
 from src.agent_service.eval_store.embedder import EvalEmbedder
-from src.agent_service.eval_store.judge import LLMJudge
-from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
+from src.agent_service.eval_store.pg_store import EvalPgStore, get_shared_pool
+from src.agent_service.eval_store.ragas_judge import RagasJudge
 
 log = logging.getLogger("shadow_eval")
-STORE = EvalNeo4jStore()
+STORE = EvalPgStore()
 EMBEDDER = EvalEmbedder()
 
 ROUTER_JOBS_STREAM_KEY = (os.getenv("ROUTER_JOBS_STREAM_KEY") or "router:jobs").strip()
@@ -61,31 +61,6 @@ DEFAULT_RULES = [
         "answer_pattern": r"(cannot\s*be\s*stopped|emi.*continue|continue\s*paying|credit\s*record|knowledge\s*base\s*error)",
     }
 ]
-
-# -----------------------------
-# Prompts
-# -----------------------------
-JUDGE_SYSTEM_PROMPT = """
-You are an impartial AI Judge for a FinTech assistant.
-Evaluate the "Assistant Answer" based on the provided Context.
-
-### Metrics to Score (1-5 Scale):
-1. **Faithfulness**: Is the answer derived *only* from the Tool Outputs? (Score 1 if hallucinated, 5 if fully grounded).
-2. **Relevance**: Does the answer directly address the User Question? (Score 1 if evasive, 5 if direct).
-3. **Correctness**:
-   - Did the assistant follow the **System Instructions** (e.g. refusal rules)?
-   - Is the answer factually consistent with the **Tool Outputs**?
-4. **Coherence**: Is the answer clear and professional?
-
-### Input Data
-- **System Instructions**: The rules the assistant MUST follow.
-- **Chat History**: Previous messages for context.
-- **User Question**: The current query.
-- **Tool Outputs**: Information retrieved to answer the query.
-- **Assistant Answer**: The final response to evaluate.
-
-Output JSON only.
-"""
 
 
 def _utc_iso(dt: Optional[datetime] = None) -> str:
@@ -462,95 +437,50 @@ async def compute_llm_metrics(
     openrouter_api_key: Optional[str] = None,
     nvidia_api_key: Optional[str] = None,
     groq_api_key: Optional[str] = None,
-    model_name: Optional[str] = None,  # ← ADD THIS
-    provider: Optional[str] = None,  # ← ADD THIS
+    model_name: Optional[str] = None,
+    provider: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     if not ENABLE_LLM_JUDGE:
         return []
 
     trace_id = trace["trace_id"]
     question = trace.get("inputs", {}).get("question", "")
-    answer = trace.get("final_output", "")
-
-    tool_outputs = (
-        "\n\n".join(collector.retrieved_context)
-        if collector.retrieved_context
-        else "No tool outputs."
-    )
-    history_str = "\n".join(collector.chat_history) if collector.chat_history else "No history."
-
-    context_str = f"""
-[SYSTEM INSTRUCTIONS]
-{collector.system_prompt}
-
-[AVAILABLE TOOLS]
-{collector.tool_definitions}
-
-[CHAT HISTORY (Last 5)]
-{history_str}
-
-[TOOL OUTPUTS / RETRIEVED CONTEXT]
-{tool_outputs}
-"""
+    answer = trace.get("final_output", "") or ""
 
     if not answer:
         return []
 
-    results = []
+    # Tool outputs captured by the collector map directly to RAGAS retrieved_contexts
+    contexts: List[str] = collector.retrieved_context or []
 
-    # ✅ Use session's model and keys instead of separate judge model
-    judge_model_name = model_name or trace.get("model") or JUDGE_MODEL_NAME
+    judge_model = model_name or trace.get("model") or JUDGE_MODEL_NAME
 
-    # Create judge instance with session's API keys and model
-    judge = LLMJudge(
-        model_name=judge_model_name,  # ← Use session's model
+    judge = RagasJudge(
+        model_name=judge_model,
         openrouter_api_key=openrouter_api_key,
         nvidia_api_key=nvidia_api_key,
         groq_api_key=groq_api_key,
     )
 
-    metrics_to_run = [
-        ("relevance", question, answer, context_str),
-        ("helpfulness", question, answer, context_str),
-        ("faithfulness", question, answer, context_str),
-        ("correctness", question, answer, context_str),
-        ("coherence", question, answer, context_str),
-    ]
-
-    tasks = [judge.evaluate_pointwise(m, q, a, c) for m, q, a, c in metrics_to_run]
-
-    eval_results = await asyncio.gather(*tasks)
-
-    full_name = judge.model_name
-    short_name = full_name.split("/", 1)[-1] if "/" in full_name else full_name
-    judge_id = f"llm_judge:{short_name}"
-
-    for res in eval_results:
-        results.append(
-            {
-                "eval_id": uuid.uuid4().hex,
-                "trace_id": trace_id,
-                "metric_name": res["metric_name"],
-                "score": float(res["score"]),
-                "passed": res["passed"],
-                "reasoning": res["reasoning"],
-                "evaluator_id": judge_id,
-                "evidence": [],
-                "meta": {"mode": "pointwise_g_eval", "same_model_as_session": True},
-            }
-        )
-
-    return results
+    try:
+        return await judge.evaluate(question, answer, contexts, trace_id)
+    except Exception as exc:
+        log.warning("[shadow_eval] RAGAS evaluation failed trace=%s: %s", trace_id, exc)
+        return []
 
 
 async def _commit_bundle(
     trace: Dict[str, Any], events: List[Dict[str, Any]], evals: List[Dict[str, Any]]
 ) -> None:
-    await STORE.upsert_trace(trace)
+    pool = get_shared_pool()
+    if pool is None:
+        log.error("[shadow_eval] PostgreSQL pool not configured; skipping bundle commit")
+        return
+    await STORE.upsert_trace(pool, trace)
     if events:
-        await STORE.upsert_events(trace["trace_id"], events)
+        await STORE.upsert_events(pool, trace["trace_id"], events)
     if evals:
-        await STORE.upsert_evals(trace["trace_id"], evals)
+        await STORE.upsert_evals(pool, trace["trace_id"], evals)
 
 
 async def maybe_shadow_eval_commit(
@@ -595,10 +525,11 @@ async def maybe_shadow_eval_commit(
         try:
             # Use session's OpenRouter key for embeddings
             embedder = EvalEmbedder(openrouter_api_key=openrouter_api_key)
-
-            await embedder.embed_trace_if_needed(trace, events)
-            for ev in evals:
-                await embedder.embed_eval_if_needed(trace["trace_id"], ev)
+            pool = get_shared_pool()
+            if pool is not None:
+                await embedder.embed_trace_if_needed(pool, trace, events)
+                for ev in evals:
+                    await embedder.embed_eval_if_needed(pool, trace["trace_id"], ev)
         except Exception as e:
             log.warning(f"[shadow_eval] Embedding generation failed: {e}")
 

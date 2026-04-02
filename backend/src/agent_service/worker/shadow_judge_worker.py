@@ -7,11 +7,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import asyncpg
 import httpx
 
 from src.agent_service.core.config import (
     GROQ_API_KEYS,
     GROQ_BASE_URL,
+    POSTGRES_DSN,
     SHADOW_JUDGE_BATCH_SIZE,
     SHADOW_JUDGE_ENABLED,
     SHADOW_JUDGE_MODEL,
@@ -21,14 +23,17 @@ from src.agent_service.core.config import (
 )
 from src.agent_service.core.http_client import close_http_client, get_http_client
 from src.agent_service.eval_store.shadow_queue import RedisTraceQueue, trace_queue
-from src.common.neo4j_mgr import neo4j_mgr
+from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger(__name__)
 
-_WRITE_EVALS_QUERY = """
-UNWIND $rows AS row
-CREATE (e:ShadowJudgeEval)
-SET e = row
+_INSERT_SHADOW_JUDGE_EVAL = """
+INSERT INTO shadow_judge_evals (
+    eval_id, trace_id, session_id, model,
+    helpfulness, faithfulness, policy_adherence,
+    summary, raw_json, evaluated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+ON CONFLICT (eval_id) DO NOTHING
 """
 
 
@@ -76,6 +81,7 @@ class ShadowJudgeWorker:
         self.queue = queue
         self.poll_seconds = SHADOW_JUDGE_POLL_SECONDS
         self.batch_size = SHADOW_JUDGE_BATCH_SIZE
+        self._pool: asyncpg.Pool | None = None
 
     async def _call_groq(self, batch: list[dict[str, Any]], model: str) -> list[dict[str, Any]]:
         if not GROQ_API_KEYS:
@@ -195,9 +201,24 @@ class ShadowJudgeWorker:
                 raise
 
     async def _persist_rows(self, rows: list[dict[str, Any]]) -> None:
-        if not rows:
+        if not rows or self._pool is None:
             return
-        await neo4j_mgr.execute_write(_WRITE_EVALS_QUERY, {"rows": rows})
+        params = [
+            (
+                r["eval_id"],
+                r.get("trace_id"),
+                r.get("session_id"),
+                r.get("model"),
+                r.get("helpfulness", 0.0),
+                r.get("faithfulness", 0.0),
+                r.get("policy_adherence", 0.0),
+                r.get("summary", ""),
+                json.dumps(r, ensure_ascii=False),
+                r.get("evaluated_at"),
+            )
+            for r in rows
+        ]
+        await self._pool.executemany(_INSERT_SHADOW_JUDGE_EVAL, params)
 
     async def process_once(self) -> int:
         if not SHADOW_JUDGE_ENABLED:
@@ -227,7 +248,17 @@ class ShadowJudgeWorker:
             raise
 
     async def run_forever(self) -> None:
-        await neo4j_mgr.connect()
+        await milvus_mgr.aconnect()
+        log.info("Milvus stores initialized.")
+
+        if POSTGRES_DSN:
+            self._pool = await asyncpg.create_pool(
+                POSTGRES_DSN, min_size=1, max_size=5, command_timeout=30
+            )
+            log.info("Shadow judge worker: PostgreSQL pool connected.")
+        else:
+            log.warning("Shadow judge worker: POSTGRES_DSN not set; eval persistence disabled.")
+
         log.info(
             "Shadow judge worker started (poll=%ss, batch_size=%s).",
             self.poll_seconds,
@@ -244,7 +275,8 @@ class ShadowJudgeWorker:
                 await asyncio.sleep(self.poll_seconds)
         finally:
             await close_http_client()
-            await neo4j_mgr.close()
+            if self._pool:
+                await self._pool.close()
 
 
 async def run_worker() -> None:

@@ -7,12 +7,12 @@ from typing import Any
 
 from prometheus_client import Counter, Histogram
 
-from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
+from src.agent_service.eval_store.pg_store import EvalPgStore, get_shared_pool
 from src.agent_service.features.question_category import classify_question_category
 
 log = logging.getLogger("runtime_trace_store")
 
-_STORE = EvalNeo4jStore()
+_STORE = EvalPgStore()
 
 RUNTIME_TRACE_PERSIST_TOTAL = Counter(
     "agent_runtime_trace_persist_total",
@@ -104,14 +104,23 @@ async def persist_runtime_trace(
         trace["inline_guard_reason_code"] = None
         trace["inline_guard_risk_score"] = None
 
+    pool = get_shared_pool()
+    if pool is None:
+        RUNTIME_TRACE_PERSIST_TOTAL.labels(status="failure").inc()
+        RUNTIME_TRACE_PERSIST_DURATION_SECONDS.labels(status="failure").observe(
+            time.perf_counter() - started
+        )
+        log.error("Runtime trace persistence skipped: PostgreSQL pool not configured")
+        return False
+
     last_error: Exception | None = None
 
     for attempt in range(1, max_attempts + 1):
         RUNTIME_TRACE_PERSIST_ATTEMPTS_TOTAL.inc()
         try:
-            await _STORE.upsert_trace(trace)
+            await _STORE.upsert_trace(pool, trace)
             if events:
-                await _STORE.upsert_events(trace_id, events)
+                await _STORE.upsert_events(pool, trace_id, events)
 
             elapsed = time.perf_counter() - started
             RUNTIME_TRACE_PERSIST_TOTAL.labels(status="success").inc()

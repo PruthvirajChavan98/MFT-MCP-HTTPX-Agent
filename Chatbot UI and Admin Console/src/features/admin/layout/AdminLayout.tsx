@@ -81,7 +81,7 @@ function AdminShell() {
         <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100">
           {sidebarOpen && (
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gradient-to-r from-cyan-500 to-teal-500">
+              <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-linear-to-r from-cyan-500 to-teal-500">
                 <ShieldIcon className="w-4 h-4 text-white" />
               </div>
               <span className="font-bold text-slate-900 truncate" style={{ fontSize: 15 }}>MFT Admin</span>
@@ -102,7 +102,7 @@ function AdminShell() {
               to={item.path}
               end={item.exact}
               title={!sidebarOpen ? item.label : undefined}
-              className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${isActive ? "text-white shadow-md bg-gradient-to-r from-cyan-500 to-teal-500" : "text-gray-600 hover:bg-gray-100"
+              className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${isActive ? "text-white shadow-md bg-linear-to-r from-cyan-500 to-teal-500" : "text-gray-600 hover:bg-gray-100"
                 }`}
             >
               <item.icon className="w-4 h-4 shrink-0" />
@@ -165,7 +165,7 @@ function AdminShell() {
               <Bell className="w-4 h-4" />
               <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full border border-white" />
             </button>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm" style={{ background: "var(--brand-gradient)", fontSize: 11, fontWeight: 700 }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm" style={{ background: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)", fontSize: 11, fontWeight: 700 }}>
               AD
             </div>
           </div>

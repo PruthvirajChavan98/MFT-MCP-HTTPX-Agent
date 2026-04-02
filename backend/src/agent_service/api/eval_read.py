@@ -1,27 +1,23 @@
-# ===== src/agent_service/api/eval_read.py =====
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from langchain_openai import OpenAIEmbeddings
-from neo4j.exceptions import DriverError, Neo4jError, ServiceUnavailable, SessionExpired
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from src.agent_service.api.admin_auth import require_admin_key
-from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
-from src.agent_service.eval_store.neo4j_store import EvalNeo4jStore
-from src.common.neo4j_mgr import neo4j_mgr
+from src.agent_service.core.config import OPENROUTER_API_KEY
+from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("eval_read_api")
 router = APIRouter(dependencies=[Depends(require_admin_key)])
-_EVAL_STORE = EvalNeo4jStore()
 
-# -----------------------------
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Helpers
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def _json_load_maybe(s: Any) -> Any:
@@ -38,102 +34,24 @@ def _json_load_maybe(s: Any) -> Any:
     return s
 
 
-async def _rows(q: str, params: dict) -> List[dict]:
-    async with neo4j_mgr._driver.session() as session:
-        result = await session.run(q, params)
-        records = await result.data()
-        return [dict(r) for r in records]
+def _get_pool(request: Request) -> Any:
+    return request.app.state.pool
 
 
-async def _one(q: str, params: dict) -> Optional[dict]:
-    async with neo4j_mgr._driver.session() as session:
-        result = await session.run(q, params)
-        r = await result.single()
-        return dict(r) if r else None
-
-
-def _error_detail(code: str, message: str, *, operation: str, hint: Optional[str] = None) -> dict:
-    detail = {
-        "code": code,
-        "operation": operation,
-        "message": message,
-    }
-    if hint:
-        detail["hint"] = hint
-    return detail
-
-
-def _raise_eval_http_error(exc: Exception, operation: str) -> None:
+def _raise_db_error(exc: Exception, operation: str) -> None:
     msg = str(exc)
-    low = msg.lower()
-
-    if isinstance(exc, (ServiceUnavailable, SessionExpired, DriverError)) or (
-        "couldn't connect" in low
-        or "connection refused" in low
-        or "neo4j" in low
-        and "failed after" in low
-    ):
-        raise HTTPException(
-            status_code=503,
-            detail=_error_detail(
-                "neo4j_unavailable",
-                msg,
-                operation=operation,
-                hint="Verify Neo4j container health and bolt connectivity on neo4j:7687.",
-            ),
-        ) from exc
-
-    if "index" in low and ("does not exist" in low or "no such index" in low):
-        raise HTTPException(
-            status_code=503,
-            detail=_error_detail(
-                "neo4j_index_missing",
-                msg,
-                operation=operation,
-                hint="Ensure eval Neo4j schema/indexes are initialized via /eval/ingest or startup migration.",
-            ),
-        ) from exc
-
-    if isinstance(exc, Neo4jError):
-        raise HTTPException(
-            status_code=500,
-            detail=_error_detail("neo4j_query_error", msg, operation=operation),
-        ) from exc
-
+    log.error("DB error in %s: %s", operation, msg)
     raise HTTPException(
-        status_code=500,
-        detail=_error_detail("eval_internal_error", msg, operation=operation),
+        status_code=503,
+        detail={"code": "store_unavailable", "operation": operation, "message": msg},
     ) from exc
 
 
-async def _run_rows_query(q: str, params: dict, operation: str) -> List[dict]:
-    try:
-        return await _rows(q, params)
-    except Exception as exc:
-        _raise_eval_http_error(exc, operation)
-        raise  # pragma: no cover
-
-
-async def _run_one_query(q: str, params: dict, operation: str) -> Optional[dict]:
-    try:
-        return await _one(q, params)
-    except Exception as exc:
-        _raise_eval_http_error(exc, operation)
-        raise  # pragma: no cover
-
-
-async def _ensure_eval_schema(operation: str) -> None:
-    try:
-        await _EVAL_STORE.ensure_schema()
-    except Exception as exc:
-        _raise_eval_http_error(exc, f"{operation}_ensure_schema")
-
-
-def _compress_events(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _compress_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not events:
         return []
-    compressed = []
-    current_block = None
+    compressed: list[dict[str, Any]] = []
+    current_block: dict[str, Any] | None = None
     for evt in events:
         e = evt.copy()
         etype = e.get("event_type")
@@ -166,35 +84,35 @@ def _compress_events(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return compressed
 
 
-# -----------------------------
-# Models
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Request models
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 class VectorSearchRequest(BaseModel):
     kind: Literal["trace", "result"] = "trace"
     text: Optional[str] = None
-    vector: Optional[List[float]] = None
+    vector: Optional[list[float]] = None
     k: int = 10
     min_score: float = 0.0
 
-    # Filters
     provider: Optional[str] = None
     model: Optional[str] = None
     status: Optional[str] = None
     metric_name: Optional[str] = None
     passed: Optional[bool] = None
-
-    # ✅ NEW: ID Filters
     session_id: Optional[str] = None
     case_id: Optional[str] = None
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # GET /eval/search
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @router.get("/search")
 async def eval_search(
+    request: Request,
     limit: int = Query(50),
     offset: int = Query(0),
     session_id: Optional[str] = None,
@@ -208,338 +126,523 @@ async def eval_search(
     max_score: Optional[float] = None,
     order: Literal["desc", "asc"] = "desc",
 ):
-    await _ensure_eval_schema("eval_search")
+    pool = _get_pool(request)
     order_dir = "DESC" if order.lower() == "desc" else "ASC"
-    if metric_name:
-        metric_name = metric_name.strip()
+    metric_name = (metric_name or "").strip() or None
 
-    where = []
-    params = {
-        "limit": limit,
-        "offset": offset,
-        "session_id": session_id,
-        "status": status,
-        "provider": provider,
-        "model": model,
-        "case_id": case_id,
-        "metric_name": metric_name,
-        "passed": passed,
-        "min_score": min_score,
-        "max_score": max_score,
-    }
-    where.append("($session_id IS NULL OR t.session_id = $session_id)")
-    where.append("($status IS NULL OR t.status = $status)")
-    where.append("($provider IS NULL OR t.provider = $provider)")
-    where.append("($model IS NULL OR t.model = $model)")
-    where.append("($case_id IS NULL OR t.case_id = $case_id)")
+    # Base WHERE params ($1–$5)
+    base_args: list[object] = [session_id, status, provider, model, case_id]
 
-    metric_filters = []
+    # Build dynamic HAVING clause with positional asyncpg $N params
+    metric_having: list[str] = []
+    having_args: list[object] = []
+    param_idx = len(base_args) + 1  # next param slot after $5
+
     if metric_name:
-        metric_filters.append("x.metric_name = $metric_name")
+        metric_having.append(f"bool_or(r.metric_name = ${param_idx})")
+        having_args.append(metric_name)
+        param_idx += 1
     if passed is not None:
-        metric_filters.append("x.passed = $passed")
+        metric_having.append(f"bool_or(r.passed = ${param_idx})")
+        having_args.append(passed)
+        param_idx += 1
     if min_score is not None:
-        metric_filters.append("x.score >= $min_score")
+        metric_having.append(f"bool_or(r.score >= ${param_idx})")
+        having_args.append(float(min_score))
+        param_idx += 1
     if max_score is not None:
-        metric_filters.append("x.score <= $max_score")
+        metric_having.append(f"bool_or(r.score <= ${param_idx})")
+        having_args.append(float(max_score))
+        param_idx += 1
 
-    if metric_filters:
-        filter_str = " AND ".join(metric_filters)
-        metric_clause = f"OPTIONAL MATCH (t)-[:HAS_EVAL]->(mr:EvalResult) WITH t, collect(mr) AS evals, [x IN collect(mr) WHERE {filter_str}] AS matching WHERE size(matching) > 0"
-    else:
-        metric_clause = (
-            "OPTIONAL MATCH (t)-[:HAS_EVAL]->(mr:EvalResult) WITH t, collect(mr) AS evals"
+    having_sql = ""
+    if metric_having:
+        having_sql = "HAVING " + " AND ".join(metric_having)
+
+    try:
+        # Count query: wrap subquery so fetchrow returns the true total
+        if metric_having:
+            count_row = await pool.fetchrow(
+                f"""
+                SELECT COUNT(*) AS total FROM (
+                    SELECT t.trace_id
+                    FROM eval_traces t
+                    LEFT JOIN eval_results r ON r.trace_id = t.trace_id
+                    WHERE ($1::text IS NULL OR t.session_id = $1)
+                      AND ($2::text IS NULL OR t.status = $2)
+                      AND ($3::text IS NULL OR t.provider = $3)
+                      AND ($4::text IS NULL OR t.model = $4)
+                      AND ($5::text IS NULL OR t.case_id = $5)
+                    GROUP BY t.trace_id
+                    {having_sql}
+                ) sub
+                """,
+                *base_args,
+                *having_args,
+            )
+        else:
+            count_row = await pool.fetchrow(
+                """
+                SELECT COUNT(DISTINCT t.trace_id) AS total
+                FROM eval_traces t
+                WHERE ($1::text IS NULL OR t.session_id = $1)
+                  AND ($2::text IS NULL OR t.status = $2)
+                  AND ($3::text IS NULL OR t.provider = $3)
+                  AND ($4::text IS NULL OR t.model = $4)
+                  AND ($5::text IS NULL OR t.case_id = $5)
+                """,
+                *base_args,
+            )
+        total = int((count_row or {}).get("total") or 0)
+
+        # Main query: offset/limit come after base + having params
+        offset_idx = param_idx
+        limit_idx = param_idx + 1
+
+        rows = await pool.fetch(
+            f"""
+            SELECT
+                t.trace_id, t.case_id, t.session_id, t.provider, t.model,
+                t.endpoint, t.started_at, t.ended_at, t.latency_ms,
+                t.status, t.error,
+                COUNT(DISTINCT e.event_key) AS event_count,
+                COUNT(DISTINCT r.eval_id)   AS eval_count,
+                SUM(CASE WHEN r.passed THEN 1 ELSE 0 END) AS pass_count,
+                COALESCE(
+                    JSONB_AGG(
+                        DISTINCT JSONB_BUILD_OBJECT(
+                            'name', r.metric_name,
+                            'score', r.score,
+                            'passed', r.passed
+                        )
+                    ) FILTER (WHERE r.eval_id IS NOT NULL),
+                    '[]'::jsonb
+                ) AS scores
+            FROM eval_traces t
+            LEFT JOIN eval_events  e ON e.trace_id = t.trace_id
+            LEFT JOIN eval_results r ON r.trace_id = t.trace_id
+            WHERE ($1::text IS NULL OR t.session_id = $1)
+              AND ($2::text IS NULL OR t.status = $2)
+              AND ($3::text IS NULL OR t.provider = $3)
+              AND ($4::text IS NULL OR t.model = $4)
+              AND ($5::text IS NULL OR t.case_id = $5)
+            GROUP BY
+                t.trace_id, t.case_id, t.session_id, t.provider, t.model,
+                t.endpoint, t.started_at, t.ended_at, t.latency_ms, t.status, t.error
+            {having_sql}
+            ORDER BY t.started_at {order_dir}
+            OFFSET ${offset_idx} LIMIT ${limit_idx}
+            """,
+            *base_args,
+            *having_args,
+            offset,
+            limit,
         )
+    except Exception as exc:
+        _raise_db_error(exc, "eval_search")
 
-    q_count = (
-        f"MATCH (t:EvalTrace) WHERE {' AND '.join(where)} {metric_clause} RETURN count(t) AS total"
-    )
-
-    q_items = f"""
-    MATCH (t:EvalTrace) WHERE {" AND ".join(where)} {metric_clause}
-    OPTIONAL MATCH (t)-[:HAS_EVENT]->(ev:EvalEvent)
-    WITH t, evals, count(ev) AS event_count
-    RETURN t.trace_id AS trace_id, t.case_id AS case_id, t.session_id AS session_id, t.provider AS provider, t.model AS model, t.endpoint AS endpoint, t.started_at AS started_at, t.ended_at AS ended_at, t.latency_ms AS latency_ms, t.status AS status, t.error AS error, event_count, size(evals) AS eval_count, reduce(p = 0, x IN evals | p + CASE WHEN x.passed = true THEN 1 ELSE 0 END) AS pass_count, [e IN evals | {{name: e.metric_name, score: e.score, passed: e.passed}}] as scores
-    ORDER BY t.started_at {order_dir} SKIP $offset LIMIT $limit
-    """
-
-    total_row = await _run_one_query(q_count, params, "eval_search_count")
-    total = int((total_row or {}).get("total") or 0)
-    items = await _run_rows_query(q_items, params, "eval_search_items")
+    items = [dict(r) for r in rows]
+    for item in items:
+        if isinstance(item.get("scores"), str):
+            item["scores"] = _json_load_maybe(item["scores"])
     return {"total": total, "limit": limit, "offset": offset, "items": items}
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # GET /eval/sessions
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @router.get("/sessions")
 async def eval_sessions(
-    limit: int = Query(25), offset: int = Query(0), app_id: Optional[str] = None
+    request: Request,
+    limit: int = Query(25),
+    offset: int = Query(0),
+    app_id: Optional[str] = None,
 ):
-    await _ensure_eval_schema("eval_sessions")
-    where_clause = ""
-    params = {"limit": limit, "offset": offset}
-    if app_id and app_id.strip():
-        where_clause = "WHERE t.case_id = $app_id"
-        params["app_id"] = app_id.strip()  # type: ignore
+    pool = _get_pool(request)
+    try:
+        count_row = await pool.fetchrow(
+            """
+            SELECT COUNT(DISTINCT session_id) AS total
+            FROM eval_traces
+            WHERE ($1::text IS NULL OR case_id = $1)
+            """,
+            app_id or None,
+        )
+        total = int((count_row or {}).get("total") or 0)
 
-    q_count = f"MATCH (t:EvalTrace) {where_clause} WITH t.session_id as sid RETURN count(DISTINCT sid) as total"
+        rows = await pool.fetch(
+            """
+            SELECT
+                t.session_id,
+                MAX(t.case_id)     AS app_id,
+                COUNT(*)           AS trace_count,
+                MAX(t.started_at)  AS last_active,
+                (array_agg(t.model       ORDER BY t.started_at DESC))[1] AS last_model,
+                (array_agg(t.status      ORDER BY t.started_at DESC))[1] AS last_status
+            FROM eval_traces t
+            WHERE t.session_id IS NOT NULL
+              AND ($1::text IS NULL OR t.case_id = $1)
+            GROUP BY t.session_id
+            ORDER BY last_active DESC
+            OFFSET $2 LIMIT $3
+            """,
+            app_id or None,
+            offset,
+            limit,
+        )
+    except Exception as exc:
+        _raise_db_error(exc, "eval_sessions")
 
-    q_items = f"""
-    MATCH (t:EvalTrace)
-    {where_clause}
-    WITH t.session_id AS sid, t
-    ORDER BY t.started_at DESC
-
-    WITH sid, collect(t) AS traces
-    WITH sid, traces, traces[0] as latest, size(traces) as trace_count,
-         [x IN traces WHERE x.case_id IS NOT NULL | x.case_id] as app_ids
-
-    RETURN
-        sid AS session_id,
-        head(app_ids) AS app_id,
-        trace_count,
-        latest.started_at AS last_active,
-        latest.model AS last_model,
-        latest.status AS last_status
-    ORDER BY last_active DESC
-    SKIP $offset LIMIT $limit
-    """
-
-    total_row = await _run_one_query(q_count, params, "eval_sessions_count")
-    total = int((total_row or {}).get("total") or 0)
-
-    items = await _run_rows_query(q_items, params, "eval_sessions_items")
-    return {"total": total, "limit": limit, "offset": offset, "items": items}
+    return {"total": total, "limit": limit, "offset": offset, "items": [dict(r) for r in rows]}
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # GET /eval/trace/{trace_id}
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @router.get("/trace/{trace_id}")
-async def eval_trace(trace_id: str):
-    await _ensure_eval_schema("eval_trace")
-    q = "MATCH (t:EvalTrace {trace_id: $trace_id}) OPTIONAL MATCH (t)-[:HAS_EVENT]->(e:EvalEvent) WITH t, e ORDER BY e.seq ASC WITH t, [x IN collect(CASE WHEN e IS NULL THEN null ELSE {event_key: e.event_key, trace_id: e.trace_id, seq: e.seq, ts: e.ts, event_type: e.event_type, name: e.name, text: e.text, payload_json: e.payload_json, meta_json: e.meta_json} END) WHERE x IS NOT NULL] AS events OPTIONAL MATCH (t)-[:HAS_EVAL]->(r:EvalResult) OPTIONAL MATCH (r)-[:EVIDENCE]->(ev:EvalEvent) WITH t, events, r, collect(ev.event_key) AS evidence_event_keys WITH t, events, [x IN collect(CASE WHEN r IS NULL THEN null ELSE {eval_id: r.eval_id, trace_id: r.trace_id, metric_name: r.metric_name, score: r.score, passed: r.passed, reasoning: r.reasoning, evaluator_id: r.evaluator_id, meta_json: r.meta_json, evidence_json: r.evidence_json, evidence_event_keys: evidence_event_keys} END) WHERE x IS NOT NULL] AS evals RETURN {trace_id: t.trace_id, case_id: t.case_id, session_id: t.session_id, provider: t.provider, model: t.model, endpoint: t.endpoint, started_at: t.started_at, ended_at: t.ended_at, latency_ms: t.latency_ms, status: t.status, error: t.error, inputs_json: t.inputs_json, final_output: t.final_output, tags_json: t.tags_json, meta_json: t.meta_json} AS trace, events AS events, evals AS evals"
-    row = await _run_one_query(q, {"trace_id": trace_id}, "eval_trace")
-    if not row:
-        raise HTTPException(status_code=404, detail="Trace not found")
-    trace_obj = row["trace"]
+async def eval_trace(request: Request, trace_id: str):
+    pool = _get_pool(request)
+    try:
+        trace_row = await pool.fetchrow("SELECT * FROM eval_traces WHERE trace_id = $1", trace_id)
+        if not trace_row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+
+        event_rows = await pool.fetch(
+            "SELECT * FROM eval_events WHERE trace_id = $1 ORDER BY seq ASC", trace_id
+        )
+        eval_rows = await pool.fetch(
+            """
+            SELECT r.*,
+                   ARRAY_AGG(ere.event_key) FILTER (WHERE ere.event_key IS NOT NULL)
+                     AS evidence_event_keys
+            FROM eval_results r
+            LEFT JOIN eval_result_evidence ere ON ere.eval_id = r.eval_id
+            WHERE r.trace_id = $1
+            GROUP BY r.eval_id
+            """,
+            trace_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _raise_db_error(exc, "eval_trace")
+
+    trace_obj = dict(trace_row)
     for k in ("inputs_json", "tags_json", "meta_json"):
         trace_obj[k] = _json_load_maybe(trace_obj.get(k))
-    events = row.get("events") or []
+
+    events = [dict(e) for e in event_rows]
     for e in events:
         e["payload_json"] = _json_load_maybe(e.get("payload_json"))
         e["meta_json"] = _json_load_maybe(e.get("meta_json"))
-    compressed_events = _compress_events(events)
-    evals = row.get("evals") or []
+
+    evals = [dict(r) for r in eval_rows]
     for r in evals:
         r["meta_json"] = _json_load_maybe(r.get("meta_json"))
         r["evidence_json"] = _json_load_maybe(r.get("evidence_json"))
-    return {"trace": trace_obj, "events": compressed_events, "evals": evals}
+
+    return {"trace": trace_obj, "events": _compress_events(events), "evals": evals}
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # GET /eval/fulltext
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @router.get("/fulltext")
 async def eval_fulltext(
+    request: Request,
     q: str = Query(..., min_length=1),
     kind: Literal["event", "trace", "result"] = "event",
     limit: int = 50,
     offset: int = 0,
     trace_id: Optional[str] = None,
 ):
-    await _ensure_eval_schema("eval_fulltext")
-    index = {"event": "evalevent_text", "trace": "evaltrace_text", "result": "evalresult_text"}[
-        kind
-    ]
-    cypher = "CALL db.index.fulltext.queryNodes($index, $q, {skip: $offset, limit: $limit}) YIELD node, score WHERE ($trace_id IS NULL OR node.trace_id = $trace_id) RETURN labels(node) AS labels, score AS score, node.trace_id AS trace_id, node.event_key AS event_key, node.seq AS seq, node.eval_id AS eval_id, node.metric_name AS metric_name, coalesce(node.text, node.final_output, node.reasoning) AS preview ORDER BY score DESC"
-    rows = await _run_rows_query(
-        cypher,
-        {"index": index, "q": q, "limit": limit, "offset": offset, "trace_id": trace_id},
-        "eval_fulltext",
-    )
-    return {"index": index, "q": q, "limit": limit, "offset": offset, "items": rows}
+    pool = _get_pool(request)
+
+    try:
+        if kind == "event":
+            rows = await pool.fetch(
+                """
+                SELECT
+                    'EvalEvent'::text AS label,
+                    ts_rank(fts, plainto_tsquery('english', $1)) AS score,
+                    trace_id, event_key, seq,
+                    text AS preview
+                FROM eval_events
+                WHERE fts @@ plainto_tsquery('english', $1)
+                  AND ($2::text IS NULL OR trace_id = $2)
+                ORDER BY score DESC
+                OFFSET $3 LIMIT $4
+                """,
+                q,
+                trace_id,
+                offset,
+                limit,
+            )
+        elif kind == "trace":
+            rows = await pool.fetch(
+                """
+                SELECT
+                    'EvalTrace'::text AS label,
+                    ts_rank(fts, plainto_tsquery('english', $1)) AS score,
+                    trace_id, NULL::text AS event_key, NULL::int AS seq,
+                    final_output AS preview
+                FROM eval_traces
+                WHERE fts @@ plainto_tsquery('english', $1)
+                  AND ($2::text IS NULL OR trace_id = $2)
+                ORDER BY score DESC
+                OFFSET $3 LIMIT $4
+                """,
+                q,
+                trace_id,
+                offset,
+                limit,
+            )
+        else:  # result
+            rows = await pool.fetch(
+                """
+                SELECT
+                    'EvalResult'::text AS label,
+                    ts_rank(
+                        to_tsvector('english', coalesce(reasoning, '')),
+                        plainto_tsquery('english', $1)
+                    ) AS score,
+                    trace_id, eval_id, NULL::text AS event_key, NULL::int AS seq,
+                    reasoning AS preview
+                FROM eval_results
+                WHERE to_tsvector('english', coalesce(reasoning, ''))
+                        @@ plainto_tsquery('english', $1)
+                  AND ($2::text IS NULL OR trace_id = $2)
+                ORDER BY score DESC
+                OFFSET $3 LIMIT $4
+                """,
+                q,
+                trace_id,
+                offset,
+                limit,
+            )
+    except Exception as exc:
+        _raise_db_error(exc, "eval_fulltext")
+
+    return {
+        "kind": kind,
+        "q": q,
+        "limit": limit,
+        "offset": offset,
+        "items": [dict(r) for r in rows],
+    }
 
 
-# -----------------------------
-# POST /eval/vector-search (UPDATED)
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /eval/vector-search
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @router.post("/vector-search")
 async def eval_vector_search(
+    request: Request,
     req: VectorSearchRequest,
     x_openrouter_key: Optional[str] = Header(None, alias="X-OpenRouter-Key"),
 ):
-    await _ensure_eval_schema("eval_vector_search")
-    if not req.vector and not req.text:
+    pool = _get_pool(request)
+
+    use_vector = req.vector is not None and len(req.vector) > 0
+    query_text = (req.text or "").strip()
+
+    if not use_vector and not query_text:
         raise HTTPException(status_code=400, detail="Provide either 'vector' or 'text'")
 
-    vector = req.vector
-    if vector is None:
+    if not use_vector:
         key = (x_openrouter_key or OPENROUTER_API_KEY or "").strip()
         if not key:
             raise HTTPException(status_code=400, detail="No OpenRouter key available")
-        try:
-            emb = OpenAIEmbeddings(
-                model="openai/text-embedding-3-small",
-                api_key=key,  # type: ignore
-                base_url=OPENROUTER_BASE_URL,
-                check_embedding_ctx_length=False,
-            )
-            vector = await emb.aembed_query(req.text or "")
-        except Exception as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=_error_detail(
-                    "embedding_provider_error",
-                    str(exc),
-                    operation="eval_vector_search_embed",
-                ),
-            ) from exc
 
-    index = "evaltrace_embeddings" if req.kind == "trace" else "evalresult_embeddings"
-    where = ["score >= $min_score"]
-
-    params: Dict[str, Any] = {
-        "index": index,
-        "k": int(req.k),
-        "vector": vector,
-        "min_score": float(req.min_score),
-        "provider": req.provider,
-        "model": req.model,
-        "status": req.status,
-        "metric_name": req.metric_name,
-        "passed": req.passed,
-        # Filters
-        "session_id": req.session_id,
-        "case_id": req.case_id,
-    }
-
+    # Build Milvus metadata filter expression
+    filters: list[str] = []
     if req.kind == "trace":
-        where.append("($provider IS NULL OR node.provider = $provider)")
-        where.append("($model IS NULL OR node.model = $model)")
-        where.append("($status IS NULL OR node.status = $status)")
-        # ✅ Add ID filters
-        where.append("($session_id IS NULL OR node.session_id = $session_id)")
-        where.append("($case_id IS NULL OR node.case_id = $case_id)")
+        if req.provider:
+            filters.append(f'provider == "{req.provider}"')
+        if req.model:
+            filters.append(f'model == "{req.model}"')
+        if req.status:
+            filters.append(f'status == "{req.status}"')
+        if req.session_id:
+            filters.append(f'session_id == "{req.session_id}"')
+        if req.case_id:
+            filters.append(f'case_id == "{req.case_id}"')
     else:
-        where.append("($metric_name IS NULL OR node.metric_name = $metric_name)")
-        where.append("($passed IS NULL OR node.passed = $passed)")
+        if req.metric_name:
+            filters.append(f'metric_name == "{req.metric_name}"')
+        if req.passed is not None:
+            filters.append(f'passed == "{str(req.passed)}"')
 
-    # ✅ FETCHING RICH METADATA
-    cypher = f"""
-    CALL db.index.vector.queryNodes($index, $k, $vector) YIELD node, score
-    WHERE {" AND ".join(where)}
-    RETURN
-        labels(node) AS labels,
-        score AS score,
-        node.trace_id AS trace_id,
-        node.event_key AS event_key,
-        node.seq AS seq,
-        node.eval_id AS eval_id,
-        node.metric_name AS metric_name,
-        node.status AS status,
-        node.provider AS provider,
-        node.model AS model,
-        node.session_id AS session_id,
-        node.case_id AS case_id,
-        node.inputs_json AS inputs_json,
-        node.final_output AS final_output,
-        node.reasoning AS reasoning
-    ORDER BY score DESC
-    """
+    expr = " and ".join(filters) or None
 
-    rows = await _run_rows_query(cypher, params, "eval_vector_search")
+    try:
+        store = milvus_mgr.eval_traces if req.kind == "trace" else milvus_mgr.eval_results
+        if store is None:
+            raise RuntimeError("Milvus store not initialized")
+
+        kwargs: dict[str, Any] = {"k": int(req.k)}
+        if expr:
+            kwargs["expr"] = expr
+
+        if use_vector:
+            hits = await store.asimilarity_search_with_score_by_vector(req.vector, **kwargs)
+        else:
+            hits = await store.asimilarity_search_with_score(query_text, **kwargs)
+    except Exception as exc:
+        log.error("Milvus vector search failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "store_unavailable",
+                "operation": "eval_vector_search",
+                "message": str(exc),
+            },
+        ) from exc
+
+    # Filter by min_score
+    hits = [(doc, score) for doc, score in hits if score >= req.min_score]
+
+    if not hits:
+        return {"kind": req.kind, "k": req.k, "min_score": req.min_score, "items": []}
+
+    # Batch-fetch full PG metadata
+    ids = [
+        doc.metadata.get("trace_id" if req.kind == "trace" else "eval_id", "") for doc, _ in hits
+    ]
+    ids = [i for i in ids if i]
+
+    try:
+        if req.kind == "trace":
+            pg_rows = await pool.fetch(
+                """
+                SELECT trace_id, inputs_json, final_output, provider, model,
+                       session_id, case_id, status, started_at
+                FROM eval_traces WHERE trace_id = ANY($1)
+                """,
+                ids,
+            )
+            pg_meta = {r["trace_id"]: dict(r) for r in pg_rows}
+        else:
+            pg_rows = await pool.fetch(
+                """
+                SELECT r.eval_id, r.trace_id, r.metric_name, r.score, r.passed, r.reasoning,
+                       t.provider, t.model, t.session_id, t.case_id, t.status
+                FROM eval_results r
+                LEFT JOIN eval_traces t ON t.trace_id = r.trace_id
+                WHERE r.eval_id = ANY($1)
+                """,
+                ids,
+            )
+            pg_meta = {r["eval_id"]: dict(r) for r in pg_rows}
+    except Exception as exc:
+        _raise_db_error(exc, "eval_vector_search_pg_fetch")
 
     out = []
-    for r in rows:
-        node = r
-        inputs = _json_load_maybe(node.get("inputs_json"))
+    for doc, score in hits:
+        meta = doc.metadata
+        id_key = "trace_id" if req.kind == "trace" else "eval_id"
+        node_id = meta.get(id_key, "")
+        pg = pg_meta.get(node_id, {})
+
+        inputs = _json_load_maybe(pg.get("inputs_json"))
         question = None
         if isinstance(inputs, dict):
             question = inputs.get("question") or inputs.get("input") or inputs.get("query")
 
         out.append(
             {
-                "labels": r.get("labels"),
-                "score": r.get("score"),
-                "trace_id": node.get("trace_id"),
-                "event_key": node.get("event_key"),
-                "seq": node.get("seq"),
-                "eval_id": node.get("eval_id"),
-                "metric_name": node.get("metric_name"),
-                "status": node.get("status"),
-                "provider": node.get("provider"),
-                "model": node.get("model"),
-                # ✅ Return all fields
-                "session_id": node.get("session_id"),
-                "app_id": node.get("case_id"),
+                "score": float(score),
+                "trace_id": pg.get("trace_id") or meta.get("trace_id"),
+                "eval_id": pg.get("eval_id") if req.kind == "result" else None,
+                "metric_name": pg.get("metric_name") if req.kind == "result" else None,
+                "status": pg.get("status"),
+                "provider": pg.get("provider"),
+                "model": pg.get("model"),
+                "session_id": pg.get("session_id"),
+                "app_id": pg.get("case_id"),
                 "question": question,
-                "final_output": node.get("final_output"),
-                "reasoning": node.get("reasoning"),
+                "final_output": pg.get("final_output"),
+                "reasoning": pg.get("reasoning") if req.kind == "result" else None,
             }
         )
 
-    return {"index": index, "k": req.k, "min_score": req.min_score, "items": out}
+    return {"kind": req.kind, "k": req.k, "min_score": req.min_score, "items": out}
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # GET /eval/metrics/summary
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @router.get("/metrics/summary")
 async def eval_metrics_summary(
+    request: Request,
     metric_name: Optional[str] = None,
     provider: Optional[str] = None,
     model: Optional[str] = None,
     status: Optional[str] = None,
 ):
-    await _ensure_eval_schema("eval_metrics_summary")
-    # 1. Fetch grouped items via Cypher
-    q = """
-    MATCH (r:EvalResult)
-    WHERE r.metric_name IS NOT NULL
-      AND ($metric_name IS NULL OR r.metric_name = $metric_name)
-    OPTIONAL MATCH (t:EvalTrace {trace_id: r.trace_id})
-    WHERE ($provider IS NULL OR t.provider = $provider)
-      AND ($model IS NULL OR t.model = $model)
-      AND ($status IS NULL OR t.status = $status)
-    WITH r.metric_name AS metric_name,
-         count(r) AS count,
-         avg(coalesce(r.score, 0.0)) AS avg_score,
-         sum(CASE WHEN r.passed = true THEN 1 ELSE 0 END) AS pass_count
-    RETURN metric_name, count, pass_count,
-           (CASE WHEN count = 0 THEN 0.0 ELSE (toFloat(pass_count) / toFloat(count)) END) AS pass_rate,
-           avg_score
-    ORDER BY metric_name ASC
-    """
+    pool = _get_pool(request)
+    try:
+        rows = await pool.fetch(
+            """
+            SELECT
+                r.metric_name,
+                COUNT(*)                                       AS count,
+                SUM(CASE WHEN r.passed THEN 1 ELSE 0 END)     AS pass_count,
+                AVG(COALESCE(r.score, 0))                      AS avg_score
+            FROM eval_results r
+            LEFT JOIN eval_traces t ON t.trace_id = r.trace_id
+            WHERE r.metric_name IS NOT NULL
+              AND ($1::text IS NULL OR r.metric_name = $1)
+              AND ($2::text IS NULL OR t.provider = $2)
+              AND ($3::text IS NULL OR t.model = $3)
+              AND ($4::text IS NULL OR t.status = $4)
+            GROUP BY r.metric_name
+            ORDER BY r.metric_name ASC
+            """,
+            metric_name,
+            provider,
+            model,
+            status,
+        )
+    except Exception as exc:
+        _raise_db_error(exc, "eval_metrics_summary")
 
-    rows = await _run_rows_query(
-        q,
-        {"metric_name": metric_name, "provider": provider, "model": model, "status": status},
-        "eval_metrics_summary",
-    )
+    items = [dict(r) for r in rows]
+    for item in items:
+        count = int(item.get("count") or 0)
+        pass_count = int(item.get("pass_count") or 0)
+        item["pass_rate"] = (pass_count / count) if count else 0.0
 
-    # 2. Calculate totals in Python
-    total_evals = sum(int(r.get("count", 0)) for r in rows)
-    total_passes = sum(int(r.get("pass_count", 0)) for r in rows)
-
-    # Avoid division by zero
+    total_evals = sum(int(r.get("count", 0)) for r in items)
+    total_passes = sum(int(r.get("pass_count", 0)) for r in items)
     overall_rate = (total_passes / total_evals) if total_evals > 0 else 0.0
 
-    # 3. Return the calculated field alongside items
     return {
-        "items": rows,
-        "total_metrics": len(rows),
+        "items": items,
+        "total_metrics": len(items),
         "total_evals": total_evals,
         "overall_pass_rate": overall_rate,
     }
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # GET /eval/metrics/failures
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @router.get("/metrics/failures")
 async def eval_metrics_failures(
+    request: Request,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     metric_name: Optional[str] = None,
@@ -547,136 +650,91 @@ async def eval_metrics_failures(
     model: Optional[str] = None,
     status: Optional[str] = None,
 ):
-    await _ensure_eval_schema("eval_metrics_failures")
-    if metric_name is not None:
-        metric_name = metric_name.strip() or None
+    pool = _get_pool(request)
+    metric_name = (metric_name or "").strip() or None
 
-    trace_filters = (provider is not None) or (model is not None) or (status is not None)
-    metric_filter = metric_name is not None
-
-    if trace_filters:
-        q = (
+    try:
+        rows = await pool.fetch(
             """
-        MATCH (t:EvalTrace)
-        WHERE ($provider IS NULL OR t.provider = $provider)
-          AND ($model IS NULL OR t.model = $model)
-          AND ($status IS NULL OR t.status = $status)
-
-        MATCH (t)-[:HAS_EVAL]->(r:EvalResult)
-        WHERE r.passed = false
-          AND r.updated_at IS NOT NULL
-        """
-            + (" AND r.metric_name = $metric_name" if metric_filter else "")
-            + """
-        WITH r, t
-        ORDER BY r.updated_at DESC
-        SKIP $offset LIMIT $limit
-
-        RETURN
-          r.eval_id AS eval_id,
-          r.trace_id AS trace_id,
-          r.metric_name AS metric_name,
-          r.score AS score,
-          r.passed AS passed,
-          r.evaluator_id AS evaluator_id,
-          r.reasoning AS reasoning,
-          toString(r.updated_at) AS updated_at,
-
-          t.status AS trace_status,
-          t.provider AS provider,
-          t.model AS model,
-          t.endpoint AS endpoint,
-          t.session_id AS session_id,
-          t.case_id AS case_id,
-          t.started_at AS started_at
-        """
+            SELECT
+                r.eval_id, r.trace_id, r.metric_name, r.score, r.passed,
+                r.evaluator_id, r.reasoning, r.updated_at,
+                t.status AS trace_status, t.provider, t.model, t.endpoint,
+                t.session_id, t.case_id, t.started_at
+            FROM eval_results r
+            LEFT JOIN eval_traces t ON t.trace_id = r.trace_id
+            WHERE r.passed = false
+              AND ($1::text IS NULL OR r.metric_name = $1)
+              AND ($2::text IS NULL OR t.provider = $2)
+              AND ($3::text IS NULL OR t.model = $3)
+              AND ($4::text IS NULL OR t.status = $4)
+            ORDER BY r.updated_at DESC
+            OFFSET $5 LIMIT $6
+            """,
+            metric_name,
+            provider,
+            model,
+            status,
+            offset,
+            limit,
         )
-    else:
-        # ✅ FIX: Escaped curly braces {{trace_id: ...}} or switched to string concatenation
-        # Since we are using an f-string for the metric_filter logic, we must double braces.
-        q = f"""
-        MATCH (r:EvalResult)
-        WHERE r.passed = false
-          AND r.updated_at IS NOT NULL
-          {" AND r.metric_name = $metric_name" if metric_filter else ""}
-        WITH r
-        ORDER BY r.updated_at DESC
-        SKIP $offset LIMIT $limit
+    except Exception as exc:
+        _raise_db_error(exc, "eval_metrics_failures")
 
-        OPTIONAL MATCH (t:EvalTrace {{trace_id: r.trace_id}})
+    return {"limit": limit, "offset": offset, "items": [dict(r) for r in rows]}
 
-        RETURN
-          r.eval_id AS eval_id,
-          r.trace_id AS trace_id,
-          r.metric_name AS metric_name,
-          r.score AS score,
-          r.passed AS passed,
-          r.evaluator_id AS evaluator_id,
-          r.reasoning AS reasoning,
-          toString(r.updated_at) AS updated_at,
 
-          t.status AS trace_status,
-          t.provider AS provider,
-          t.model AS model,
-          t.endpoint AS endpoint,
-          t.session_id AS session_id,
-          t.case_id AS case_id,
-          t.started_at AS started_at
-        """
-
-    rows = await _run_rows_query(
-        q,
-        {
-            "limit": limit,
-            "offset": offset,
-            "metric_name": metric_name,
-            "provider": provider,
-            "model": model,
-            "status": status,
-        },
-        "eval_metrics_failures",
-    )
-
-    return {"limit": limit, "offset": offset, "items": rows}
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /eval/question-types
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 @router.get("/question-types")
-async def question_types(limit: int = 200):
-    await _ensure_eval_schema("eval_question_types")
-    rows = await _run_rows_query(
-        """
-        MATCH (t:EvalTrace)
-        WHERE t.started_at IS NOT NULL
-        WITH t ORDER BY t.started_at DESC LIMIT $limit
-        WITH coalesce(
-          t.question_category,
-          CASE t.router_reason
-            WHEN 'lead_intent_new_loan' THEN 'loan_products_and_eligibility'
-            WHEN 'eligibility_offer' THEN 'loan_products_and_eligibility'
-            WHEN 'loan_terms_rates' THEN 'loan_products_and_eligibility'
-            WHEN 'application_status_approval' THEN 'application_status_and_approval'
-            WHEN 'disbursal' THEN 'disbursal_and_bank_credit'
-            WHEN 'kyc_verification' THEN 'profile_kyc_and_access'
-            WHEN 'otp_login_app_tech' THEN 'profile_kyc_and_access'
-            WHEN 'emi_payment_reflecting' THEN 'emi_payments_and_charges'
-            WHEN 'nach_autodebit_bounce' THEN 'emi_payments_and_charges'
-            WHEN 'charges_fees_penalty' THEN 'emi_payments_and_charges'
-            WHEN 'statement_receipt' THEN 'emi_payments_and_charges'
-            WHEN 'foreclosure_partpayment' THEN 'foreclosure_and_closure'
-            WHEN 'collections_harassment' THEN 'collections_and_recovery'
-            WHEN 'fraud_security' THEN 'fraud_and_security'
-            WHEN 'customer_support' THEN 'customer_support_channels'
-            WHEN 'unknown' THEN 'other'
-            ELSE null
-          END,
-          'Unknown'
-        ) as reason
-        RETURN reason, count(*) as n
-        ORDER BY n DESC
-        """,
-        {"limit": limit},
-        "eval_question_types",
-    )
+async def question_types(request: Request, limit: int = 200):
+    pool = _get_pool(request)
+    try:
+        rows = await pool.fetch(
+            """
+            SELECT
+                COALESCE(
+                    question_category,
+                    CASE router_reason
+                        WHEN 'lead_intent_new_loan'         THEN 'loan_products_and_eligibility'
+                        WHEN 'eligibility_offer'            THEN 'loan_products_and_eligibility'
+                        WHEN 'loan_terms_rates'             THEN 'loan_products_and_eligibility'
+                        WHEN 'application_status_approval'  THEN 'application_status_and_approval'
+                        WHEN 'disbursal'                    THEN 'disbursal_and_bank_credit'
+                        WHEN 'kyc_verification'             THEN 'profile_kyc_and_access'
+                        WHEN 'otp_login_app_tech'           THEN 'profile_kyc_and_access'
+                        WHEN 'emi_payment_reflecting'       THEN 'emi_payments_and_charges'
+                        WHEN 'nach_autodebit_bounce'        THEN 'emi_payments_and_charges'
+                        WHEN 'charges_fees_penalty'         THEN 'emi_payments_and_charges'
+                        WHEN 'statement_receipt'            THEN 'emi_payments_and_charges'
+                        WHEN 'foreclosure_partpayment'      THEN 'foreclosure_and_closure'
+                        WHEN 'collections_harassment'       THEN 'collections_and_recovery'
+                        WHEN 'fraud_security'               THEN 'fraud_and_security'
+                        WHEN 'customer_support'             THEN 'customer_support_channels'
+                        WHEN 'unknown'                      THEN 'other'
+                        ELSE NULL
+                    END,
+                    'Unknown'
+                ) AS reason,
+                COUNT(*) AS n
+            FROM (
+                SELECT question_category, router_reason
+                FROM eval_traces
+                WHERE started_at IS NOT NULL
+                ORDER BY started_at DESC
+                LIMIT $1
+            ) sub
+            GROUP BY reason
+            ORDER BY n DESC
+            """,
+            limit,
+        )
+    except Exception as exc:
+        _raise_db_error(exc, "eval_question_types")
+
     total = sum(int(r["n"]) for r in rows) or 1
     items = [
         {"reason": r["reason"], "count": int(r["n"]), "pct": float(r["n"]) / total} for r in rows

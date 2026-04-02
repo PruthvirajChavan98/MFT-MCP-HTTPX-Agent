@@ -4,11 +4,11 @@ import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAdminTrace } from '@features/admin/api/admin'
 import { useAdminContext } from '@features/admin/context/AdminContext'
+import { mapTraceDetailToViewer } from '@features/admin/traces/viewmodel'
 import { Sheet, SheetContent, SheetTitle } from '@components/ui/sheet'
 import { TraceTree } from './TraceTree'
 import { TraceInspector } from './TraceInspector'
 import { parseToLangsmithTree } from './parse'
-import type { TraceDetail } from './types'
 import { buildConversationHref } from '@features/admin/lib/admin-links'
 
 export function GlobalTraceSheet() {
@@ -35,8 +35,8 @@ export function GlobalTraceSheet() {
     })
   }
 
-  // Parse and cast API trace structure to match the viewer
-  const nodes = detail ? parseToLangsmithTree(detail as unknown as TraceDetail) : []
+  const traceDetail = mapTraceDetailToViewer(detail)
+  const nodes = traceDetail ? parseToLangsmithTree(traceDetail) : []
   const selectedNode = nodes.find(n => n.id === selectedNodeId) || nodes[0] || null
   const sessionId = typeof detail?.trace?.session_id === 'string' ? detail.trace.session_id : undefined
   const conversationHref = buildConversationHref(sessionId)
@@ -60,15 +60,13 @@ export function GlobalTraceSheet() {
               <span className="text-xs text-muted-foreground font-medium">
                 Trace {traceId}
               </span>
-              {conversationHref ? (
+              {conversationHref && (
                 <Link
                   to={conversationHref}
                   className="inline-flex items-center rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-100"
                 >
                   View Conversation
                 </Link>
-              ) : (
-                <span className="text-[11px] text-muted-foreground">Conversation unavailable</span>
               )}
             </div>
             <div className="flex-1 flex overflow-hidden">
@@ -79,10 +77,7 @@ export function GlobalTraceSheet() {
               onClose={handleClose}
               isLoading={isLoading}
             />
-            <TraceInspector
-              node={selectedNode}
-              cost={(detail as any)?.cost}
-            />
+            <TraceInspector node={selectedNode} />
             </div>
           </div>
         )}

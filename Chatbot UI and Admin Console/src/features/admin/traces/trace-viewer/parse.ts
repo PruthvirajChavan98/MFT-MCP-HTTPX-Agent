@@ -78,7 +78,7 @@ export function parseToLangsmithTree(traceDetail: TraceDetail): FlatNode[] {
   for (const ev of events) {
     const etype = ev.event_type ?? ev.name ?? ev.event_key
 
-    if (etype === 'reasoning') {
+    if (etype === 'reasoning' || etype === 'reasoning_token') {
       flushOutput()
       pendingReasoning.push(ev)
     } else if (etype === 'token') {
@@ -86,6 +86,8 @@ export function parseToLangsmithTree(traceDetail: TraceDetail): FlatNode[] {
       pendingOutput.push(ev)
     } else if (
       etype === 'tool_call' ||
+      etype === 'tool_start' ||
+      etype === 'tool_end' ||
       etype === 'action' ||
       (etype && etype.includes('tool'))
     ) {
@@ -109,13 +111,13 @@ export function parseToLangsmithTree(traceDetail: TraceDetail): FlatNode[] {
       nodes.push({
         id: `tool-exec-${seq++}`,
         type: 'tool',
-        name: (payload?.name as string) ?? ev.event_key ?? 'execute_tool',
+        name: (payload?.tool as string) ?? (payload?.name as string) ?? ev.name ?? ev.event_key ?? 'execute_tool',
         latencyS: '0.00',
         status: 'success',
         tokens: 0,
         depth: 2,
-        input: payload,
-        output: payload?.output ?? 'Tool executed successfully',
+        input: payload?.input ?? payload,
+        output: payload?.output ?? ev.text ?? 'Tool executed successfully',
       })
     }
   }

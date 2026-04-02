@@ -41,7 +41,6 @@ describe('knowledge base viewmodel', () => {
         { id: 'billing', slug: 'billing', label: 'Billing', is_active: true },
         { id: 'account', slug: 'account', label: 'Account', is_active: true },
       ],
-      searchQuery: '',
       selectedCategory: 'All',
       sortField: 'createdAt',
       sortDir: 'desc',
@@ -54,7 +53,7 @@ describe('knowledge base viewmodel', () => {
     expect(model.categoryOptions[0]).toMatchObject({ label: 'All', count: 2 })
   })
 
-  it('filters by semantic text and category then sorts by question', () => {
+  it('filters by category and sorts by question', () => {
     const model = buildKnowledgeBaseViewModel({
       faqs: [
         {
@@ -77,7 +76,6 @@ describe('knowledge base viewmodel', () => {
         },
       ],
       categories: [],
-      searchQuery: 'csv',
       selectedCategory: 'Data',
       sortField: 'question',
       sortDir: 'asc',

@@ -1,6 +1,9 @@
+tunnel: dc78d069-cb3f-411a-a10a-8c0d020058e5
+credentials-file: /etc/cloudflared/credentials.json
+
 ingress:
   - hostname: mft-agent.pruthvirajchavan.codes
-    service: http://127.0.0.1:5173
+    service: http://frontend-prod:80
   - hostname: mft-api.pruthvirajchavan.codes
-    service: http://127.0.0.1:8005
+    service: http://agent:8000
   - service: http_status:404

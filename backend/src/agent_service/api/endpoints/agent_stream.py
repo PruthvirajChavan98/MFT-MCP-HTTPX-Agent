@@ -3,7 +3,8 @@
 import asyncio
 import json
 import logging
-from typing import Any, Dict
+import re
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
@@ -38,6 +39,31 @@ from src.agent_service.security.inline_guard import evaluate_prompt_safety_decis
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent-stream"])
+
+# ---------------------------------------------------------------------------
+# Follow-up extraction from LLM output
+# ---------------------------------------------------------------------------
+_FOLLOW_UPS_RE = re.compile(r"\n?FOLLOW_UPS:\s*(\[.*?\])\s*$", re.DOTALL)
+
+
+def extract_follow_ups(text: str) -> Tuple[str, List[str]]:
+    """Strip ``FOLLOW_UPS:[...]`` tag from *text*.
+
+    Returns ``(clean_text, questions)`` where *clean_text* has the tag
+    removed and *questions* is a list of up to 5 follow-up strings.
+    """
+    match = _FOLLOW_UPS_RE.search(text)
+    if not match:
+        return text, []
+    try:
+        questions = json.loads(match.group(1))
+        if isinstance(questions, list):
+            clean = text[: match.start()].rstrip()
+            return clean, [str(q).strip() for q in questions if str(q).strip()][:5]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return text, []
+
 
 _LIFECYCLE_EVENTS = {
     "on_chat_model_start",
@@ -682,6 +708,15 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     )
 
                 async for event in event_stream:
+                    # Kill switch: detect client disconnect and stop burning tokens.
+                    if await http_request.is_disconnected():
+                        log.info(
+                            "Client disconnected session_id=%s trace_id=%s — cancelling stream",
+                            sid,
+                            collector.trace_id,
+                        )
+                        break
+
                     router_evt = await maybe_handle_router_outcome()
                     if router_evt:
                         yield router_evt
@@ -796,6 +831,9 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         collector.on_token(fallback_text)
                         yield sse_formatter.token_event(fallback_text)
 
+                # Extract inline follow-up suggestions from the LLM output.
+                final_output, follow_ups = extract_follow_ups(final_output)
+
                 collector.on_done(final_output=final_output, error=None)
 
                 yield sse_formatter.cost_event(
@@ -843,6 +881,9 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                             "currency": "USD",
                         }
 
+                        if follow_ups:
+                            add_kwargs["follow_ups"] = follow_ups
+
                         await graph.aupdate_state(cfg, {"messages": [msgs[-1]]})
                 except Exception as store_err:
                     log.warning(
@@ -863,6 +904,8 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     persisted,
                     len(final_output),
                 )
+                if follow_ups:
+                    yield sse_formatter.follow_ups_event(follow_ups)
                 yield sse_formatter.trace_event(collector.trace_id)
                 yield sse_formatter.done_event()
 

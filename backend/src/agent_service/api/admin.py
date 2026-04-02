@@ -8,7 +8,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.config import KB_FAQ_BATCH_MAX_ITEMS, KB_FAQ_PDF_MAX_BYTES
-from src.agent_service.features.follow_up import follow_up_service
 from src.agent_service.features.knowledge_base_service import knowledge_base_service
 
 log = logging.getLogger("admin_api")
@@ -49,13 +48,13 @@ def _classify_kb_error(message: str) -> tuple[int, str]:
     msg = (message or "").lower()
     if "openrouter key required" in msg or msg.strip() == "key required":
         return 400, "missing_openrouter_key"
-    if "neo4j" in msg and (
+    if "milvus" in msg and (
         "connection refused" in msg
         or "couldn't connect" in msg
-        or "serviceunavailable" in msg
+        or "unavailable" in msg
         or "failed after" in msg
     ):
-        return 503, "neo4j_unavailable"
+        return 503, "vector_store_unavailable"
     if "postgres" in msg or "pool unavailable" in msg:
         return 503, "postgres_unavailable"
     return 500, "kb_operation_failed"
@@ -103,16 +102,6 @@ def _sse_error_payload(
     if detail:
         payload["detail"] = detail
     return json.dumps(payload)
-
-
-@router.get("/agent/all-follow-ups")
-async def get_stored_followups():
-    try:
-        results = await follow_up_service.get_all_cached_questions()
-        return {"count": len(results), "data": results}
-    except Exception as e:  # noqa: BLE001
-        log.error("Admin Fetch Error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/agent/admin/faqs/semantic-search")

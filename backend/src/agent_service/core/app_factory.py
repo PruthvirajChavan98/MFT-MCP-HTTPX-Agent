@@ -19,7 +19,7 @@ from src.agent_service.api.admin import router as admin_router
 from src.agent_service.api.admin_analytics import router as admin_analytics_router
 from src.agent_service.api.endpoints.agent_query import router as query_router
 from src.agent_service.api.endpoints.agent_stream import router as stream_router
-from src.agent_service.api.endpoints.follow_up import router as follow_up_router
+from src.agent_service.api.endpoints.download_proxy import router as download_proxy_router
 from src.agent_service.api.endpoints.health import router as health_router
 from src.agent_service.api.endpoints.live_dashboards import router as live_router
 from src.agent_service.api.endpoints.models import router as models_router
@@ -93,10 +93,16 @@ class AppFactory:
                 prompt_manager.load()
                 app.state.prompt_manager = prompt_manager
 
-                from src.common.neo4j_mgr import neo4j_mgr
+                from src.common.memgraph_mgr import memgraph_mgr
+                from src.common.milvus_mgr import milvus_mgr
 
-                await neo4j_mgr.connect()
-                app.state.neo4j_mgr = neo4j_mgr
+                await memgraph_mgr.connect()
+                log.info("✅ Memgraph connected (long-term memory graph)")
+
+                await milvus_mgr.aconnect()
+                log.info(
+                    "✅ Milvus stores initialized (kb_faqs, eval_traces_emb, eval_results_emb)"
+                )
 
                 if POSTGRES_DSN:
                     postgres_pool = PostgresPoolManager(
@@ -106,7 +112,13 @@ class AppFactory:
                     )
                     await postgres_pool.start()
                     app.state.postgres_pool = postgres_pool
+                    app.state.pool = postgres_pool.pool
                     log.info("✅ PostgreSQL pool initialized")
+
+                    from src.agent_service.eval_store.pg_store import configure_shared_pool
+
+                    configure_shared_pool(postgres_pool.pool)
+                    log.info("✅ Shared pool wired for runtime trace + shadow eval stores")
 
                 if SECURITY_ENABLED:
                     redis = await get_redis()
@@ -126,7 +138,8 @@ class AppFactory:
                 await mcp_manager.shutdown()
                 await close_http_client()
                 await config_manager.close()
-                await neo4j_mgr.close()
+                await memgraph_mgr.close()
+                await milvus_mgr.close()
 
                 # Graceful EventBus Shutdown
                 await event_bus.close()
@@ -218,9 +231,9 @@ class AppFactory:
         app.include_router(router_router)
         app.include_router(query_router)
         app.include_router(stream_router)
-        app.include_router(follow_up_router)
         app.include_router(rate_limit_metrics_router)
         app.include_router(live_router)
+        app.include_router(download_proxy_router)
 
         log.info("✅ All routers mounted")
 

@@ -66,34 +66,46 @@ repayment_schedule: |
     - Structured response with installments and schedule summary.
 
 download_welcome_letter: |
-  Purpose: Generate a Welcome Letter PDF on-demand and return the password hint needed to open it.
+  Purpose: Generate a Welcome Letter for the currently selected loan.
   Input variables:
     - none
   Returns:
     - status: "ready" on success
     - document_type: "welcome-letter"
-    - password_hint: hint describing how to derive the document password
-    - filename: suggested filename
+    - download_url: (when present) a single-use link to download the PDF.
+      Present this to the user as a clickable download link. Expires in 10 minutes.
+    - content: (when present) full formatted welcome letter — render this verbatim in your
+      response as a formatted document; do not summarise or paraphrase it
+    - password_hint: hint for the PDF password (if the document is password-protected)
+    - filename: the PDF filename
   Notes:
-    - The PDF itself is not returned. The user must download it separately using
-      a bearer token at GET /mockfin-service/download/welcome-letter
-    - Tell the user the password_hint so they can derive the password themselves.
+    - If the result contains a `download_url`, present it as a clickable link for the user
+      to download the PDF. Also mention the password_hint if provided.
+    - If the result contains a `content` field instead (no download_url), display the
+      content directly as a formatted letter.
+    - The download link is single-use and expires after 10 minutes.
 
 download_soa: |
-  Purpose: Generate a Statement of Account (SOA) PDF for a date range and return the password hint.
+  Purpose: Generate a Statement of Account (SOA) for a given date range.
   Input variables:
     - start_date: Start date in YYYY-MM-DD format (e.g. "2025-01-01").
     - end_date: End date in YYYY-MM-DD format (e.g. "2025-12-31").
   Returns:
     - status: "ready" on success
     - document_type: "soa"
-    - password_hint: hint describing how to derive the document password
-    - filename: suggested filename
+    - download_url: (when present) a single-use link to download the PDF.
+      Present this to the user as a clickable download link. Expires in 10 minutes.
+    - content: (when present) full formatted statement — render this verbatim in your
+      response as a formatted document; do not summarise or paraphrase it
+    - password_hint: hint for the PDF password (if the document is password-protected)
+    - filename: the PDF filename
   Notes:
     - Requires an active loan to be selected (call select_loan first if needed).
-    - The PDF itself is not returned. The user must download it separately using
-      a bearer token at POST /mockfin-service/download/soa
-    - Tell the user the password_hint so they can derive the password themselves.
+    - If the result contains a `download_url`, present it as a clickable link for the user
+      to download the PDF.
+    - If the result contains a `content` field instead (no download_url), display the
+      content directly as a formatted statement.
+    - The download link is single-use and expires after 10 minutes.
 
 list_loans: |
   Purpose: List all loans linked to the authenticated user's account.

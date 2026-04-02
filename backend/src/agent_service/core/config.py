@@ -8,9 +8,18 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 
 # --- EXTERNAL SERVICES ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+CRM_BASE_URL = os.getenv("CRM_BASE_URL", "http://localhost:8080").rstrip("/")
+DOWNLOAD_TOKEN_REDIS_PREFIX = "dl_token:"
 POSTGRES_DSN = os.getenv("POSTGRES_DSN", "").strip()
 POSTGRES_POOL_MIN = int(os.getenv("POSTGRES_POOL_MIN", "10"))
 POSTGRES_POOL_MAX = int(os.getenv("POSTGRES_POOL_MAX", "50"))
+
+# =============================================================================
+# MILVUS VECTOR STORE
+# =============================================================================
+MILVUS_URI = os.getenv("MILVUS_URI", "http://localhost:19530").strip()
+# Optional — set for Zilliz Cloud (cloud.zilliz.com). Leave empty for self-hosted.
+MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "").strip() or None
 
 # --- LOGIC SETTINGS ---
 # LangGraph history limit
@@ -240,9 +249,8 @@ INLINE_GUARD_SIMILARITY_THRESHOLD = float(os.getenv("INLINE_GUARD_SIMILARITY_THR
 INLINE_GUARD_TOTAL_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_TOTAL_TIMEOUT_MS", "3200"))
 INLINE_GUARD_VECTOR_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_VECTOR_TIMEOUT_MS", "1200"))
 INLINE_GUARD_GROQ_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_GROQ_TIMEOUT_MS", "2200"))
-INLINE_GUARD_PROMPT_GUARD_MODEL = os.getenv(
-    "INLINE_GUARD_PROMPT_GUARD_MODEL", "meta-llama/llama-guard-4-12b"
-).strip()
+INLINE_GUARD_GROQ_MODEL = os.getenv("INLINE_GUARD_GROQ_MODEL", "gpt-oss-20b-safeguard").strip()
+GROQ_GUARD_BASE_URL = os.getenv("GROQ_GUARD_BASE_URL", "https://api.groq.com/openai/v1").strip()
 INLINE_GUARD_PROTOTYPE_CACHE_TTL_SECONDS = int(
     os.getenv("INLINE_GUARD_PROTOTYPE_CACHE_TTL_SECONDS", "86400")
 )
@@ -267,7 +275,7 @@ SHADOW_TRACE_QUEUE_KEY = os.getenv("SHADOW_TRACE_QUEUE_KEY", "agent:shadow:trace
 SHADOW_TRACE_QUEUE_MAXLEN = int(os.getenv("SHADOW_TRACE_QUEUE_MAXLEN", "50000"))
 SHADOW_TRACE_DLQ_KEY = os.getenv("SHADOW_TRACE_DLQ_KEY", "agent:shadow:trace_dlq").strip()
 SHADOW_TRACE_QUEUE_DLQ_MAXLEN = int(os.getenv("SHADOW_TRACE_QUEUE_DLQ_MAXLEN", "20000"))
-SHADOW_TRACE_QUEUE_MAX_RETRIES = int(os.getenv("SHADOW_TRACE_QUEUE_MAX_RETRIES", "3"))
+SHADOW_TRACE_QUEUE_MAX_RETRIES = int(os.getenv("SHADOW_TRACE_QUEUE_MAX_RETRIES") or "3")
 SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS = float(
     os.getenv("SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS", "0.25")
 )

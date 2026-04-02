@@ -10,12 +10,16 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Literal
 
+from guardrails import Guard, OnFailAction
+from guardrails.validators import FailResult, PassResult, Validator, register_validator
 from prometheus_client import Counter
 
 from src.agent_service.core.config import (
+    GROQ_API_KEYS,
+    GROQ_GUARD_BASE_URL,
     INLINE_GUARD_ENABLED,
+    INLINE_GUARD_GROQ_MODEL,
     INLINE_GUARD_GROQ_TIMEOUT_MS,
-    INLINE_GUARD_PROMPT_GUARD_MODEL,
     INLINE_GUARD_PROTOTYPE_CACHE_TTL_SECONDS,
     INLINE_GUARD_REDIS_KEY_PREFIX,
     INLINE_GUARD_SIMILARITY_THRESHOLD,
@@ -78,6 +82,42 @@ _HIGH_RISK_TOKENS: tuple[str, ...] = (
 )
 
 _HIGH_RISK_BLOCK_THRESHOLD = 0.75
+
+_GROQ_RR_COUNTER_KEY = "agent:groq_rr_counter"
+
+
+async def _get_next_groq_key() -> str:
+    """Atomic round-robin selection across GROQ_API_KEYS via Redis INCR."""
+    if not GROQ_API_KEYS:
+        raise RuntimeError("No GROQ_API_KEYS configured for inline guard.")
+    if len(GROQ_API_KEYS) == 1:
+        return GROQ_API_KEYS[0]
+    redis = await get_redis()
+    counter = await redis.incr(_GROQ_RR_COUNTER_KEY)
+    return GROQ_API_KEYS[(counter - 1) % len(GROQ_API_KEYS)]
+
+
+# ---------------------------------------------------------------------------
+# guardrails-ai custom validator for prompt safety classification
+# ---------------------------------------------------------------------------
+_UNSAFE_TOKENS = ("unsafe", "injection", "jailbreak")
+
+
+@register_validator(name="groq_prompt_safety", data_type="string")
+class GroqPromptSafetyValidator(Validator):
+    """Validates that text does not contain unsafe signal tokens from the
+    Groq safeguard model response."""
+
+    def validate(self, value: Any, metadata: Any = None) -> PassResult | FailResult:
+        text = str(value).strip().lower()
+        if any(token in text for token in _UNSAFE_TOKENS):
+            return FailResult(
+                error_message=f"Groq safeguard flagged prompt as unsafe: {text[:200]}"
+            )
+        return PassResult()
+
+
+_groq_safety_guard = Guard().use(GroqPromptSafetyValidator(on_fail=OnFailAction.EXCEPTION))
 
 
 @dataclass(slots=True)
@@ -203,13 +243,12 @@ async def _vector_rail_check(prompt: str) -> bool:
     return similarity <= INLINE_GUARD_SIMILARITY_THRESHOLD
 
 
-async def _openrouter_prompt_guard_check(prompt: str) -> bool:
-    if not OPENROUTER_API_KEY:
-        raise RuntimeError("Inline guard prompt rail unavailable: OPENROUTER_API_KEY missing.")
-
+async def _groq_guard_check(prompt: str) -> bool:
+    """Call Groq gpt-oss-20b-safeguard with round-robin key, validate with guardrails-ai."""
+    api_key = await _get_next_groq_key()
     client = await get_http_client()
     payload: dict[str, Any] = {
-        "model": INLINE_GUARD_PROMPT_GUARD_MODEL,
+        "model": INLINE_GUARD_GROQ_MODEL,
         "temperature": 0,
         "messages": [
             {
@@ -219,21 +258,23 @@ async def _openrouter_prompt_guard_check(prompt: str) -> bool:
         ],
     }
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     response = await client.post(
-        f"{OPENROUTER_BASE_URL.rstrip('/')}/chat/completions",
+        f"{GROQ_GUARD_BASE_URL.rstrip('/')}/chat/completions",
         json=payload,
         headers=headers,
     )
     response.raise_for_status()
     body = response.json()
-    text = _extract_guard_text(body).strip().lower()
+    text = _extract_guard_text(body).strip()
     if not text:
-        raise RuntimeError("Inline guard prompt rail returned empty content.")
-    unsafe_tokens = ("unsafe", "injection", "jailbreak")
-    return not any(token in text for token in unsafe_tokens)
+        raise RuntimeError("Groq guard returned empty content.")
+
+    # guardrails-ai validation: classify Groq's response for unsafe signals
+    _groq_safety_guard.validate(text)
+    return True
 
 
 async def _with_timeout(coro: Any, timeout_seconds: float) -> Any:
@@ -360,8 +401,8 @@ async def evaluate_prompt_safety_decision(prompt: str) -> InlineGuardDecision:
                 await asyncio.gather(
                     _run_check("vector", _vector_rail_check(clean_prompt), vector_timeout),
                     _run_check(
-                        "prompt_guard",
-                        _openrouter_prompt_guard_check(clean_prompt),
+                        "groq_guard",
+                        _groq_guard_check(clean_prompt),
                         provider_timeout,
                     ),
                 )

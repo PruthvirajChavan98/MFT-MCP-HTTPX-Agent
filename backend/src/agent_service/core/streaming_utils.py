@@ -252,6 +252,11 @@ class SSEEventFormatter:
         return {"event": "trace", "data": json.dumps({"trace_id": trace_id})}
 
     @staticmethod
+    def follow_ups_event(questions: list[str]) -> Dict[str, Any]:
+        """Emit context-aware follow-up suggestions parsed from the LLM response."""
+        return {"event": "follow_ups", "data": json.dumps({"questions": questions})}
+
+    @staticmethod
     def error_event(error_message: str) -> Dict[str, Any]:
         """Return dict - sse-starlette handles formatting."""
         return {"event": "error", "data": json.dumps({"message": error_message})}

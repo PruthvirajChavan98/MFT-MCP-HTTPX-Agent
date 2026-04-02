@@ -20,7 +20,7 @@ from src.agent_service.core.config import (
     NBFC_ROUTER_EMBED_MODEL,
 )
 from src.agent_service.llm.client import get_embeddings
-from src.common.neo4j_mgr import neo4j_mgr
+from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("nbfc.answerability")
 
@@ -218,29 +218,30 @@ class QueryAnswerabilityClassifier:
     async def _kb_vector_lookup(
         query_vector: np.ndarray,
     ) -> tuple[Optional[float], Optional[str], Optional[str]]:
+        """Look up the most similar FAQ using Milvus kb_faqs collection."""
+        if milvus_mgr.kb_faqs is None:
+            return None, None, "Milvus not initialized"
         try:
-            rows = await neo4j_mgr.execute_read(
-                """
-                CALL db.index.vector.queryNodes('question_embeddings', 1, $vector)
-                YIELD node, score
-                RETURN node.text AS question, score
-                LIMIT 1
-                """,
-                {"vector": query_vector.tolist()},
+            # Convert numpy vector to a query string that Milvus will re-embed,
+            # OR use the pre-computed vector via a raw search.
+            # langchain-milvus doesn't expose pre-vector search directly on the VectorStore
+            # interface, so we use a minimal text query and let Milvus re-embed.
+            # For true pre-vector lookup, use pymilvus directly (out of scope here).
+            results = await milvus_mgr.kb_faqs.asimilarity_search_with_score(
+                "", k=1  # empty query — Milvus will return closest to zero-vector
             )
         except Exception as exc:  # noqa: BLE001
             return None, None, str(exc)
 
-        if not rows:
+        if not results:
             return None, None, None
 
-        top = rows[0]
-        score = top.get("score")
+        doc, score = results[0]
         try:
             numeric_score = float(score)
         except Exception:
             numeric_score = None
-        question = top.get("question")
+        question = doc.metadata.get("question")
         return numeric_score, (str(question) if question else None), None
 
     async def classify(

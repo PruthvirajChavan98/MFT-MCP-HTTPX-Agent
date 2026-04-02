@@ -381,7 +381,7 @@ export function ChatWidget() {
                       ) : (
                         <>
                           {messages.map((message) => (
-                            <ChatMessage key={message.id} message={message} sessionId={sessionId} />
+                            <ChatMessage key={message.id} message={message} sessionId={sessionId} onFollowUpClick={handleFollowUp} />
                           ))}
                         </>
                       )}

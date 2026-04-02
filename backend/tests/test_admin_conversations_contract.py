@@ -39,13 +39,15 @@ async def test_conversations_cursor_contract_returns_next_cursor(monkeypatch):
         },
     ]
 
-    async def _fake_read(_query: str, params: dict[str, object]):
-        assert params["search"] == "loan"
-        assert params["limit_plus_one"] == 3
+    async def _fake_pg_rows(_pool, _query: str, *args):
+        # args: search_pat, cursor_started_at, cursor_session_id, limit+1
+        assert args[0] == "%loan%"  # search_pat
+        assert args[3] == 3  # limit_plus_one
         return rows
 
-    monkeypatch.setattr(admin_analytics, "_neo4j_read", _fake_read)
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    fake_pool = object()
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
     response = await admin_analytics.conversations(
         request=request,
@@ -114,14 +116,19 @@ async def test_traces_cursor_contract_returns_next_cursor(monkeypatch):
         },
     ]
 
-    async def _fake_read(_query: str, params: dict[str, object]):
-        assert params["limit_plus_one"] == 3
-        assert params["search"] == "q"
+    async def _fake_pg_rows(_pool, _query: str, *args):
+        # args: normalized_status, normalized_model, search_pat,
+        #       cursor_started_at, cursor_trace_id, limit+1
+        assert args[2] == "%q%"  # search_pat
+        assert args[5] == 3  # limit_plus_one
         return rows
 
-    monkeypatch.setattr(admin_analytics, "_neo4j_read", _fake_read)
+    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    fake_pool = object()
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
+
     response = await admin_analytics.traces(
-        limit=2, cursor=None, search="q", status=None, model=None
+        request=request, limit=2, cursor=None, search="q", status=None, model=None
     )
 
     assert response["count"] == 2
@@ -181,7 +188,7 @@ async def test_session_traces_reconstructs_from_eval_trace_when_checkpoint_missi
         async def aget_tuple(self, _config):
             return None
 
-    async def _fake_read(_query: str, _params: dict[str, object]):
+    async def _fake_pg_rows(_pool, _query: str, *args):
         return [
             {
                 "trace_id": "trace-xyz",
@@ -195,9 +202,10 @@ async def test_session_traces_reconstructs_from_eval_trace_when_checkpoint_missi
             }
         ]
 
-    monkeypatch.setattr(admin_analytics, "_neo4j_read", _fake_read)
+    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    fake_pool = object()
     request = SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
+        app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer(), pool=fake_pool))
     )
 
     response = await admin_analytics.session_traces(

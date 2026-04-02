@@ -11,7 +11,7 @@ import numpy as np
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel
 
-from src.agent_service.core.config import (  # Thresholds
+from src.agent_service.core.config import (
     NBFC_ROUTER_ANSWERABILITY_ENABLED,
     NBFC_ROUTER_CHAT_MODEL,
     NBFC_ROUTER_EMBED_MODEL,

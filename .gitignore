@@ -13,15 +13,13 @@ Chatbot UI and Admin Console/.vite/
 Chatbot UI and Admin Console/dist/
 Chatbot UI and Admin Console/dist-ssr/
 
-NBFC_Chatbot_UI_2/node_modules/
-NBFC_Chatbot_UI_2/.vite/
-NBFC_Chatbot_UI_2/dist/
-NBFC_Chatbot_UI_2/dist-ssr/
-
 STALE_OLD_UI/node_modules/
 STALE_OLD_UI/.vite/
 STALE_OLD_UI/dist/
 STALE_OLD_UI/dist-ssr/
+
+NBFC_Chatbot_UI_2/
+frontend_uat/
 
 Reference UI/node_modules/
 Reference UI/.vite/
@@ -38,4 +36,3 @@ Reference*
 reference*
 Reference Trace Module/
 Reference UI/
-

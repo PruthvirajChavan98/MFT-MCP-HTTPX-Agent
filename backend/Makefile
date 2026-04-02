@@ -1,7 +1,7 @@
 .PHONY: \
 	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard \
-	docker-build docker-up docker-down docker-logs docker-restart deploy \
-	local-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
+	docker-build docker-up docker-down docker-logs docker-restart deploy deploy-uat deploy-prod uat-up uat-down prod-up prod-down \
+	local-validate uat-validate prod-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
 	begin down-up
 
@@ -10,14 +10,19 @@ REPO_ROOT ?= $(abspath $(MAKEFILE_DIR)/..)
 ROOT_ENV_FILE ?= $(REPO_ROOT)/.env
 BACKEND_ENV_FILE ?= .env
 
-COMPOSE ?= docker compose --project-directory $(REPO_ROOT) --env-file $(ROOT_ENV_FILE)
-COMPOSE_FILE ?= $(REPO_ROOT)/docker-compose.yml
-LOCAL_COMPOSE_FILE ?= $(REPO_ROOT)/docker-compose.local.yml
+COMPOSE_FILE ?= $(REPO_ROOT)/compose.yaml
 
-MAIN_COMPOSE = $(COMPOSE) -f $(COMPOSE_FILE)
-LOCAL_COMPOSE = $(COMPOSE) -f $(LOCAL_COMPOSE_FILE)
+COMPOSE_BASE = docker compose --project-directory $(REPO_ROOT) \
+    --env-file $(ROOT_ENV_FILE) -f $(COMPOSE_FILE)
 
-LOCAL_CORE_SERVICES = redis postgres neo4j mcp agent
+LOCAL_COMPOSE  = $(COMPOSE_BASE) --profile local
+UAT_COMPOSE    = $(COMPOSE_BASE) --profile deployed --profile uat --profile monitoring
+PROD_COMPOSE   = $(COMPOSE_BASE) --profile deployed --profile prod --profile monitoring
+
+# Keep MAIN_COMPOSE pointing at UAT by default for legacy targets
+MAIN_COMPOSE   = $(UAT_COMPOSE)
+
+LOCAL_CORE_SERVICES = redis postgres mcp-local agent-local
 
 help:
 	@echo "Available targets:"
@@ -41,16 +46,22 @@ help:
 	@echo "  backfill-question-categories - Backfill canonical business categories on EvalTrace nodes"
 	@echo "  backfill-inline-guard - Backfill canonical inline guard fields on EvalTrace nodes"
 	@echo ""
-	@echo "Docker (main compose):"
-	@echo "  docker-build        - Build images from $(COMPOSE_FILE)"
-	@echo "  docker-up           - Start services from $(COMPOSE_FILE)"
-	@echo "  docker-down         - Stop services from $(COMPOSE_FILE)"
-	@echo "  docker-logs         - View logs from $(COMPOSE_FILE)"
-	@echo "  docker-restart      - Restart services from $(COMPOSE_FILE)"
-	@echo "  deploy              - Force-recreate deployment on $(COMPOSE_FILE)"
+	@echo "Docker / Deployed (ENV=local|uat|prod, default=local):"
+	@echo "  docker-build        - Build images (UAT profiles)"
+	@echo "  docker-up           - Start UAT stack"
+	@echo "  docker-down         - Stop UAT stack"
+	@echo "  docker-logs         - View UAT logs"
+	@echo "  docker-restart      - Restart UAT stack"
+	@echo "  deploy              - Force-recreate UAT deployment"
+	@echo "  deploy-uat          - Build + force-recreate UAT stack"
+	@echo "  deploy-prod         - Build + force-recreate prod stack"
+	@echo "  uat-up / uat-down   - Start / stop UAT stack"
+	@echo "  prod-up / prod-down - Start / stop prod stack"
 	@echo ""
-	@echo "Local Stack ($(LOCAL_COMPOSE_FILE)):"
+	@echo "Local Stack:"
 	@echo "  local-validate      - Validate local compose config"
+	@echo "  uat-validate        - Validate UAT compose config"
+	@echo "  prod-validate       - Validate prod compose config"
 	@echo "  local-env-audit     - Detect duplicate keys in root .env (compose interpolation)"
 	@echo "  backend-env-audit   - Detect duplicate keys in backend/.env (runtime env_file)"
 	@echo "  local-setup-check   - Run setup profile checks against local stack"
@@ -167,11 +178,39 @@ docker-restart:
 deploy: docker-build
 	$(MAIN_COMPOSE) up -d --force-recreate
 
+deploy-uat:
+	$(UAT_COMPOSE) build --no-cache
+	$(UAT_COMPOSE) up -d --force-recreate
+
+deploy-prod:
+	$(PROD_COMPOSE) build --no-cache
+	$(PROD_COMPOSE) up -d --force-recreate
+
+uat-up:
+	$(UAT_COMPOSE) up -d
+
+uat-down:
+	$(UAT_COMPOSE) down
+
+prod-up:
+	$(PROD_COMPOSE) up -d
+
+prod-down:
+	$(PROD_COMPOSE) down
+
 # Local compose targets
 
 local-validate:
-	$(LOCAL_COMPOSE) config >/tmp/docker-compose.local.rendered.yml
+	$(LOCAL_COMPOSE) config >/tmp/compose.local.rendered.yml
 	@echo "Local compose config is valid"
+
+uat-validate:
+	$(UAT_COMPOSE) config >/tmp/compose.uat.rendered.yml
+	@echo "UAT compose config is valid"
+
+prod-validate:
+	$(PROD_COMPOSE) config >/tmp/compose.prod.rendered.yml
+	@echo "Prod compose config is valid"
 
 local-env-audit:
 	@echo "Checking root .env for duplicate keys..."
@@ -187,16 +226,16 @@ local-up:
 	$(LOCAL_COMPOSE) up -d $(LOCAL_CORE_SERVICES)
 
 local-router-up:
-	$(LOCAL_COMPOSE) --profile router up -d router_worker
+	$(LOCAL_COMPOSE) --profile router up -d router-worker-local
 
 local-monitoring-up:
 	$(LOCAL_COMPOSE) --profile monitoring up -d prometheus alertmanager grafana
 
 local-geoip-up:
-	$(LOCAL_COMPOSE) --profile geoip up -d geoip_updater
+	$(LOCAL_COMPOSE) --profile geoip up -d geoip-updater-local
 
 local-edge-up:
-	$(LOCAL_COMPOSE) --profile edge up -d cloudflared
+	$(LOCAL_COMPOSE) --profile edge up -d cloudflared-local
 
 local-setup-check:
 	$(LOCAL_COMPOSE) --profile setup run --no-deps --rm localsetup
@@ -205,7 +244,8 @@ localsetup: local-validate local-up local-setup-check
 	@echo "Local core stack is up and setup checks passed"
 
 localsetup-full: localsetup
-	$(LOCAL_COMPOSE) --profile router --profile monitoring --profile geoip --profile edge up -d router_worker prometheus alertmanager grafana geoip_updater cloudflared
+	$(LOCAL_COMPOSE) --profile router --profile monitoring --profile geoip --profile edge up -d \
+		router-worker-local prometheus alertmanager grafana geoip-updater-local cloudflared-local
 	@echo "Local full stack is up"
 
 local-down:
@@ -218,7 +258,7 @@ local-ps:
 	$(LOCAL_COMPOSE) ps
 
 local-restart:
-	$(LOCAL_COMPOSE) restart $(LOCAL_CORE_SERVICES)
+	$(LOCAL_COMPOSE) restart redis postgres mcp-local agent-local
 
 # Legacy helpers
 
@@ -230,6 +270,6 @@ begin:
 
 down-up:
 	rm -f uv.lock && uv sync
-	$(MAIN_COMPOSE) down
-	$(MAIN_COMPOSE) build
-	$(MAIN_COMPOSE) up -d
+	$(UAT_COMPOSE) down
+	$(UAT_COMPOSE) build
+	$(UAT_COMPOSE) up -d

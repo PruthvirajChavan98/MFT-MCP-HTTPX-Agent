@@ -570,7 +570,41 @@ class KnowledgeBaseRepo:
         if not q:
             return []
 
+        # Full-text search with ts_rank for real relevance scores.
+        # ts_rank_cd(..., 32) uses rank/(rank+1) normalization → scores bounded in (0, 1).
         rows = await pool.fetch(
+            """
+            SELECT
+                question,
+                answer,
+                ts_rank_cd(
+                    to_tsvector('english', question || ' ' || answer),
+                    plainto_tsquery('english', $1),
+                    32
+                ) AS score
+            FROM public.nbfc_faqs
+            WHERE to_tsvector('english', question || ' ' || answer)
+                    @@ plainto_tsquery('english', $1)
+            ORDER BY score DESC
+            LIMIT $2
+            """,
+            q,
+            limit,
+        )
+
+        if rows:
+            return [
+                {
+                    "question": row["question"],
+                    "answer": row["answer"],
+                    "score": float(row["score"]),
+                }
+                for row in rows
+            ]
+
+        # Fallback: ILIKE substring match when FTS yields nothing (e.g. very short
+        # queries, stop-words only). Score is a low constant to signal low confidence.
+        ilike_rows = await pool.fetch(
             """
             SELECT question, answer
             FROM public.nbfc_faqs
@@ -586,9 +620,9 @@ class KnowledgeBaseRepo:
             {
                 "question": row["question"],
                 "answer": row["answer"],
-                "score": 1.0,
+                "score": 0.1,
             }
-            for row in rows
+            for row in ilike_rows
         ]
 
     async def dump_all(self, pool: Any) -> list[dict[str, str]]:

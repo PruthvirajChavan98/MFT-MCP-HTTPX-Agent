@@ -1,9 +1,11 @@
+import json as _json
 import logging
+import uuid
 from typing import Any, Dict, Optional
 
 import httpx
 
-from .config import CRM_BASE_URL
+from .config import CRM_BASE_URL, DOWNLOAD_PROXY_BASE_URL, DOWNLOAD_TOKEN_TTL_SECONDS
 from .session_store import RedisSessionStore
 from .utils import JsonConverter, ToonOptions
 
@@ -61,7 +63,9 @@ class MockFinTechAPIs:
         if not self.app_id:
             s = self.session_store.get(self.session_id) or {}
             if s.get("loans"):
-                return {"error": "No loan selected. Call list_loans() then select_loan(loan_number)."}
+                return {
+                    "error": "No loan selected. Call list_loans() then select_loan(loan_number)."
+                }
             return {"error": "app_id missing."}
         return None
 
@@ -102,30 +106,55 @@ class MockFinTechAPIs:
 
         try:
             with httpx.Client(timeout=_CRM_TIMEOUT) as client:
-                resp = client.request(
+                with client.stream(
                     method, self._url(path), headers=headers, json=json_body
-                )
-                self.logger.info(f"{method} {path} - {resp.status_code}")
+                ) as resp:
+                    self.logger.info(f"{method} {path} - {resp.status_code}")
 
-                if resp.status_code not in (200, 201):
-                    try:
-                        err = resp.json()
-                    except Exception:
-                        err = resp.text[:1000]
-                    return {"error": err, "status_code": resp.status_code}
+                    if resp.status_code not in (200, 201):
+                        resp.read()
+                        try:
+                            err = resp.json()
+                        except Exception:
+                            err = resp.text[:1000]
+                        return {"error": err, "status_code": resp.status_code}
 
-                hint = resp.headers.get("x-password-hint", "")
-                disposition = resp.headers.get("content-disposition", "")
-                filename = ""
-                if 'filename="' in disposition:
-                    filename = disposition.split('filename="')[1].rstrip('"')
+                    hint = resp.headers.get("x-password-hint", "")
+                    disposition = resp.headers.get("content-disposition", "")
+                    filename = ""
+                    if 'filename="' in disposition:
+                        filename = disposition.split('filename="')[1].rstrip('"')
 
-                return {
-                    "status": "ready",
-                    "document_type": doc_type,
-                    "password_hint": hint,
+            # CRM confirmed the document is available — generate a one-time
+            # download token so the user can fetch the PDF via a browser link.
+            token = uuid.uuid4().hex
+            redis_key = f"dl_token:{token}"
+            token_payload = _json.dumps(
+                {
+                    "bearer_token": self.bearer_token,
+                    "method": method,
+                    "path": path,
+                    "json_body": _json.dumps(json_body) if json_body else None,
+                    "doc_type": doc_type,
                     "filename": filename,
+                    "password_hint": hint,
                 }
+            )
+            self.session_store.client.set(  # type: ignore[union-attr]
+                redis_key,
+                token_payload,
+                ex=DOWNLOAD_TOKEN_TTL_SECONDS,
+            )
+
+            download_url = f"{DOWNLOAD_PROXY_BASE_URL}/api/download/{token}"
+
+            return {
+                "status": "ready",
+                "document_type": doc_type,
+                "download_url": download_url,
+                "password_hint": hint,
+                "filename": filename,
+            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -186,21 +215,175 @@ class MockFinTechAPIs:
         )
 
     def download_welcome_letter(self) -> str:
-        return self._to_toon(
-            self._download("GET", "/mockfin-service/download/welcome-letter/", doc_type="welcome-letter")
+        result = self._download(
+            "GET", "/mockfin-service/download/welcome-letter/", doc_type="welcome-letter"
         )
+        if "error" not in result:
+            return self._to_toon(result)
+        # CRM unavailable in demo — generate mock letter from loan details
+        loan: dict = {}
+        if self.app_id:
+            raw = self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/")
+            if isinstance(raw, dict) and "error" not in raw:
+                loan = raw
+        return self._to_toon(self._build_mock_welcome_letter(loan))
+
+    def _build_mock_welcome_letter(self, loan: dict) -> dict:
+        import datetime
+
+        loan_no = (
+            loan.get("loan_number") or loan.get("applicationId") or self.app_id or "RNTWL-XXXXXX"
+        )
+        amount = loan.get("loanAmount") or loan.get("sanctionedAmount") or "₹X,XX,XXX"
+        tenure = loan.get("tenure") or loan.get("loanTenure") or "XX months"
+        rate = loan.get("roi") or loan.get("interestRate") or "X.XX%"
+        emi = loan.get("emi") or loan.get("monthlyEMI") or "₹X,XXX"
+        issued = datetime.date.today().strftime("%d %B %Y")
+        phone = self.phone_number or "XXXXXXXXXX"
+
+        content = f"""## Welcome Letter — Mock Fin Tech
+
+**Date:** {issued} | **Loan Number:** {loan_no} | **Mobile:** {phone}
+
+---
+
+Dear Valued Customer,
+
+We are pleased to welcome you as a customer of **Mock Fin Tech** and thank you for choosing us for your financing needs.
+
+### Loan Sanction Summary
+
+| Field | Details |
+|---|---|
+| Loan Number | {loan_no} |
+| Sanctioned Amount | {amount} |
+| Tenure | {tenure} |
+| Rate of Interest | {rate} p.a. |
+| Monthly EMI | {emi} |
+
+### Important Notes
+
+- Your EMI will be debited on the due date from your registered bank account.
+- For queries, visit [mockfintech.example/servicing](https://mockfintech.example/servicing) or call **1800-XXX-XXXX** (toll-free).
+- Please keep this letter for your records.
+
+Yours sincerely,
+**Mock Fin Tech — Customer Relations**
+
+*This is a mock document generated for demonstration purposes only. It does not constitute a legal agreement.*
+"""
+        return {
+            "status": "ready",
+            "document_type": "welcome-letter",
+            "note": "Mock letter generated (PDF endpoint unavailable in demo environment)",
+            "content": content,
+        }
 
     def download_soa(self, start_date: str, end_date: str) -> str:
         if not self.app_id:
-            return self._to_toon({"error": "No loan selected. Call list_loans() then select_loan(loan_number)."})
-        return self._to_toon(
-            self._download(
-                "POST",
-                "/mockfin-service/download/soa/",
-                doc_type="soa",
-                json_body={"app_id": self.app_id, "start_date": start_date, "end_date": end_date},
+            return self._to_toon(
+                {"error": "No loan selected. Call list_loans() then select_loan(loan_number)."}
             )
+        result = self._download(
+            "POST",
+            "/mockfin-service/download/soa/",
+            doc_type="soa",
+            json_body={"app_id": self.app_id, "start_date": start_date, "end_date": end_date},
         )
+        if "error" not in result:
+            return self._to_toon(result)
+        # CRM unavailable in demo — generate mock SOA from loan + repayment schedule
+        loan: dict = {}
+        schedule: dict = {}
+        raw_loan = self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/")
+        if isinstance(raw_loan, dict) and "error" not in raw_loan:
+            loan = raw_loan
+        raw_sched = self._request("GET", f"/mockfin-service/loan/repayment-schedule/{self.app_id}/")
+        if isinstance(raw_sched, dict) and "error" not in raw_sched:
+            schedule = raw_sched
+        return self._to_toon(self._build_mock_soa(start_date, end_date, loan, schedule))
+
+    def _build_mock_soa(self, start_date: str, end_date: str, loan: dict, schedule: dict) -> dict:
+        import datetime
+
+        loan_no = (
+            loan.get("loan_number") or loan.get("applicationId") or self.app_id or "RNTWL-XXXXXX"
+        )
+        amount = loan.get("loanAmount") or loan.get("sanctionedAmount") or "—"
+        rate = loan.get("roi") or loan.get("interestRate") or "—"
+        phone = self.phone_number or "XXXXXXXXXX"
+        issued = datetime.date.today().strftime("%d %B %Y")
+
+        # Parse date bounds
+        try:
+            start_dt = datetime.date.fromisoformat(start_date)
+            end_dt = datetime.date.fromisoformat(end_date)
+        except ValueError:
+            start_dt = end_dt = None
+
+        # Extract instalment rows from repayment schedule that fall in range
+        rows: list[dict] = []
+        # The CRM may nest instalments under various keys; try common ones
+        for key in ("instalments", "installments", "schedule", "repaymentSchedule", "data"):
+            candidate = schedule.get(key)
+            if isinstance(candidate, list):
+                rows = candidate
+                break
+        if not rows and isinstance(schedule, list):
+            rows = schedule  # type: ignore[assignment]
+
+        tx_lines: list[str] = []
+        for row in rows:
+            due_str = row.get("dueDate") or row.get("due_date") or row.get("date") or ""
+            try:
+                due_dt = datetime.date.fromisoformat(str(due_str)[:10])
+            except (ValueError, TypeError):
+                continue
+            if start_dt and end_dt and not (start_dt <= due_dt <= end_dt):
+                continue
+            debit = row.get("emi") or row.get("amount") or row.get("instalment") or "—"
+            credit = row.get("paid") or row.get("amountPaid") or "—"
+            status = row.get("status") or ""
+            tx_lines.append(f"| {due_str} | EMI instalment | {debit} | {credit} | {status} |")
+
+        if not tx_lines:
+            tx_lines = ["| — | No transactions in selected period | — | — | — |"]
+
+        tx_table = "\n".join(tx_lines)
+
+        content = f"""## Statement of Account — Mock Fin Tech
+
+**As of:** {issued} | **Account:** {loan_no} | **Mobile:** {phone}
+**Period:** {start_date} to {end_date}
+
+---
+
+### Account Summary
+
+| Field | Details |
+|---|---|
+| Loan Number | {loan_no} |
+| Sanctioned Amount | {amount} |
+| Rate of Interest | {rate} p.a. |
+
+---
+
+### Transaction History
+
+| Date | Description | Debit (₹) | Credit (₹) | Status |
+|---|---|---|---|---|
+{tx_table}
+
+---
+
+*This is a mock statement generated for demonstration purposes only.*
+"""
+        return {
+            "status": "ready",
+            "document_type": "soa",
+            "note": "Mock SOA generated (PDF endpoint unavailable in demo environment)",
+            "content": content,
+        }
 
     def initiate_transaction(self, amount: str, otp: str, payment_mode: str = "UPI") -> str:
         payload = {

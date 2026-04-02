@@ -21,7 +21,6 @@ class PromptsSchema(BaseModel):
     agent: Dict[str, PromptDef]
     eval: Dict[str, PromptDef]
     router: Dict[str, PromptDef]
-    follow_up: Dict[str, PromptDef]
     knowledge: Dict[str, PromptDef]
 
 

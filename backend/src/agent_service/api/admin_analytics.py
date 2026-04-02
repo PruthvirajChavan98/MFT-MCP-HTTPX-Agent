@@ -17,7 +17,6 @@ from src.agent_service.core.config import (
     SHADOW_TRACE_QUEUE_KEY,
 )
 from src.agent_service.core.session_utils import get_redis
-from src.common.neo4j_mgr import neo4j_mgr
 
 router = APIRouter(
     prefix="/agent/admin/analytics",
@@ -101,11 +100,12 @@ def _extract_question_preview(inputs_json: Any) -> str:
     return ""
 
 
-async def _neo4j_read(query: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+async def _pg_rows(pool: Any, query: str, *args: Any) -> list[dict[str, Any]]:
     try:
-        return await neo4j_mgr.execute_read(query, params)
+        rows = await pool.fetch(query, *args)
+        return [dict(r) for r in rows]
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Neo4j unavailable: {exc}") from exc
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
 
 
 def _risk_level(score: float) -> str:
@@ -160,6 +160,7 @@ def _extract_inline_guard_fields(row: dict[str, Any]) -> tuple[str | None, str |
 
 
 async def _load_guardrail_trace_rows(
+    pool: Any,
     *,
     limit: int,
     tenant_id: str,
@@ -167,41 +168,30 @@ async def _load_guardrail_trace_rows(
     start: datetime | None = None,
     end: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    start_iso = start.astimezone(timezone.utc).isoformat() if start else None
-    end_iso = end.astimezone(timezone.utc).isoformat() if end else None
-
-    return await _neo4j_read(
+    return await _pg_rows(
+        pool,
         """
-        MATCH (t:EvalTrace)
-        WHERE t.started_at IS NOT NULL
-          AND ($session_id IS NULL OR t.session_id = $session_id)
-          AND ($tenant_id = 'default' OR t.case_id = $tenant_id)
-          AND ($start IS NULL OR datetime(t.started_at) >= datetime($start))
-          AND ($end IS NULL OR datetime(t.started_at) <= datetime($end))
+        SELECT
+            trace_id, session_id, endpoint, started_at, meta_json,
+            inline_guard_decision, inline_guard_reason_code, inline_guard_risk_score
+        FROM eval_traces
+        WHERE started_at IS NOT NULL
+          AND ($1::text IS NULL OR session_id = $1)
+          AND ($2 = 'default' OR case_id = $2)
+          AND ($3::timestamptz IS NULL OR started_at >= $3)
+          AND ($4::timestamptz IS NULL OR started_at <= $4)
           AND (
-            t.inline_guard_decision IS NOT NULL
-            OR t.meta_json CONTAINS '"inline_guard"'
+            inline_guard_decision IS NOT NULL
+            OR meta_json::text LIKE '%"inline_guard"%'
           )
-        RETURN
-          t.trace_id AS trace_id,
-          t.session_id AS session_id,
-          t.endpoint AS endpoint,
-          t.started_at AS started_at,
-          t.meta_json AS meta_json,
-          t.inline_guard_decision AS inline_guard_decision,
-          t[$inline_guard_reason_code_key] AS inline_guard_reason_code,
-          t.inline_guard_risk_score AS inline_guard_risk_score
-        ORDER BY t.started_at DESC
-        LIMIT $limit
+        ORDER BY started_at DESC
+        LIMIT $5
         """,
-        {
-            "limit": limit,
-            "tenant_id": tenant_id,
-            "session_id": session_id,
-            "start": start_iso,
-            "end": end_iso,
-            "inline_guard_reason_code_key": "inline_guard_reason_code",
-        },
+        session_id,
+        tenant_id,
+        start,
+        end,
+        limit,
     )
 
 
@@ -246,20 +236,19 @@ def _log_guardrails_query_failure(
 
 
 @router.get("/overview")
-async def overview():
-    rows = await _neo4j_read(
+async def overview(request: Request):
+    pool = request.app.state.pool
+    rows = await _pg_rows(
+        pool,
         """
-        MATCH (t:EvalTrace)
-        WITH
-          count(t) AS traces,
-          sum(CASE WHEN t.status = 'success' THEN 1 ELSE 0 END) AS success_count,
-          avg(toFloat(coalesce(t.latency_ms, 0))) AS avg_latency_ms,
-          max(t.started_at) AS last_active
-        RETURN traces, success_count, avg_latency_ms, last_active
+        SELECT
+            COUNT(*)                                              AS traces,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success_count,
+            AVG(COALESCE(latency_ms, 0))                         AS avg_latency_ms,
+            MAX(started_at)                                      AS last_active
+        FROM eval_traces
         """,
-        {},
     )
-
     row = rows[0] if rows else {}
     traces = int(row.get("traces") or 0)
     success = int(row.get("success_count") or 0)
@@ -297,52 +286,40 @@ async def conversations(
             else None
         )
 
-        rows = await _neo4j_read(
+        pool = request.app.state.pool
+        search_pat = f"%{normalized_search}%" if normalized_search else None
+        rows = await _pg_rows(
+            pool,
             """
-            MATCH (t:EvalTrace)
+            SELECT
+                t.session_id,
+                MAX(t.started_at) AS started_at,
+                COUNT(*) AS message_count,
+                (array_agg(t.model    ORDER BY t.started_at DESC))[1] AS model,
+                (array_agg(t.provider ORDER BY t.started_at DESC))[1] AS provider,
+                (array_agg(t.inputs_json ORDER BY t.started_at DESC))[1] AS inputs_json
+            FROM eval_traces t
             WHERE t.session_id IS NOT NULL
               AND t.started_at IS NOT NULL
               AND (
-                $search IS NULL
-                OR toLower(t.session_id) CONTAINS $search
-                OR toLower(coalesce(toString(t.inputs_json), '')) CONTAINS $search
-                OR toLower(coalesce(toString(t.final_output), '')) CONTAINS $search
+                $1::text IS NULL
+                OR LOWER(t.session_id)  LIKE $1
+                OR LOWER(COALESCE(t.inputs_json::text, '')) LIKE $1
+                OR LOWER(COALESCE(t.final_output, '')) LIKE $1
               )
-            WITH
-              t.session_id AS session_id,
-              max(t.started_at) AS started_at,
-              count(t) AS message_count
-            WHERE
-              $cursor_started_at IS NULL
-              OR datetime(started_at) < datetime($cursor_started_at)
-              OR (
-                datetime(started_at) = datetime($cursor_started_at)
-                AND session_id < $cursor_session_id
-              )
-            CALL {
-              WITH session_id
-              MATCH (latest:EvalTrace {session_id: session_id})
-              WHERE latest.started_at IS NOT NULL
-              RETURN latest
-              ORDER BY latest.started_at DESC, latest.trace_id DESC
-              LIMIT 1
-            }
-            RETURN
-              session_id,
-              started_at,
-              message_count,
-              latest.model AS model,
-              latest.provider AS provider,
-              latest.inputs_json AS inputs_json
-            ORDER BY started_at DESC, session_id DESC
-            LIMIT $limit_plus_one
+            GROUP BY t.session_id
+            HAVING (
+                $2::timestamptz IS NULL
+                OR MAX(t.started_at) < $2
+                OR (MAX(t.started_at) = $2 AND t.session_id < $3)
+            )
+            ORDER BY started_at DESC, t.session_id DESC
+            LIMIT $4
             """,
-            {
-                "search": normalized_search,
-                "cursor_started_at": cursor_started_at,
-                "cursor_session_id": cursor_session_id,
-                "limit_plus_one": limit + 1,
-            },
+            search_pat,
+            cursor_started_at,
+            cursor_session_id or "",
+            limit + 1,
         )
 
         has_more = len(rows) > limit
@@ -528,23 +505,20 @@ async def session_traces(
             )
 
     if not items:
-        # Fallback for sessions with missing checkpointer data: reconstruct from EvalTrace rows.
-        rows = await _neo4j_read(
+        # Fallback for sessions with missing checkpointer data: reconstruct from eval_traces.
+        pool = request.app.state.pool
+        rows = await _pg_rows(
+            pool,
             """
-            MATCH (t:EvalTrace {session_id: $session_id})
-            RETURN
-              t.trace_id AS trace_id,
-              t.started_at AS started_at,
-              t.inputs_json AS inputs_json,
-              t.final_output AS final_output,
-              t.status AS status,
-              t.model AS model,
-              t.provider AS provider,
-              t.meta_json AS meta_json
-            ORDER BY t.started_at ASC
-            LIMIT $limit
+            SELECT trace_id, started_at, inputs_json, final_output,
+                   status, model, provider, meta_json
+            FROM eval_traces
+            WHERE session_id = $1
+            ORDER BY started_at ASC
+            LIMIT $2
             """,
-            {"session_id": session_id, "limit": limit},
+            session_id,
+            limit,
         )
         for idx, row in enumerate(rows, start=1):
             started_at = _parse_iso_timestamp(row.get("started_at"))
@@ -589,6 +563,7 @@ async def session_traces(
 
 @router.get("/traces")
 async def traces(
+    request: Request,
     limit: int = Query(default=200, ge=1, le=500),
     cursor: str | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
@@ -613,53 +588,40 @@ async def traces(
         normalized_status = status.strip().lower() if status and status.strip() else None
         normalized_model = model.strip() if model and model.strip() else None
 
-        rows = await _neo4j_read(
+        pool = request.app.state.pool
+        search_pat = f"%{normalized_search}%" if normalized_search else None
+        rows = await _pg_rows(
+            pool,
             """
-            MATCH (t:EvalTrace)
-            WHERE t.started_at IS NOT NULL
-              AND ($status IS NULL OR toLower(coalesce(t.status, '')) = $status)
-              AND ($model IS NULL OR coalesce(t.model, '') = $model)
+            SELECT
+                trace_id, case_id, session_id, provider, model, endpoint,
+                started_at, ended_at, latency_ms, status, error,
+                inputs_json, final_output, meta_json
+            FROM eval_traces
+            WHERE started_at IS NOT NULL
+              AND ($1::text IS NULL OR LOWER(COALESCE(status, '')) = $1)
+              AND ($2::text IS NULL OR COALESCE(model, '') = $2)
               AND (
-                $search IS NULL
-                OR toLower(t.trace_id) CONTAINS $search
-                OR toLower(coalesce(t.session_id, '')) CONTAINS $search
-                OR toLower(coalesce(toString(t.inputs_json), '')) CONTAINS $search
-                OR toLower(coalesce(toString(t.final_output), '')) CONTAINS $search
+                $3::text IS NULL
+                OR LOWER(trace_id) LIKE $3
+                OR LOWER(COALESCE(session_id, '')) LIKE $3
+                OR LOWER(COALESCE(inputs_json::text, '')) LIKE $3
+                OR LOWER(COALESCE(final_output, '')) LIKE $3
               )
               AND (
-                $cursor_started_at IS NULL
-                OR datetime(t.started_at) < datetime($cursor_started_at)
-                OR (
-                  datetime(t.started_at) = datetime($cursor_started_at)
-                  AND t.trace_id < $cursor_trace_id
-                )
+                $4::timestamptz IS NULL
+                OR started_at < $4
+                OR (started_at = $4 AND trace_id < $5)
               )
-            RETURN
-              t.trace_id AS trace_id,
-              t.case_id AS case_id,
-              t.session_id AS session_id,
-              t.provider AS provider,
-              t.model AS model,
-              t.endpoint AS endpoint,
-              t.started_at AS started_at,
-              t.ended_at AS ended_at,
-              t.latency_ms AS latency_ms,
-              t.status AS status,
-              t.error AS error,
-              t.inputs_json AS inputs_json,
-              t.final_output AS final_output,
-              t.meta_json AS meta_json
-            ORDER BY t.started_at DESC, t.trace_id DESC
-            LIMIT $limit_plus_one
+            ORDER BY started_at DESC, trace_id DESC
+            LIMIT $6
             """,
-            {
-                "limit_plus_one": limit + 1,
-                "search": normalized_search,
-                "status": normalized_status,
-                "model": normalized_model,
-                "cursor_started_at": cursor_started_at,
-                "cursor_trace_id": cursor_trace_id,
-            },
+            normalized_status,
+            normalized_model,
+            search_pat,
+            cursor_started_at,
+            cursor_trace_id or "",
+            limit + 1,
         )
 
         has_more = len(rows) > limit
@@ -784,80 +746,46 @@ async def _checkpoint_trace_detail(request: Request, trace_id: str) -> dict[str,
     }
 
 
-async def _eval_trace_detail(trace_id: str) -> dict[str, Any] | None:
-    rows = await _neo4j_read(
-        """
-        MATCH (t:EvalTrace {trace_id: $trace_id})
-        OPTIONAL MATCH (t)-[:HAS_EVENT]->(e:EvalEvent)
-        WITH t, e ORDER BY e.seq ASC
-        WITH t, [x IN collect(CASE WHEN e IS NULL THEN null ELSE {
-          event_key: e.event_key,
-          trace_id: e.trace_id,
-          seq: e.seq,
-          ts: e.ts,
-          event_type: e.event_type,
-          name: e.name,
-          text: e.text,
-          payload_json: e.payload_json,
-          meta_json: e.meta_json
-        } END) WHERE x IS NOT NULL] AS events
-        OPTIONAL MATCH (t)-[:HAS_EVAL]->(r:EvalResult)
-        OPTIONAL MATCH (r)-[evidence_rel]->(ev:EvalEvent)
-        WHERE type(evidence_rel) = 'EVIDENCE'
-        WITH t, events, r, collect(ev.event_key) AS evidence_event_keys
-        WITH t, events, [x IN collect(CASE WHEN r IS NULL THEN null ELSE {
-          eval_id: r.eval_id,
-          trace_id: r.trace_id,
-          metric_name: r.metric_name,
-          score: r.score,
-          passed: r.passed,
-          reasoning: r.reasoning,
-          evaluator_id: r.evaluator_id,
-          meta_json: r.meta_json,
-          evidence_json: r.evidence_json,
-          evidence_event_keys: evidence_event_keys
-        } END) WHERE x IS NOT NULL] AS evals
-        RETURN {
-          trace_id: t.trace_id,
-          case_id: t.case_id,
-          session_id: t.session_id,
-          provider: t.provider,
-          model: t.model,
-          endpoint: t.endpoint,
-          started_at: t.started_at,
-          ended_at: t.ended_at,
-          latency_ms: t.latency_ms,
-          status: t.status,
-          error: t.error,
-          inputs_json: t.inputs_json,
-          final_output: t.final_output,
-          tags_json: t.tags_json,
-          meta_json: t.meta_json
-        } AS trace,
-        events AS events,
-        evals AS evals
-        """,
-        {"trace_id": trace_id},
+async def _eval_trace_detail(pool: Any, trace_id: str) -> dict[str, Any] | None:
+    trace_rows = await _pg_rows(
+        pool,
+        "SELECT * FROM eval_traces WHERE trace_id = $1",
+        trace_id,
     )
-    if not rows:
+    if not trace_rows:
         return None
 
-    row = rows[0]
-    trace_obj = row.get("trace") or {}
+    trace_obj = trace_rows[0]
     for key in ("inputs_json", "tags_json", "meta_json"):
         trace_obj[key] = _json_load_maybe(trace_obj.get(key))
 
-    events = row.get("events") or []
-    for event in events:
+    event_rows = await _pg_rows(
+        pool,
+        "SELECT * FROM eval_events WHERE trace_id = $1 ORDER BY seq ASC",
+        trace_id,
+    )
+    for event in event_rows:
         event["payload_json"] = _json_load_maybe(event.get("payload_json"))
         event["meta_json"] = _json_load_maybe(event.get("meta_json"))
 
-    evals = row.get("evals") or []
-    for eval_row in evals:
+    eval_rows = await _pg_rows(
+        pool,
+        """
+        SELECT r.*,
+               ARRAY_AGG(ere.event_key) FILTER (WHERE ere.event_key IS NOT NULL)
+                 AS evidence_event_keys
+        FROM eval_results r
+        LEFT JOIN eval_result_evidence ere ON ere.eval_id = r.eval_id
+        WHERE r.trace_id = $1
+        GROUP BY r.eval_id
+        """,
+        trace_id,
+    )
+    for eval_row in eval_rows:
         eval_row["meta_json"] = _json_load_maybe(eval_row.get("meta_json"))
         eval_row["evidence_json"] = _json_load_maybe(eval_row.get("evidence_json"))
 
-    return {"trace": trace_obj, "events": events, "evals": evals}
+    return {"trace": trace_obj, "events": event_rows, "evals": eval_rows}
 
 
 @router.get("/trace/{trace_id:path}")
@@ -874,7 +802,7 @@ async def trace_detail(request: Request, trace_id: str):
             except HTTPException as exc:
                 checkpoint_error = exc
 
-            detail = await _eval_trace_detail(trace_id)
+            detail = await _eval_trace_detail(request.app.state.pool, trace_id)
             if detail:
                 ADMIN_TRACE_RESOLVE_SOURCE_TOTAL.labels(source="eval").inc()
                 return detail
@@ -884,7 +812,7 @@ async def trace_detail(request: Request, trace_id: str):
                 raise checkpoint_error
             raise HTTPException(status_code=404, detail="Trace not found")
 
-        detail = await _eval_trace_detail(trace_id)
+        detail = await _eval_trace_detail(request.app.state.pool, trace_id)
         if detail:
             ADMIN_TRACE_RESOLVE_SOURCE_TOTAL.labels(source="eval").inc()
             return detail
@@ -898,26 +826,26 @@ async def trace_detail(request: Request, trace_id: str):
 
 
 @router.get("/users")
-async def users(limit: int = Query(default=120, ge=1, le=1000)):
-    rows = await _neo4j_read(
+async def users(request: Request, limit: int = Query(default=120, ge=1, le=1000)):
+    pool = request.app.state.pool
+    rows = await _pg_rows(
+        pool,
         """
-        MATCH (t:EvalTrace)
-        WHERE t.session_id IS NOT NULL
-          AND t.started_at IS NOT NULL
-        WITH
-          t.session_id AS session_id,
-          count(t) AS trace_count,
-          sum(CASE WHEN t.status = 'success' THEN 1 ELSE 0 END) AS success_count,
-          sum(CASE WHEN t.status = 'error' THEN 1 ELSE 0 END) AS error_count,
-          avg(toFloat(coalesce(t.latency_ms, 0))) AS avg_latency_ms,
-          max(t.started_at) AS last_active
-        RETURN session_id, trace_count, success_count, error_count, avg_latency_ms, last_active
+        SELECT
+            session_id,
+            COUNT(*) AS trace_count,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success_count,
+            SUM(CASE WHEN status = 'error'   THEN 1 ELSE 0 END) AS error_count,
+            AVG(COALESCE(latency_ms, 0))                         AS avg_latency_ms,
+            MAX(started_at)                                      AS last_active
+        FROM eval_traces
+        WHERE session_id IS NOT NULL AND started_at IS NOT NULL
+        GROUP BY session_id
         ORDER BY trace_count DESC
-        LIMIT $limit
+        LIMIT $1
         """,
-        {"limit": limit},
+        limit,
     )
-
     return {"items": rows, "count": len(rows), "limit": limit}
 
 
@@ -938,8 +866,10 @@ async def guardrails(
     started = time.perf_counter()
 
     try:
+        pool = request.app.state.pool
         fetch_cap = min(max(offset + limit + 1000, 2000), 10000)
         rows = await _load_guardrail_trace_rows(
+            pool,
             limit=fetch_cap,
             tenant_id=tenant_id,
             session_id=session_id.strip() if session_id else None,
@@ -992,7 +922,8 @@ async def guardrails_summary(
     status = "success"
     started = time.perf_counter()
     try:
-        rows = await _load_guardrail_trace_rows(limit=20000, tenant_id=tenant_id)
+        pool = request.app.state.pool
+        rows = await _load_guardrail_trace_rows(pool, limit=20000, tenant_id=tenant_id)
         events = [evt for row in rows if (evt := _as_guardrail_event(row)) is not None]
 
         total_events = len(events)
@@ -1038,8 +969,10 @@ async def guardrails_trends(
     status = "success"
     started = time.perf_counter()
     try:
+        pool = request.app.state.pool
         start = datetime.now(timezone.utc) - timedelta(hours=hours)
         rows = await _load_guardrail_trace_rows(
+            pool,
             limit=20000,
             tenant_id=tenant_id,
             start=start,
@@ -1130,37 +1063,33 @@ async def guardrails_queue_health():
 
 
 @router.get("/guardrails/judge-summary")
-async def guardrails_judge_summary(limit_failures: int = Query(default=20, ge=1, le=100)):
-    aggregate_rows = await _neo4j_read(
+async def guardrails_judge_summary(
+    request: Request,
+    limit_failures: int = Query(default=20, ge=1, le=100),
+):
+    pool = request.app.state.pool
+    aggregate_rows = await _pg_rows(
+        pool,
         """
-        MATCH (e:ShadowJudgeEval)
-        RETURN
-          count(e) AS total_evals,
-          avg(toFloat(coalesce(e.helpfulness, 0))) AS avg_helpfulness,
-          avg(toFloat(coalesce(e.faithfulness, 0))) AS avg_faithfulness,
-          avg(toFloat(coalesce(e.policy_adherence, 0))) AS avg_policy_adherence
+        SELECT
+            COUNT(*) AS total_evals,
+            AVG(COALESCE(helpfulness, 0))       AS avg_helpfulness,
+            AVG(COALESCE(faithfulness, 0))       AS avg_faithfulness,
+            AVG(COALESCE(policy_adherence, 0))   AS avg_policy_adherence
+        FROM shadow_judge_evals
         """,
-        {},
     )
-    failure_rows = await _neo4j_read(
+    failure_rows = await _pg_rows(
+        pool,
         """
-        MATCH (e:ShadowJudgeEval)
-        WHERE toFloat(coalesce(e.policy_adherence, 0)) < 0.5
-           OR toFloat(coalesce(e.faithfulness, 0)) < 0.5
-           OR toFloat(coalesce(e.helpfulness, 0)) < 0.5
-        RETURN
-          e.trace_id AS trace_id,
-          e.session_id AS session_id,
-          e.model AS model,
-          e.summary AS summary,
-          toFloat(coalesce(e.helpfulness, 0)) AS helpfulness,
-          toFloat(coalesce(e.faithfulness, 0)) AS faithfulness,
-          toFloat(coalesce(e.policy_adherence, 0)) AS policy_adherence,
-          e.evaluated_at AS evaluated_at
-        ORDER BY e.evaluated_at DESC
-        LIMIT $limit
+        SELECT trace_id, session_id, model, summary,
+               helpfulness, faithfulness, policy_adherence, evaluated_at
+        FROM shadow_judge_evals
+        WHERE policy_adherence < 0.5 OR faithfulness < 0.5 OR helpfulness < 0.5
+        ORDER BY evaluated_at DESC
+        LIMIT $1
         """,
-        {"limit": limit_failures},
+        limit_failures,
     )
 
     row = aggregate_rows[0] if aggregate_rows else {}

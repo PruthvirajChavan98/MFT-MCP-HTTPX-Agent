@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { deleteFaq, ingestFaqBatch, ingestFaqPdf, updateFaq } from '@features/admin/api/admin'
+import { clearAllFaqs, deleteFaq, ingestFaqBatch, ingestFaqPdf, updateFaq } from '@features/admin/api/admin'
 import { formatDateTime } from '@shared/lib/format'
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
@@ -83,7 +83,13 @@ function blankEntry(category = DEFAULT_CATEGORY): FaqEntryDraft {
 // Sub-components
 // ────────────────────────────────────────────────────────────────────────────
 
-function StatusBadge({ vectorStatus }: { vectorStatus: KnowledgeBaseFaqRow['vectorStatus'] }) {
+function StatusBadge({
+  vectorStatus,
+  vectorError,
+}: {
+  vectorStatus: KnowledgeBaseFaqRow['vectorStatus']
+  vectorError: KnowledgeBaseFaqRow['vectorError']
+}) {
   if (vectorStatus === 'synced') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
@@ -94,10 +100,14 @@ function StatusBadge({ vectorStatus }: { vectorStatus: KnowledgeBaseFaqRow['vect
   }
 
   if (vectorStatus === 'failed') {
+    const label = vectorError ? vectorError.slice(0, 60) : 'Vectorization failed'
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-        Failed
+      <span
+        className="inline-flex max-w-xs items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700"
+        title={vectorError ?? undefined}
+      >
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+        <span className="truncate">{label}{vectorError && vectorError.length > 60 ? '…' : ''}</span>
       </span>
     )
   }
@@ -155,7 +165,7 @@ function FAQRow({
   const toggleExpanded = () => setExpanded((prev) => !prev)
 
   return (
-    <div className="mb-2 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md">
+    <div className="mb-2 rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md">
       <div
         role="button"
         tabIndex={0}
@@ -192,7 +202,7 @@ function FAQRow({
           onKeyDown={(event) => event.stopPropagation()}
         >
           <CategoryBadge category={faq.category} />
-          <StatusBadge vectorStatus={faq.vectorStatus} />
+          <StatusBadge vectorStatus={faq.vectorStatus} vectorError={faq.vectorError} />
           <div className="relative">
             <button
               type="button"
@@ -548,6 +558,7 @@ export function KnowledgeBasePage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<KnowledgeBaseFaqRow | null>(null)
   const [modalSaving, setModalSaving] = useState(false)
+  const [semanticMenuOpen, setSemanticMenuOpen] = useState<number | null>(null)
 
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
@@ -573,13 +584,15 @@ export function KnowledgeBasePage() {
       buildKnowledgeBaseViewModel({
         faqs: faqsQuery.data ?? [],
         categories: categoriesQuery.data ?? [],
-        searchQuery,
         selectedCategory,
         sortField,
         sortDir,
       }),
-    [faqsQuery.data, categoriesQuery.data, searchQuery, selectedCategory, sortField, sortDir],
+    [faqsQuery.data, categoriesQuery.data, selectedCategory, sortField, sortDir],
   )
+
+  const findFaqByQuestion = (question: string): KnowledgeBaseFaqRow | undefined =>
+    model.rows.find((r) => r.question === question)
 
   const availableCategories = useMemo(() => {
     const labels = categoriesQuery.data?.map((category) => category.label) ?? []
@@ -595,6 +608,21 @@ export function KnowledgeBasePage() {
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   })
+
+  const deleteAllMut = useMutation({
+    mutationFn: () => clearAllFaqs(auth.adminKey),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['faqs'] })
+      toast.success('All FAQs deleted')
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  })
+
+  const handleDeleteAll = () => {
+    if (model.stats.total === 0) return
+    if (!window.confirm(`Delete all ${model.stats.total} FAQs? This cannot be undone.`)) return
+    deleteAllMut.mutate()
+  }
 
   const runSemanticSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
@@ -713,13 +741,23 @@ export function KnowledgeBasePage() {
               Manage FAQs, vector embeddings, and Neo4j graph relationships.
             </p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm transition-all shadow-sm shadow-teal-200 active:scale-95"
-          >
-            <Plus size={16} />
-            Add FAQ
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDeleteAll}
+              disabled={deleteAllMut.isPending || model.stats.total === 0}
+              className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {deleteAllMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              Delete All
+            </button>
+            <button
+              onClick={openAddModal}
+              className="flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm transition-all shadow-sm shadow-teal-200 active:scale-95"
+            >
+              <Plus size={16} />
+              Add FAQ
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -855,14 +893,68 @@ export function KnowledgeBasePage() {
             ) : (
               <div className="space-y-3">
                 {semanticMatches.map((match, index) => (
-                  <div key={`${match.question}:${index}`} className="flex items-start justify-between gap-4 rounded-lg border border-violet-100 bg-white p-4 shadow-sm">
-                    <div className="min-w-0">
+                  <div key={`${match.question}:${index}`} className="flex items-start gap-4 rounded-lg border border-violet-100 bg-white p-4 shadow-sm">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-gray-900">{match.question}</p>
                       <p className="mt-1 line-clamp-2 text-sm text-gray-600">{match.answer}</p>
                     </div>
                     <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
                       {(match.score * 100).toFixed(1)}% Match
                     </span>
+                    <div className="relative shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSemanticMenuOpen(semanticMenuOpen === index ? null : index)}
+                        aria-label="Open row actions"
+                        className="rounded-lg p-1.5 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                      {semanticMenuOpen === index && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setSemanticMenuOpen(null)} aria-hidden />
+                          <div className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-xl">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const faq = findFaqByQuestion(match.question)
+                                if (faq) openEditModal(faq)
+                                setSemanticMenuOpen(null)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                            >
+                              <Pencil size={13} />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await navigator.clipboard.writeText(`Q: ${match.question}\nA: ${match.answer}`)
+                                toast.success('Copied to clipboard')
+                                setSemanticMenuOpen(null)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                            >
+                              <Copy size={13} />
+                              Copy
+                            </button>
+                            <div className="my-1 border-t border-gray-100" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const faq = findFaqByQuestion(match.question)
+                                if (faq) deleteMut.mutate(faq)
+                                setSemanticMenuOpen(null)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                            >
+                              <Trash2 size={13} />
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

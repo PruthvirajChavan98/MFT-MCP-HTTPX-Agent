@@ -6,9 +6,8 @@ import type { ChatMessage, CostEvent, ToolCallEvent } from '@shared/types/chat'
 const SESSION_KEY = 'nbfc_chat_session_id'
 const messageKey = (sid: string) => `nbfc_chat_messages_${sid}`
 
-interface FollowUpToken {
-  index: number
-  token: string
+interface FollowUpsPayload {
+  questions?: string[]
 }
 
 interface SessionInitResponse {
@@ -123,42 +122,6 @@ export function useChatStream() {
       patchAssistant((last) => ({ ...last, [field]: `${last[field]}${chunk}` }))
     },
     [patchAssistant],
-  )
-
-  const fetchFollowUps = useCallback(
-    async (question: string) => {
-      if (!sessionId) return
-      const chunks = new Map<number, string>()
-      try {
-        await streamSse(
-          `${API_BASE_URL}/agent/follow-up-stream`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId, question }),
-          },
-          {
-            onEvent: (eventName, data, parsed) => {
-              if (eventName !== 'token') return
-              const token = parsed as FollowUpToken | undefined
-              if (token && typeof token.index === 'number' && typeof token.token === 'string') {
-                chunks.set(token.index, `${chunks.get(token.index) ?? ''}${token.token}`)
-              } else if (typeof data === 'string' && data.trim()) {
-                chunks.set(chunks.size, data.trim())
-              }
-            },
-          },
-        )
-        const ordered = [...chunks.entries()]
-          .sort((a, b) => a[0] - b[0])
-          .map(([, v]) => v.trim())
-          .filter(Boolean)
-        setFollowUps(ordered.slice(0, 5))
-      } catch {
-        // follow-up errors are non-critical
-      }
-    },
-    [sessionId],
   )
 
   const sendMessage = useCallback(
@@ -281,6 +244,19 @@ export function useChatStream() {
                     setError(message)
                   }
                   break
+                case 'follow_ups': {
+                  const payload = parsed as FollowUpsPayload | undefined
+                  if (payload?.questions) {
+                    const questions = payload.questions.slice(0, 5)
+                    setFollowUps(questions)
+                    patchAssistant((last) => ({
+                      ...last,
+                      followUps: questions,
+                      content: last.content.replace(/\n?FOLLOW_UPS:\s*\[.*?\]\s*$/s, '').trimEnd(),
+                    }))
+                  }
+                  break
+                }
                 case 'done':
                   hadDone = true
                   patchAssistant((last) => ({ ...last, status: last.status === 'error' ? 'error' : 'done' }))
@@ -315,7 +291,6 @@ export function useChatStream() {
           }))
         }
 
-        await fetchFollowUps(trimmed)
       } catch (raw) {
         const err = raw instanceof Error ? raw : new Error('Unknown stream failure')
         if (err.name === 'AbortError') {
@@ -333,7 +308,7 @@ export function useChatStream() {
         abortRef.current = null
       }
     },
-    [sessionId, isStreaming, appendAssistant, patchAssistant, fetchFollowUps],
+    [sessionId, isStreaming, appendAssistant, patchAssistant],
   )
 
   const stopGeneration = useCallback(() => {

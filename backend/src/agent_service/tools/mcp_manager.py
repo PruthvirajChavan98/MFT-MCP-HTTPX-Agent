@@ -178,44 +178,33 @@ class MCPManager:
                     log.error(f"Failed to create MCP tool '{tool_name}': {e}")
                     continue
 
-        # 3. Add Local Cognee graph-completion tool
+        # 3. Add local KB semantic search tool (Milvus)
         if is_auth or "mock_fintech_knowledge_base" in PUBLIC_TOOLS:
             try:
-                tools.append(self._build_cognee_tool())
+                tools.append(self._build_kb_tool())
             except Exception as e:
-                log.error(f"Failed to attach Cognee tool: {e}")
+                log.error(f"Failed to attach KB tool: {e}")
 
         return tools
 
-    def _build_cognee_tool(self) -> StructuredTool:
-        class CogneeQueryInput(BaseModel):
+    def _build_kb_tool(self) -> StructuredTool:
+        from src.agent_service.features.kb_milvus_store import kb_milvus_store
+
+        class KBQueryInput(BaseModel):
             query: str = Field(
-                description="Natural language query to search the fintech knowledge graph."
+                description="Natural language query to search the fintech FAQ knowledge base."
             )
 
         async def mock_fintech_knowledge_base(query: str) -> dict[str, Any]:
-            import cognee
-
-            try:
-                # Latest Cognee docs use query_text/query_type.
-                result = await cognee.search(
-                    query_text=query,
-                    query_type=cognee.SearchType.GRAPH_COMPLETION,
-                )
-            except TypeError:
-                # Backward compatibility for older Cognee API variants.
-                result = await cognee.search(
-                    query=query,
-                    search_type=cognee.SearchType.GRAPH_COMPLETION,
-                )
-            return normalize_result(result)
+            results = await kb_milvus_store.semantic_search(query, limit=5)
+            return normalize_result(results)
 
         return StructuredTool.from_function(
             func=None,
             coroutine=mock_fintech_knowledge_base,
             name="mock_fintech_knowledge_base",
-            description="Query fintech knowledge using Cognee graph completion.",
-            args_schema=CogneeQueryInput,
+            description="Search the fintech FAQ knowledge base by semantic similarity.",
+            args_schema=KBQueryInput,
         )
 
 

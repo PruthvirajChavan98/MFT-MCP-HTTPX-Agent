@@ -1,5 +1,5 @@
 // src/app/components/admin/trace/TraceTree.tsx
-import { AlignLeft, Settings, Minimize2, CheckCircle2, Eye, ChevronRight } from 'lucide-react'
+import { Minimize2, CheckCircle2, Eye, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@components/ui/skeleton'
 import { getNodeIcon, getNodeChipClasses, getBarColor } from './nodeUtils'
 import type { FlatNode } from './types'
@@ -15,24 +15,15 @@ interface TraceTreeProps {
 export function TraceTree({ nodes, selectedNodeId, onSelect, onClose, isLoading }: TraceTreeProps) {
   return (
     <div className="w-[380px] border-r border-border bg-card flex flex-col shrink-0 h-full">
-      <div className="px-4 pt-4 pb-3 border-b border-border shrink-0 space-y-3">
+      <div className="px-4 pt-4 pb-3 border-b border-border shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold text-muted-foreground tracking-[0.12em] uppercase">
             Trace Explorer
           </span>
-          <div className="flex items-center gap-1">
-            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" aria-label="Settings">
-              <Settings size={13} />
-            </button>
-            <button onClick={onClose} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
-              <Minimize2 size={13} />
-            </button>
-          </div>
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
+            <Minimize2 size={13} />
+          </button>
         </div>
-
-        <button className="flex items-center gap-1.5 text-[12px] font-medium text-foreground bg-muted border border-border px-2.5 py-1.5 rounded-md hover:bg-accent transition-colors">
-          <AlignLeft size={13} /> Waterfall
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-8 mt-1">

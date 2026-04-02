@@ -10,82 +10,6 @@ from fastapi import HTTPException
 from src.agent_service.api import admin_analytics
 
 
-class _FakeConn:
-    def __init__(self):
-        self.executed: list[tuple[str, tuple]] = []
-        self.fetch_calls: list[tuple[str, tuple]] = []
-
-    async def execute(self, query: str, *args):
-        self.executed.append((query, args))
-
-    async def fetchrow(self, query: str, *args):
-        if "FROM security.session_ip_events" in query:
-            return {"total": 2}
-        return {"total_events": 2, "avg_risk_score": 0.62, "deny_events": 1}
-
-    async def fetch(self, query: str, *args):
-        self.fetch_calls.append((query, args))
-        if "GROUP BY bucket" in query:
-            return [
-                {
-                    "bucket": datetime(2026, 1, 1, 10, tzinfo=timezone.utc),
-                    "total_events": 3,
-                    "deny_events": 1,
-                    "avg_risk_score": 0.5,
-                }
-            ]
-        return [
-            {
-                "event_time": datetime(2026, 1, 1, 10, tzinfo=timezone.utc),
-                "session_id": "s-1",
-                "risk_score": 0.8,
-                "risk_decision": "deny",
-                "request_path": "/agent/stream",
-                "risk_reasons": ["anomaly"],
-            },
-            {
-                "event_time": datetime(2026, 1, 1, 11, tzinfo=timezone.utc),
-                "session_id": "s-2",
-                "risk_score": 0.2,
-                "risk_decision": "allow",
-                "request_path": "/health/ready",
-                "risk_reasons": [],
-            },
-        ]
-
-    def transaction(self):
-        return self
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-
-class _FakePool:
-    def __init__(self):
-        self.conn = _FakeConn()
-
-    def acquire(self):
-        return self.conn
-
-
-class _FailingTrendsConn(_FakeConn):
-    async def fetch(self, query: str, *args):
-        if "GROUP BY bucket" in query:
-            raise RuntimeError("db unavailable")
-        return await super().fetch(query, *args)
-
-
-class _FailingTrendsPool:
-    def __init__(self):
-        self.conn = _FailingTrendsConn()
-
-    def acquire(self):
-        return self.conn
-
-
 @pytest.mark.asyncio
 async def test_guardrails_events_support_filters_and_pagination():
     now = datetime.now(timezone.utc)
@@ -112,10 +36,11 @@ async def test_guardrails_events_support_filters_and_pagination():
         },
     ]
 
-    async def _fake_rows(**kwargs):
+    async def _fake_rows(pool, **kwargs):
         return rows
 
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(admin_analytics, "_load_guardrail_trace_rows", _fake_rows)
     response = await admin_analytics.guardrails(
@@ -165,11 +90,12 @@ async def test_guardrails_trends_accepts_integer_hours():
 
     captured: dict[str, object] = {}
 
-    async def _fake_rows(**kwargs):
+    async def _fake_rows(pool, **kwargs):
         captured.update(kwargs)
         return rows
 
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(admin_analytics, "_load_guardrail_trace_rows", _fake_rows)
 
@@ -188,13 +114,14 @@ async def test_guardrails_trends_accepts_integer_hours():
 
 @pytest.mark.asyncio
 async def test_guardrails_trends_returns_503_when_db_query_fails():
-    async def _raise(**kwargs):
+    async def _raise(pool, **kwargs):
         raise RuntimeError("db unavailable")
 
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(admin_analytics, "_load_guardrail_trace_rows", _raise)
 
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
     with pytest.raises(HTTPException) as exc_info:
         await admin_analytics.guardrails_trends(
@@ -232,32 +159,40 @@ async def test_guardrails_queue_health_reports_depth_and_oldest_age(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_guardrails_judge_summary_returns_aggregates(monkeypatch):
-    async def _fake_neo4j_read(query: str, params: dict[str, object]):
-        if "count(e) AS total_evals" in query:
-            return [
-                {
-                    "total_evals": 5,
-                    "avg_helpfulness": 0.8,
-                    "avg_faithfulness": 0.7,
-                    "avg_policy_adherence": 0.9,
-                }
-            ]
-        return [
-            {
-                "trace_id": "trace-1",
-                "session_id": "session-1",
-                "model": "model-a",
-                "summary": "Needs improvement",
-                "helpfulness": 0.2,
-                "faithfulness": 0.4,
-                "policy_adherence": 0.3,
-                "evaluated_at": "2026-01-01T10:00:00Z",
-            }
-        ]
+async def test_guardrails_judge_summary_returns_aggregates():
+    aggregate_row = {
+        "total_evals": 5,
+        "avg_helpfulness": 0.8,
+        "avg_faithfulness": 0.7,
+        "avg_policy_adherence": 0.9,
+    }
+    failure_row = {
+        "trace_id": "trace-1",
+        "session_id": "session-1",
+        "model": "model-a",
+        "summary": "Needs improvement",
+        "helpfulness": 0.2,
+        "faithfulness": 0.4,
+        "policy_adherence": 0.3,
+        "evaluated_at": "2026-01-01T10:00:00Z",
+    }
 
-    monkeypatch.setattr(admin_analytics, "_neo4j_read", _fake_neo4j_read)
-    response = await admin_analytics.guardrails_judge_summary(limit_failures=5)
+    call_count = 0
+
+    class _FakePoolJudge:
+        async def fetch(self, query: str, *args):
+            nonlocal call_count
+            call_count += 1
+            if "COUNT(*) AS total_evals" in query:
+                return [aggregate_row]
+            return [failure_row]
+
+    fake_pool = _FakePoolJudge()
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
+    response = await admin_analytics.guardrails_judge_summary(
+        request=request,
+        limit_failures=5,
+    )
 
     assert response["total_evals"] == 5
     assert len(response["recent_failures"]) == 1

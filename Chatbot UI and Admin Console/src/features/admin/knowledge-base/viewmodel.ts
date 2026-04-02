@@ -13,6 +13,7 @@ export type KnowledgeBaseFaqRow = {
   createdAt: string
   updatedAt?: string
   vectorStatus: FaqVectorStatus
+  vectorError: string | null
   vectorized: boolean
 }
 
@@ -74,6 +75,7 @@ export function normalizeFaqRecord(record: FaqRecord): KnowledgeBaseFaqRow {
     createdAt: normalizeString(record.created_at),
     updatedAt: normalizeString(record.updated_at) || undefined,
     vectorStatus,
+    vectorError: record.vector_error ?? null,
     vectorized: vectorStatus === 'synced',
   }
 }
@@ -102,20 +104,9 @@ function sortRows(
 
 function filterRows(
   rows: KnowledgeBaseFaqRow[],
-  searchQuery: string,
   selectedCategory: string,
 ): KnowledgeBaseFaqRow[] {
-  const normalizedQuery = searchQuery.trim().toLowerCase()
-  return rows.filter((row) => {
-    if (selectedCategory !== 'All' && row.category !== selectedCategory) return false
-    if (!normalizedQuery) return true
-
-    return (
-      row.question.toLowerCase().includes(normalizedQuery) ||
-      row.answer.toLowerCase().includes(normalizedQuery) ||
-      row.tags.some((tag) => tag.includes(normalizedQuery))
-    )
-  })
+  return rows.filter((row) => selectedCategory === 'All' || row.category === selectedCategory)
 }
 
 function buildCategoryOptions(
@@ -147,13 +138,12 @@ function buildCategoryOptions(
 export function buildKnowledgeBaseViewModel(params: {
   faqs: FaqRecord[]
   categories: FaqCategory[]
-  searchQuery: string
   selectedCategory: string
   sortField: KnowledgeBaseSortField
   sortDir: KnowledgeBaseSortDir
 }): KnowledgeBaseViewModel {
   const normalizedRows = params.faqs.map(normalizeFaqRecord)
-  const filteredRows = filterRows(normalizedRows, params.searchQuery, params.selectedCategory)
+  const filteredRows = filterRows(normalizedRows, params.selectedCategory)
   const rows = sortRows(filteredRows, params.sortField, params.sortDir)
 
   const vectorized = normalizedRows.filter((row) => row.vectorStatus === 'synced').length
