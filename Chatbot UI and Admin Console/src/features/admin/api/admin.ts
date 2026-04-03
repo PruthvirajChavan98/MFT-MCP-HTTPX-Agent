@@ -143,6 +143,44 @@ export interface VectorSearchItem {
   reasoning?: string | null
 }
 
+export interface AgentModelParameterSpec {
+  name: string
+  type?: string
+  min?: number
+  max?: number
+  default?: string | number | boolean | null
+  options?: string[]
+}
+
+export interface AgentModel {
+  id: string
+  name: string
+  provider?: string
+  display_name?: string
+  is_reasoning_model?: boolean
+  supports_reasoning_effort?: boolean
+  supports_tools?: boolean
+  supported_parameters?: string[]
+  parameter_specs?: AgentModelParameterSpec[]
+  type?: string
+}
+
+export interface AgentModelCategory {
+  name: string
+  models: AgentModel[]
+}
+
+export interface SessionConfig {
+  session_id: string
+  system_prompt?: string
+  model_name?: string
+  reasoning_effort?: string
+  provider?: string
+  has_openrouter_key?: boolean
+  has_nvidia_key?: boolean
+  has_groq_key?: boolean
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseQuestion(input: unknown): string {
@@ -353,16 +391,11 @@ export async function searchFaqSemantic(
   adminKey: string,
   query: string,
   limit = 5,
-  openrouterKey?: string,
-  groqKey?: string,
 ): Promise<Array<{ question: string; answer: string; score: number }>> {
   const response = await requestJson<{ status: string; results: Array<{ question: string; answer: string; score: number }> }>({
     method: 'POST',
     path: '/agent/admin/faqs/semantic-search',
-    headers: withAdminHeaders(adminKey, {
-      ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
-      ...(groqKey ? { 'X-Groq-Key': groqKey } : {}),
-    }),
+    headers: withAdminHeaders(adminKey),
     body: { query, limit },
   })
   return response.results ?? []
@@ -399,8 +432,6 @@ export async function ingestFaqBatch(
   adminKey: string,
   items: Array<{ question: string; answer: string; category?: string; tags?: string[] }>,
   onProgress?: (message: string) => void,
-  openrouterKey?: string,
-  groqKey?: string,
 ): Promise<string> {
   let lastMessage = 'Ingest complete'
   await streamSse(
@@ -408,8 +439,6 @@ export async function ingestFaqBatch(
     {
       method: 'POST',
       headers: withAdminHeaders(adminKey, {
-        ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
-        ...(groqKey ? { 'X-Groq-Key': groqKey } : {}),
         'Content-Type': 'application/json',
       }),
       body: JSON.stringify({ items }),
@@ -431,8 +460,6 @@ export async function ingestFaqPdf(
   adminKey: string,
   file: File,
   onProgress?: (message: string) => void,
-  openrouterKey?: string,
-  groqKey?: string,
 ): Promise<string> {
   let lastMessage = 'PDF ingest complete'
   const formData = new FormData()
@@ -442,10 +469,7 @@ export async function ingestFaqPdf(
     `${API_BASE_URL}/agent/admin/faqs/upload-pdf`,
     {
       method: 'POST',
-      headers: withAdminHeaders(adminKey, {
-        ...(openrouterKey ? { 'X-OpenRouter-Key': openrouterKey } : {}),
-        ...(groqKey ? { 'X-Groq-Key': groqKey } : {}),
-      }),
+      headers: withAdminHeaders(adminKey),
       body: formData,
     },
     {
@@ -464,25 +488,14 @@ export async function ingestFaqPdf(
 
 // ── Models / Config ───────────────────────────────────────────────────────────
 
-export async function fetchModels(): Promise<
-  Array<{ name: string; models: Array<{ id: string; name: string; provider?: string }> }>
-> {
+export async function fetchModels(): Promise<AgentModelCategory[]> {
   const response = await requestJson<{
-    categories: Array<{
-      name: string
-      models: Array<{ id: string; name: string; provider?: string }>
-    }>
+    categories: AgentModelCategory[]
   }>({ method: 'GET', path: '/agent/models' })
   return response.categories ?? []
 }
 
-export async function fetchSessionConfig(sessionId: string): Promise<{
-  session_id: string
-  system_prompt?: string
-  model_name?: string
-  reasoning_effort?: string
-  provider?: string
-}> {
+export async function fetchSessionConfig(sessionId: string): Promise<SessionConfig> {
   return requestJson({
     method: 'GET',
     path: `/agent/config/${encodeURIComponent(sessionId)}`,
@@ -496,6 +509,7 @@ export async function saveSessionConfig(payload: {
   reasoning_effort?: string
   provider?: string
   openrouter_api_key?: string
+  nvidia_api_key?: string
   groq_api_key?: string
 }): Promise<{ status: string }> {
   return requestJson({ method: 'POST', path: '/agent/config', body: payload })

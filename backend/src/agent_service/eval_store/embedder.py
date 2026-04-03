@@ -6,9 +6,9 @@ import logging
 from typing import Any
 
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+from src.agent_service.llm.client import get_owner_embeddings
 from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("eval_embedder")
@@ -78,21 +78,17 @@ def _build_eval_doc(ev: dict[str, Any], evidence_events: list[dict[str, Any]]) -
 
 class EvalEmbedder:
     def __init__(self, openrouter_api_key: str | None = None) -> None:
-        self.key = openrouter_api_key or OPENROUTER_API_KEY
+        if openrouter_api_key:
+            log.debug(
+                "[eval_embedder] Ignoring session OpenRouter key; embeddings are owner-managed"
+            )
+        self.key = OPENROUTER_API_KEY
         self.enabled = bool(self.key)
-        self.emb: OpenAIEmbeddings | None = None
+        self.emb = None
 
         if self.enabled:
-            self.emb = OpenAIEmbeddings(
-                model=EMBED_MODEL,
-                api_key=self.key,  # type: ignore[arg-type]
-                base_url=OPENROUTER_BASE_URL,
-                check_embedding_ctx_length=False,
-            )
-            log.debug(
-                "[eval_embedder] Using %s OpenRouter key",
-                "session" if openrouter_api_key else "environment",
-            )
+            self.emb = get_owner_embeddings(model=EMBED_MODEL, base_url=OPENROUTER_BASE_URL)
+            log.debug("[eval_embedder] Using environment OpenRouter key")
         else:
             log.warning("[eval_embedder] No OpenRouter API key available — embeddings disabled")
 

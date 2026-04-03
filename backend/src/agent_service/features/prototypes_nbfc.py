@@ -24,7 +24,7 @@ SENTIMENT_PROTOTYPES: Dict[str, List[str]] = {
         "fake app",
         "fraud company",
         "stop harassing me",
-        "i will complain to rbi",
+        "i will complain to non-rbi",
         "worst experience ever",
         "customer care is useless",
         "why did you deduct money",

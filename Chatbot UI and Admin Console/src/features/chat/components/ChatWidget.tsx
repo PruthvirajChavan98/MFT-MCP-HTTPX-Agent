@@ -21,7 +21,12 @@ import { toast } from 'sonner'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { useChatStream } from '@features/chat/hooks/useChatStream'
-import { fetchSessionConfig, saveSessionConfig } from '@features/admin/api/admin'
+import {
+  fetchSessionConfig,
+  saveSessionConfig,
+  type AgentModel,
+  type SessionConfig,
+} from '@features/admin/api/admin'
 import { useAvailableModels } from '@shared/hooks/useModels'
 import { cn } from '@components/ui/utils'
 
@@ -44,6 +49,39 @@ const STARTER_PROMPTS = [
   },
 ] as const
 
+function providerRequiresSessionKey(provider: string) {
+  return provider === 'openrouter' || provider === 'nvidia'
+}
+
+function hasSavedProviderKey(provider: string, sessionCfg?: SessionConfig) {
+  if (provider === 'openrouter') return !!sessionCfg?.has_openrouter_key
+  if (provider === 'nvidia') return !!sessionCfg?.has_nvidia_key
+  if (provider === 'groq') return !!sessionCfg?.has_groq_key
+  return false
+}
+
+function providerKeyHeading(provider: string) {
+  if (provider === 'openrouter') return 'OpenRouter Key (Required)'
+  if (provider === 'nvidia') return 'NVIDIA Key (Required)'
+  return 'Groq Key (Optional)'
+}
+
+function providerKeyHelp(provider: string, hasSavedKey: boolean) {
+  if (provider === 'openrouter') {
+    return hasSavedKey
+      ? 'A saved OpenRouter key already exists for this session. Leave blank to keep it, or enter a new one to replace it.'
+      : 'OpenRouter sessions require a key. Enter one now to save and apply this model.'
+  }
+  if (provider === 'nvidia') {
+    return hasSavedKey
+      ? 'A saved NVIDIA key already exists for this session. Leave blank to keep it, or enter a new one to replace it.'
+      : 'NVIDIA sessions require a key. Enter one now to save and apply this model.'
+  }
+  return hasSavedKey
+    ? 'A saved Groq key already exists for this session. Leave blank to keep it, or enter a new one to replace it.'
+    : 'Groq BYOK is optional. Leave blank to use the server-managed Groq key.'
+}
+
 // --- Settings View Component ---
 function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
   const qc = useQueryClient()
@@ -65,25 +103,30 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
     formData.model_name,
     handleModelChange,
   )
+  const selectedModel = availableModels.find((model) => model.id === formData.model_name) as
+    | AgentModel
+    | undefined
 
-  const { isLoading: cfgLoading } = useQuery({
+  const { data: sessionCfg, isLoading: cfgLoading } = useQuery({
     queryKey: ['session-config', sessionId],
     queryFn: () => fetchSessionConfig(sessionId),
     enabled: !!sessionId,
   })
 
   useEffect(() => {
-    const cachedCfg = qc.getQueryData<any>(['session-config', sessionId])
-    if (!cachedCfg) return
-
     setFormData({
-      provider: cachedCfg.provider || 'groq',
-      model_name: cachedCfg.model_name || '',
-      reasoning_effort: cachedCfg.reasoning_effort || 'medium',
-      system_prompt: cachedCfg.system_prompt || '',
+      provider: sessionCfg?.provider || 'groq',
+      model_name: sessionCfg?.model_name || '',
+      reasoning_effort: sessionCfg?.reasoning_effort || 'medium',
+      system_prompt: sessionCfg?.system_prompt || '',
       apiKey: '',
     })
-  }, [sessionId, qc])
+  }, [sessionCfg])
+
+  const requiresProviderKey = providerRequiresSessionKey(formData.provider)
+  const savedProviderKey = hasSavedProviderKey(formData.provider, sessionCfg)
+  const hasNewProviderKey = formData.apiKey.trim().length > 0
+  const canSave = !!formData.model_name && (!requiresProviderKey || savedProviderKey || hasNewProviderKey)
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -147,15 +190,40 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
           </option>
           {availableModels.map((model: any) => (
             <option key={model.id} value={model.id}>
-              {model.name}
+              {model.display_name || model.name || model.id}
             </option>
           ))}
         </select>
+        <p className="text-[10px] leading-tight text-slate-500">
+          {selectedModel?.supports_tools
+            ? 'This model supports tool calling.'
+            : 'This model is chat-only.'}
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+          Reasoning Effort
+        </label>
+        <select
+          value={formData.reasoning_effort}
+          onChange={(e) => setFormData({ ...formData, reasoning_effort: e.target.value })}
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition-shadow focus:ring-2 focus:ring-cyan-500"
+        >
+          <option value="low">Low (Fastest)</option>
+          <option value="medium">Medium (Balanced)</option>
+          <option value="high">High (Deep Thinking)</option>
+        </select>
+        <p className="text-[10px] leading-tight text-slate-500">
+          {selectedModel?.supports_reasoning_effort
+            ? 'Applied when the selected model supports reasoning effort.'
+            : 'Visible for all models; unsupported models ignore the saved setting.'}
+        </p>
       </div>
 
       <div className="space-y-1.5">
         <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-700">
-          <KeyRound size={12} /> Bring Your Own Key (Optional)
+          <KeyRound size={12} /> {providerKeyHeading(formData.provider)}
         </label>
         <input
           type="password"
@@ -165,7 +233,7 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-sm text-slate-900 shadow-sm outline-none transition-shadow placeholder:font-sans focus:ring-2 focus:ring-cyan-500"
         />
         <p className="text-[10px] leading-tight text-slate-500">
-          Leave blank to use server defaults. Keys are securely bound to this session.
+          {providerKeyHelp(formData.provider, savedProviderKey)}
         </p>
       </div>
 
@@ -182,7 +250,7 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
 
       <button
         onClick={() => saveMut.mutate()}
-        disabled={saveMut.isPending || !formData.model_name}
+        disabled={saveMut.isPending || !canSave}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 py-3 font-semibold text-white shadow-lg transition-opacity disabled:opacity-50"
         type="button"
       >
@@ -201,13 +269,13 @@ export function ChatWidget() {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { messages, followUps, isStreaming, error, sendMessage, stopGeneration, clearConversation, sessionId } =
+  const { messages, isStreaming, error, sendMessage, stopGeneration, clearConversation, sessionId } =
     useChatStream()
 
   useEffect(() => {
     if (!isOpen || view !== 'chat') return
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isStreaming, followUps, error, isOpen, view, isMaximized])
+  }, [messages, isStreaming, error, isOpen, view, isMaximized])
 
   const handleSend = () => {
     if (!input.trim() || isStreaming) return
@@ -278,7 +346,7 @@ export function ChatWidget() {
 
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate text-sm font-bold tracking-tight">
-                      {view === 'settings' ? 'Session Configuration' : 'TrustFin Assistant'}
+                      {view === 'settings' ? 'Session Configuration' : 'Mock FinTech Assistant'}
                     </h3>
                     {view === 'chat' && (
                       <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-white/85">
@@ -393,21 +461,6 @@ export function ChatWidget() {
                         </div>
                       )}
 
-                      {!isStreaming && followUps.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {followUps.map((followUp, index) => (
-                            <button
-                              className="rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-2 text-left text-xs font-medium text-teal-700 shadow-sm transition-colors hover:bg-teal-100"
-                              key={`${followUp}-${index}`}
-                              onClick={() => handleFollowUp(followUp)}
-                              type="button"
-                            >
-                              {followUp}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
                       <div ref={messagesEndRef} className="h-px w-full" />
                     </div>
                   </div>
@@ -432,6 +485,7 @@ export function ChatWidget() {
           whileTap={{ scale: 0.95 }}
           aria-label="Open chat"
           className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-cyan-500 to-teal-600 text-white shadow-2xl transition-all"
+          data-highlight-id="landing-chat-launcher"
           onClick={() => setIsOpen(true)}
         >
           <motion.span

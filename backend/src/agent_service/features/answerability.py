@@ -19,7 +19,7 @@ from src.agent_service.core.config import (
     NBFC_ROUTER_ANSWERABILITY_VECTOR_CACHE_SIZE,
     NBFC_ROUTER_EMBED_MODEL,
 )
-from src.agent_service.llm.client import get_embeddings
+from src.agent_service.llm.client import get_owner_embeddings
 from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("nbfc.answerability")
@@ -200,7 +200,7 @@ class QueryAnswerabilityClassifier:
             if cached is not None:
                 return cached
 
-            emb = get_embeddings(api_key=api_key, model=self.embed_model)
+            emb = get_owner_embeddings(model=self.embed_model)
             vectors = await emb.aembed_documents([c.text for c in candidates])
             out = [np.asarray(v, dtype=np.float32) for v in vectors]
             self._tool_vector_cache[cache_key] = out
@@ -269,9 +269,9 @@ class QueryAnswerabilityClassifier:
 
         query_vec = query_vector
         vector_error = None
-        if query_vec is None and api_key:
+        if query_vec is None:
             try:
-                emb = get_embeddings(api_key=api_key, model=self.embed_model)
+                emb = get_owner_embeddings(model=self.embed_model)
                 query_vec = np.asarray(await emb.aembed_query(q), dtype=np.float32)
             except Exception as exc:  # noqa: BLE001
                 vector_error = str(exc)
@@ -279,9 +279,12 @@ class QueryAnswerabilityClassifier:
 
         # MCP semantic scoring
         best_mcp_sem = None
-        if query_vec is not None and api_key and mcp_candidates:
+        if query_vec is not None and mcp_candidates:
             try:
-                tool_vecs = await self._get_tool_vectors(mcp_candidates, api_key=api_key)
+                tool_vecs = await self._get_tool_vectors(
+                    mcp_candidates,
+                    api_key=api_key or "",
+                )
                 for idx, vec in enumerate(tool_vecs):
                     sem_score = _cosine(query_vec, vec)
                     if (best_mcp_sem is None) or (sem_score > best_mcp_sem):

@@ -112,4 +112,32 @@ describe('useChatStream stream-only contract', () => {
     expect(assistant?.content).toContain('Streaming completed without response tokens.')
     expect(hook.result.current.error).toContain('Streaming completed without response tokens.')
   })
+
+  it('stores follow-ups on the active assistant message and strips trailing follow-up payload text', async () => {
+    streamSseMock.mockImplementation(async (url: string, _init: RequestInit, handlers: { onEvent: StreamOnEvent }) => {
+      if (url.endsWith('/agent/stream')) {
+        handlers.onEvent(
+          'token',
+          'Here are some options.\nFOLLOW_UPS:["Can I view my repayment schedule?"]',
+        )
+        handlers.onEvent(
+          'follow_ups',
+          JSON.stringify({ questions: ['Can I view my repayment schedule?'] }),
+          { questions: ['Can I view my repayment schedule?'] },
+        )
+        handlers.onEvent('done', JSON.stringify({ status: 'complete' }), { status: 'complete' })
+      }
+    })
+
+    const hook = await initHook()
+
+    await act(async () => {
+      await hook.result.current.sendMessage('show options')
+    })
+
+    const assistant = hook.result.current.messages.find((m) => m.role === 'assistant')
+    expect(assistant?.followUps).toEqual(['Can I view my repayment schedule?'])
+    expect(assistant?.content).toBe('Here are some options.')
+    expect('followUps' in (hook.result.current as unknown as Record<string, unknown>)).toBe(false)
+  })
 })

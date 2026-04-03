@@ -10,7 +10,6 @@ from typing import Any, List, Optional
 from src.agent_service.core.config import (
     GROQ_API_KEYS,
     MODEL_NAME,
-    NVIDIA_API_KEY,
     OPENROUTER_API_KEY,
 )
 from src.agent_service.core.prompts import prompt_manager
@@ -50,6 +49,24 @@ class ResourceResolver:
     """Resolves models, tools, and configurations for agent execution."""
 
     @staticmethod
+    def _require_session_provider_key(
+        provider: str,
+        *,
+        session_openrouter_key: Optional[str],
+        session_nvidia_key: Optional[str],
+    ) -> None:
+        if provider == "openrouter" and not session_openrouter_key:
+            raise ValueError(
+                "OpenRouter provider requires a session OpenRouter API key. "
+                "Server fallback is disabled for OpenRouter LLMs."
+            )
+        if provider == "nvidia" and not session_nvidia_key:
+            raise ValueError(
+                "NVIDIA provider requires a session NVIDIA API key. "
+                "Server fallback is disabled for NVIDIA LLMs."
+            )
+
+    @staticmethod
     def infer_provider_from_model_name(model_name: Optional[str]) -> str:
         """Infer provider from model name prefix."""
         if not model_name:
@@ -81,12 +98,20 @@ class ResourceResolver:
                 "provider"
             ) or ResourceResolver.infer_provider_from_model_name(model_name)
 
-            # Prefer per-session BYOK values, then fall back to server-managed keys.
-            openrouter_key = saved_config.get("openrouter_api_key") or OPENROUTER_API_KEY
-            nvidia_key = saved_config.get("nvidia_api_key") or NVIDIA_API_KEY
-            groq_key = saved_config.get("groq_api_key") or (
-                GROQ_API_KEYS[0] if GROQ_API_KEYS else None
+            session_openrouter_key = saved_config.get("openrouter_api_key") or None
+            session_nvidia_key = saved_config.get("nvidia_api_key") or None
+            session_groq_key = saved_config.get("groq_api_key") or None
+
+            ResourceResolver._require_session_provider_key(
+                provider,
+                session_openrouter_key=session_openrouter_key,
+                session_nvidia_key=session_nvidia_key,
             )
+
+            # Owner-managed OpenRouter remains available for internal routing/embedding helpers.
+            openrouter_key = session_openrouter_key or OPENROUTER_API_KEY
+            nvidia_key = session_nvidia_key
+            groq_key = session_groq_key or (GROQ_API_KEYS[0] if GROQ_API_KEYS else None)
 
             # Get LLM (returns tuple: model, actual_provider)
             llm_result = get_llm(

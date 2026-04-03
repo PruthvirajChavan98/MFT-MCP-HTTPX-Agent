@@ -147,17 +147,18 @@ function AdminShell() {
               <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl">
                 <div className="space-y-1 mb-2">
                   <h4 className="font-semibold text-sm text-slate-900">Authentication</h4>
-                  <p className="text-xs text-slate-500">Required headers for accessing production backend endpoints.</p>
+                  <p className="text-xs text-slate-500">Admin access plus provider keys for session-scoped model execution.</p>
                 </div>
                 {missingAdminKey && (
                   <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
                     <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                    <p>Admin API key is required for admin analytics endpoints. Provider keys are only required for model-dependent actions.</p>
+                    <p>Admin API key is required for admin analytics endpoints. OpenRouter and NVIDIA session models require matching provider keys. Groq remains optional.</p>
                   </div>
                 )}
                 <KeyInput label="Admin API Key (X-Admin-Key)" value={auth.adminKey} onChange={auth.setAdminKey} />
-                <KeyInput label="OpenRouter Key (X-OpenRouter-Key)" value={auth.openrouterKey} onChange={auth.setOpenrouterKey} />
-                <KeyInput label="Groq Key (X-Groq-Key)" value={auth.groqKey} onChange={auth.setGroqKey} />
+                <KeyInput label="OpenRouter Key (Required for OpenRouter sessions)" value={auth.openrouterKey} onChange={auth.setOpenrouterKey} />
+                <KeyInput label="NVIDIA Key (Required for NVIDIA sessions)" value={auth.nvidiaKey} onChange={auth.setNvidiaKey} />
+                <KeyInput label="Groq Key (Optional)" value={auth.groqKey} onChange={auth.setGroqKey} />
               </PopoverContent>
             </Popover>
 

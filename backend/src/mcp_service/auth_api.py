@@ -132,7 +132,9 @@ class MockFinTechAuthAPIs:
                 if len(loans) == 1:
                     result["active_loan"] = loans[0].get("loan_number")
                 elif len(loans) > 1:
-                    result["hint"] = "Multiple loans found. Call list_loans() then select_loan(loan_number)."
+                    result["hint"] = (
+                        "Multiple loans found. Call list_loans() then select_loan(loan_number)."
+                    )
 
                 return self._to_vsc(result)
         except Exception as e:

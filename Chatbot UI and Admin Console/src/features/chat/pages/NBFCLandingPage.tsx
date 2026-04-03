@@ -1,5 +1,6 @@
+import { Sparkles } from 'lucide-react'
 import { motion, useInView } from 'motion/react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ChatWidget } from '../components/ChatWidget'
 import { RegisterDialog } from '../components/RegisterDialog'
@@ -66,7 +67,7 @@ const FEATURES = [
   {
     icon: '🔒',
     title: 'Bank-Grade Security',
-    desc: '256-bit encryption and RBI-compliant data handling keeps your information safe.',
+    desc: '256-bit encryption and Non-RBI-compliant data handling keeps your information safe.',
   },
   {
     icon: '📱',
@@ -96,6 +97,41 @@ const STATS = [
   { value: '48 hrs', label: 'Avg Approval Time' },
   { value: '99.2%', label: 'Customer Satisfaction' },
 ]
+
+const LANDING_SPOTLIGHT_STORAGE_KEY = 'mft_landing_spotlight_dismissed_v1'
+
+const LANDING_SPOTLIGHT_STEPS = [
+  {
+    targetId: 'landing-nav-ctas',
+    title: 'Start with the main actions',
+    description:
+      'This rail keeps the key flows close by: admin access, quick registration, and a direct route to apply.',
+  },
+  {
+    targetId: 'landing-hero-ctas',
+    title: 'Compare your first moves',
+    description:
+      'These hero actions are the fastest way to check eligibility or estimate your EMI before you commit.',
+  },
+  {
+    targetId: 'landing-chat-launcher',
+    title: 'Need help instantly?',
+    description:
+      'Open the assistant at any time to ask about rates, eligibility, repayment plans, or your application.',
+  },
+] as const
+
+const CTA_GEOMETRY =
+  'inline-flex min-h-12 items-center justify-center rounded-full px-6 text-sm font-semibold tracking-tight transition-all duration-200'
+
+const CTA_PRIMARY =
+  `${CTA_GEOMETRY} min-w-[10.5rem] bg-gradient-to-r from-teal-500 to-cyan-600 text-white shadow-[0_18px_40px_-24px_rgba(34,211,238,0.9)] hover:opacity-95`
+
+const CTA_SECONDARY =
+  `${CTA_GEOMETRY} min-w-[10.5rem] border border-teal-400/35 bg-white/5 text-teal-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-teal-300/60 hover:bg-teal-400/10 hover:text-white`
+
+const CTA_TERTIARY =
+  `${CTA_GEOMETRY} min-w-[8.75rem] border border-white/10 bg-white/5 text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-cyan-300/35 hover:bg-white/10 hover:text-white`
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -200,10 +236,172 @@ function FeatureCard({ icon, title, desc, index }: { icon: string; title: string
   )
 }
 
+function LandingSpotlightTour({
+  isOpen,
+  stepIndex,
+  onBack,
+  onNext,
+  onClose,
+}: {
+  isOpen: boolean
+  stepIndex: number
+  onBack: () => void
+  onNext: () => void
+  onClose: () => void
+}) {
+  const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
+  const step = LANDING_SPOTLIGHT_STEPS[stepIndex]
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const updateRect = () => {
+      const target = document.querySelector<HTMLElement>(`[data-highlight-id="${step.targetId}"]`)
+      setTargetRect(target?.getBoundingClientRect() ?? null)
+    }
+
+    updateRect()
+    window.addEventListener('resize', updateRect)
+    window.addEventListener('scroll', updateRect, true)
+
+    return () => {
+      window.removeEventListener('resize', updateRect)
+      window.removeEventListener('scroll', updateRect, true)
+    }
+  }, [isOpen, step.targetId])
+
+  if (!isOpen) return null
+
+  const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth
+  const viewportHeight = typeof window === 'undefined' ? 720 : window.innerHeight
+  const cardWidth = Math.min(360, viewportWidth - 32)
+  const rect = targetRect
+
+  const cardLeft = rect
+    ? Math.min(Math.max(16, rect.left), Math.max(16, viewportWidth - cardWidth - 16))
+    : 16
+  const preferredTop = rect ? rect.bottom + 20 : 24
+  const cardTop =
+    preferredTop + 220 > viewportHeight && rect
+      ? Math.max(16, rect.top - 236)
+      : Math.min(preferredTop, Math.max(16, viewportHeight - 236))
+
+  return (
+    <div aria-label="Site tour" aria-modal="true" className="fixed inset-0 z-[80]" role="dialog">
+      <div className="absolute inset-0 bg-slate-950/72 backdrop-blur-[2px]" />
+
+      {rect && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed rounded-[30px] border-2 border-cyan-300/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.58),0_0_0_10px_rgba(34,211,238,0.14)] transition-all duration-200"
+          style={{
+            top: Math.max(8, rect.top - 10),
+            left: Math.max(8, rect.left - 10),
+            width: rect.width + 20,
+            height: rect.height + 20,
+          }}
+        />
+      )}
+
+      <div
+        className="fixed rounded-[28px] border border-white/10 bg-slate-950/96 p-5 text-white shadow-2xl"
+        style={{
+          top: cardTop,
+          left: cardLeft,
+          width: cardWidth,
+        }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">
+              Step {stepIndex + 1} of {LANDING_SPOTLIGHT_STEPS.length}
+            </div>
+            <h2 className="mt-3 text-lg font-semibold tracking-tight">{step.title}</h2>
+          </div>
+          <button
+            className="inline-flex min-h-9 items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+            onClick={onClose}
+            type="button"
+          >
+            Skip
+          </button>
+        </div>
+
+        <p className="mt-3 text-sm leading-6 text-slate-300">{step.description}</p>
+
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 px-4 text-sm font-medium text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+            disabled={stepIndex === 0}
+            onClick={onBack}
+            type="button"
+          >
+            Back
+          </button>
+
+          <div className="flex items-center gap-2">
+            {LANDING_SPOTLIGHT_STEPS.map((tourStep) => (
+              <span
+                key={tourStep.targetId}
+                aria-hidden
+                className={`h-2 rounded-full transition-all ${
+                  tourStep.targetId === step.targetId ? 'w-8 bg-cyan-300' : 'w-2 bg-white/20'
+                }`}
+              />
+            ))}
+          </div>
+
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-gradient-to-r from-teal-500 to-cyan-600 px-5 text-sm font-semibold text-white shadow-[0_18px_40px_-24px_rgba(34,211,238,0.9)] transition-opacity hover:opacity-95"
+            onClick={onNext}
+            type="button"
+          >
+            {stepIndex === LANDING_SPOTLIGHT_STEPS.length - 1 ? 'Done' : 'Next'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export function NBFCLandingPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false)
+  const [spotlightStepIndex, setSpotlightStepIndex] = useState(0)
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(LANDING_SPOTLIGHT_STORAGE_KEY) !== 'true') {
+        setIsSpotlightOpen(true)
+      }
+    } catch {
+      setIsSpotlightOpen(true)
+    }
+  }, [])
+
+  const closeSpotlight = () => {
+    setIsSpotlightOpen(false)
+    try {
+      window.localStorage.setItem(LANDING_SPOTLIGHT_STORAGE_KEY, 'true')
+    } catch {
+      // localStorage can be unavailable in restricted environments.
+    }
+  }
+
+  const advanceSpotlight = () => {
+    if (spotlightStepIndex >= LANDING_SPOTLIGHT_STEPS.length - 1) {
+      closeSpotlight()
+      return
+    }
+    setSpotlightStepIndex((current) => current + 1)
+  }
+
+  const reopenSpotlight = () => {
+    setSpotlightStepIndex(0)
+    setIsSpotlightOpen(true)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
@@ -225,10 +423,10 @@ export function NBFCLandingPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div data-highlight-id="landing-nav-ctas" className="flex items-center gap-3">
             <Link
               to="/admin"
-              className="hidden rounded-lg px-4 py-2 text-sm text-slate-400 transition-colors hover:text-white md:inline-flex"
+              className={`hidden md:inline-flex ${CTA_TERTIARY}`}
             >
               Admin
             </Link>
@@ -236,14 +434,14 @@ export function NBFCLandingPage() {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setRegisterOpen(true)}
-              className="hidden rounded-lg border border-teal-500/50 px-4 py-2 text-sm font-semibold text-teal-400 transition-colors hover:bg-teal-500/10 sm:inline-flex"
+              className={`hidden sm:inline-flex ${CTA_SECONDARY}`}
             >
               Register
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="rounded-lg bg-gradient-to-r from-teal-500 to-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow transition-opacity hover:opacity-90"
+              className={CTA_PRIMARY}
             >
               Apply Now
             </motion.button>
@@ -266,7 +464,7 @@ export function NBFCLandingPage() {
             className="mb-4 inline-flex items-center gap-2 rounded-full border border-teal-500/30 bg-teal-500/10 px-4 py-1.5 text-sm text-teal-300"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-teal-400 animate-pulse" />
-            RBI Registered NBFC • Trusted Since 2005
+            Non-RBI Registered NBFC • Trusted Since 2005
           </motion.div>
 
           <motion.h1
@@ -296,23 +494,36 @@ export function NBFCLandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.5 }}
             className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center"
+            data-highlight-id="landing-hero-ctas"
           >
             <motion.button
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setRegisterOpen(true)}
-              className="w-full rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90 sm:w-auto"
+              className={`${CTA_PRIMARY} w-full px-8 text-base sm:w-auto`}
             >
               Check Eligibility
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.97 }}
-              className="w-full rounded-xl border border-white/15 bg-white/5 px-8 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/10 sm:w-auto"
+              className={`${CTA_SECONDARY} w-full px-8 text-base sm:w-auto`}
             >
               Calculate EMI
             </motion.button>
           </motion.div>
+
+          <motion.button
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38, duration: 0.45 }}
+            className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-300/30 hover:bg-white/10 hover:text-white"
+            onClick={reopenSpotlight}
+            type="button"
+          >
+            <Sparkles size={14} className="text-teal-300" />
+            Explore site
+          </motion.button>
         </div>
       </section>
 
@@ -415,14 +626,14 @@ export function NBFCLandingPage() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.97 }}
-                className="rounded-xl bg-white px-8 py-3 font-semibold text-teal-700 shadow-md transition-colors hover:bg-white/90"
+                className={`${CTA_GEOMETRY} min-w-[11rem] bg-white px-8 text-base text-teal-700 shadow-md transition-colors hover:bg-white/90`}
               >
                 Apply Now
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.97 }}
-                className="rounded-xl border-2 border-white/40 px-8 py-3 font-semibold text-white backdrop-blur-sm transition-colors hover:border-white/70"
+                className={`${CTA_GEOMETRY} min-w-[11rem] border border-white/40 px-8 text-base text-white backdrop-blur-sm transition-colors hover:border-white/70 hover:bg-white/10`}
               >
                 Speak to an Expert
               </motion.button>
@@ -442,7 +653,7 @@ export function NBFCLandingPage() {
               <span className="font-semibold text-slate-300">Mock FinTech</span>
             </div>
             <p className="text-xs text-slate-600">
-              © {new Date().getFullYear()} Mock FinTech Ltd. RBI Registered NBFC. All rights
+              © {new Date().getFullYear()} Mock FinTech Ltd. Non-RBI Registered NBFC. All rights
               reserved.
             </p>
             <div className="flex gap-6">
@@ -461,6 +672,14 @@ export function NBFCLandingPage() {
 
       {/* ── Registration dialog ── */}
       <RegisterDialog open={registerOpen} onOpenChange={setRegisterOpen} />
+
+      <LandingSpotlightTour
+        isOpen={isSpotlightOpen}
+        onBack={() => setSpotlightStepIndex((current) => Math.max(0, current - 1))}
+        onClose={closeSpotlight}
+        onNext={advanceSpotlight}
+        stepIndex={spotlightStepIndex}
+      />
     </div>
   )
 }

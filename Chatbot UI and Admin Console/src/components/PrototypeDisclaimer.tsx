@@ -38,7 +38,7 @@ export function PrototypeDisclaimer() {
 
                         <div className="p-4 bg-amber-100/50 rounded-xl border border-amber-200/50">
                             <p className="text-sm text-amber-800 leading-6">
-                                <strong>TrustFin</strong> is a fictional entity. The services, products, and scenarios depicted in this application <span className="font-bold underline decoration-amber-500/50 decoration-2 underline-offset-2">do not exist in real life</span>.
+                                <strong>Mock FinTech</strong> is a fictional entity. The services, products, and scenarios depicted in this application <span className="font-bold underline decoration-amber-500/50 decoration-2 underline-offset-2">do not exist in real life</span>.
                             </p>
                         </div>
 

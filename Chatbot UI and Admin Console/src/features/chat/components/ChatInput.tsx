@@ -37,7 +37,7 @@ export function ChatInput({ value, onChange, onSend, onStop, isStreaming, disabl
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask TrustFin anything..."
+          placeholder="Ask Mock FinTech anything..."
           rows={1}
           disabled={inputDisabled}
           className={cn(

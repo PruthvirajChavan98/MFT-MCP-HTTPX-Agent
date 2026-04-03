@@ -27,7 +27,7 @@ from src.agent_service.core.session_utils import get_redis
 from src.agent_service.features.answerability import QueryAnswerabilityClassifier
 
 # Enterprise Imports (Use Factory, not raw classes)
-from src.agent_service.llm.client import get_embeddings, get_llm
+from src.agent_service.llm.client import get_llm, get_owner_embeddings
 
 from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
 
@@ -219,7 +219,7 @@ class EmbeddingsRouter:
             return _ProtoBank(vectors=out)
 
         # Generate fresh embeddings using Factory
-        emb = get_embeddings(api_key=api_key, model=self.embed_model)
+        emb = get_owner_embeddings(model=self.embed_model)
 
         flat = []
         labels = []
@@ -250,7 +250,7 @@ class EmbeddingsRouter:
             self._ready = True
 
     async def _embed_query(self, text: str, api_key: str) -> np.ndarray:
-        emb = get_embeddings(api_key=api_key, model=self.embed_model)
+        emb = get_owner_embeddings(model=self.embed_model)
         return np.asarray(await emb.aembed_query(_norm(text)), dtype=np.float32)
 
     @staticmethod

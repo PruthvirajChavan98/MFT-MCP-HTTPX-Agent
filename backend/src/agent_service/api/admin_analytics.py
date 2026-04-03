@@ -16,6 +16,7 @@ from src.agent_service.core.config import (
     SHADOW_TRACE_DLQ_KEY,
     SHADOW_TRACE_QUEUE_KEY,
 )
+from src.agent_service.core.follow_ups import normalize_follow_up_content
 from src.agent_service.core.session_utils import get_redis
 
 router = APIRouter(
@@ -463,8 +464,13 @@ async def session_traces(
                 or add_kwargs.get("reasoning_content", "")
                 or resp_meta.get("reasoning", "")
             )
-            follow_ups = add_kwargs.get("follow_ups")
-            if not isinstance(follow_ups, list):
+            if msg_type == "ai":
+                content, follow_ups = normalize_follow_up_content(
+                    content,
+                    add_kwargs.get("follow_ups"),
+                    limit=8,
+                )
+            else:
                 follow_ups = []
 
             cost = add_kwargs.get("cost")
@@ -541,17 +547,23 @@ async def session_traces(
             inline_reason = ""
             if isinstance(inline_guard, dict):
                 inline_reason = str(inline_guard.get("reason_code") or "")
+            final_output, fallback_follow_ups = normalize_follow_up_content(
+                row.get("final_output") or "",
+                None,
+                limit=8,
+            )
             items.append(
                 {
                     "id": f"{session_id}~{idx*2}",
                     "role": "assistant",
-                    "content": row.get("final_output") or "",
+                    "content": final_output,
                     "reasoning": inline_reason,
                     "timestamp": timestamp,
                     "status": (
                         "error" if str(row.get("status") or "").lower() == "error" else "done"
                     ),
                     "traceId": row.get("trace_id"),
+                    "followUps": fallback_follow_ups,
                     "provider": row.get("provider"),
                     "model": row.get("model"),
                 }
@@ -719,6 +731,7 @@ async def _checkpoint_trace_detail(request: Request, trace_id: str) -> dict[str,
         or add_kwargs.get("reasoning_content", "")
         or resp_meta.get("reasoning", "")
     )
+    content, _ = normalize_follow_up_content(content, add_kwargs.get("follow_ups"))
 
     events = []
     if reasoning:

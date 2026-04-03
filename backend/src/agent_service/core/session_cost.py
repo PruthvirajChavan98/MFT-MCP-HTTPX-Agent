@@ -194,13 +194,11 @@ class SessionCostTracker:
                 data={
                     "session_id": session_id,
                     "incremental_cost": cost,
-                    "new_total": data["total_cost"]
-                }
+                    "new_total": data["total_cost"],
+                },
             )
             await event_bus.publish(
-                channel=f"live:session:{session_id}",
-                event_type="session_tick",
-                data=data
+                channel=f"live:session:{session_id}", event_type="session_tick", data=data
             )
 
             return True

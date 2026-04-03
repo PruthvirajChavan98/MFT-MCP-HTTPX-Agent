@@ -113,12 +113,17 @@ class AppFactory:
                     await postgres_pool.start()
                     app.state.postgres_pool = postgres_pool
                     app.state.pool = postgres_pool.pool
-                    log.info("✅ PostgreSQL pool initialized")
 
-                    from src.agent_service.eval_store.pg_store import configure_shared_pool
+                    from src.agent_service.eval_store.pg_store import (
+                        configure_shared_pool,
+                        eval_pg_store,
+                    )
 
+                    await eval_pg_store.ensure_schema(postgres_pool.pool)
                     configure_shared_pool(postgres_pool.pool)
-                    log.info("✅ Shared pool wired for runtime trace + shadow eval stores")
+                    log.info(
+                        "✅ PostgreSQL pool initialized, eval schema verified, and shared pool wired"
+                    )
 
                 if SECURITY_ENABLED:
                     redis = await get_redis()

@@ -1,6 +1,6 @@
 # NBFC Chatbot UI
 
-Production-grade React 18 + Tailwind CSS v4 + shadcn/ui frontend for the TrustFin NBFC chatbot.
+Production-grade React 18 + Tailwind CSS v4 + shadcn/ui frontend for the Mock FinTech NBFC chatbot.
 
 ## Running locally
 

@@ -47,7 +47,13 @@ describe('admin faq api contract', () => {
 
     expect(streamSseMock).toHaveBeenCalledWith(
       '/api/agent/admin/faqs/batch-json',
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'X-Admin-Key': 'admin-key',
+          'Content-Type': 'application/json',
+        },
+      }),
       expect.any(Object),
     )
     expect(progress).toContain('Ingesting...')
@@ -69,6 +75,7 @@ describe('admin faq api contract', () => {
     const init = call?.[1] as RequestInit
     expect(init.method).toBe('POST')
     expect(init.body).toBeInstanceOf(FormData)
+    expect(init.headers).toEqual({ 'X-Admin-Key': 'admin-key' })
   })
 
   it('ingestFaqBatch surfaces structured SSE error payload message', async () => {
@@ -137,6 +144,7 @@ describe('admin faq api contract', () => {
       expect.objectContaining({
         method: 'POST',
         path: '/agent/admin/faqs/semantic-search',
+        headers: { 'X-Admin-Key': 'admin-key' },
         body: { query: 'loan', limit: 5 },
       }),
     )

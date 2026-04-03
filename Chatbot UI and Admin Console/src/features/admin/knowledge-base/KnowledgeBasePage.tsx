@@ -572,8 +572,6 @@ export function KnowledgeBasePage() {
       adminKey: auth.adminKey,
       query: searchQuery.trim(),
       limit: 5,
-      openrouterKey: auth.openrouterKey,
-      groqKey: auth.groqKey,
     }),
   )
 
@@ -695,13 +693,7 @@ export function KnowledgeBasePage() {
     if (!pdfFile) return
     setPdfLoading(true)
     try {
-      await ingestFaqPdf(
-        auth.adminKey,
-        pdfFile,
-        undefined,
-        auth.openrouterKey,
-        auth.groqKey
-      )
+      await ingestFaqPdf(auth.adminKey, pdfFile)
       toast.success(`PDF parsed and ingested successfully`)
       setPdfFile(null)
       if (fileRef.current) fileRef.current.value = ''

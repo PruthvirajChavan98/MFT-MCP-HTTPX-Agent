@@ -140,7 +140,7 @@ async def test_traces_cursor_contract_returns_next_cursor(monkeypatch):
 async def test_session_traces_returns_additive_assistant_metadata(monkeypatch):
     assistant = SimpleNamespace(
         type="ai",
-        content="Answer text",
+        content='Answer text\nFOLLOW_UPS:["Raw follow-up"]',
         additional_kwargs={
             "follow_ups": ["Follow-up one", "Follow-up two"],
             "trace_id": "trace-123",
@@ -175,6 +175,7 @@ async def test_session_traces_returns_additive_assistant_metadata(monkeypatch):
     assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
 
     assert assistant_row["traceId"] == "trace-123"
+    assert assistant_row["content"] == "Answer text"
     assert assistant_row["followUps"] == ["Follow-up one", "Follow-up two"]
     assert assistant_row["provider"] == "openrouter"
     assert assistant_row["model"] == "deepseek/deepseek-v3.2"
@@ -215,3 +216,67 @@ async def test_session_traces_reconstructs_from_eval_trace_when_checkpoint_missi
     assert response["items"][0]["role"] == "user"
     assert response["items"][1]["role"] == "assistant"
     assert response["items"][1]["traceId"] == "trace-xyz"
+
+
+@pytest.mark.asyncio
+async def test_session_traces_derives_follow_ups_from_checkpoint_content_when_missing_metadata():
+    assistant = SimpleNamespace(
+        type="ai",
+        content='Answer text\nFOLLOW_UPS:["Follow-up one","Follow-up two"]',
+        additional_kwargs={},
+        response_metadata={"created": 1700000000},
+    )
+    user = SimpleNamespace(
+        type="human", content="Question text", additional_kwargs={}, response_metadata={}
+    )
+    checkpoint = {"channel_values": {"messages": [user, assistant]}}
+    fake_ckp = SimpleNamespace(checkpoint=checkpoint)
+
+    class _FakeCheckpointer:
+        async def aget_tuple(self, _config):
+            return fake_ckp
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
+    )
+
+    response = await admin_analytics.session_traces(
+        request=request, session_id="session-1", limit=50
+    )
+    assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
+
+    assert assistant_row["content"] == "Answer text"
+    assert assistant_row["followUps"] == ["Follow-up one", "Follow-up two"]
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_trace_detail_strips_raw_follow_up_suffix():
+    assistant = SimpleNamespace(
+        type="ai",
+        content='Answer text\nFOLLOW_UPS:["Follow-up one","Follow-up two"]',
+        additional_kwargs={"trace_id": "trace-123"},
+        response_metadata={
+            "created": 1700000000,
+            "model_provider": "openrouter",
+            "model_name": "deepseek/deepseek-v3.2",
+        },
+    )
+    user = SimpleNamespace(
+        type="human", content="Question text", additional_kwargs={}, response_metadata={}
+    )
+    checkpoint = {"channel_values": {"messages": [user, assistant]}}
+    fake_ckp = SimpleNamespace(checkpoint=checkpoint)
+
+    class _FakeCheckpointer:
+        async def aget_tuple(self, _config):
+            return fake_ckp
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
+    )
+
+    detail = await admin_analytics._checkpoint_trace_detail(request, "session-1~2")
+
+    assert detail["trace"]["final_output"] == "Answer text"
+    assert detail["events"][-1]["event_type"] == "token"
+    assert detail["events"][-1]["text"] == "Answer text"

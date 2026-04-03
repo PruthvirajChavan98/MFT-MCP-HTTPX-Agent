@@ -271,6 +271,8 @@ class ShadowEvalCollector:
         self._add_event("tool_end", "tool_end", text=str(tool), payload=payload)
 
     def on_done(self, final_output: str, error: Optional[str]) -> None:
+        # Persist the canonical final output rather than raw streamed chunks.
+        self.final_parts = [final_output] if final_output else []
         if error:
             self.status = "error"
             self.error = _clip(error, 4000)
@@ -455,12 +457,16 @@ async def compute_llm_metrics(
 
     judge_model = model_name or trace.get("model") or JUDGE_MODEL_NAME
 
-    judge = RagasJudge(
-        model_name=judge_model,
-        openrouter_api_key=openrouter_api_key,
-        nvidia_api_key=nvidia_api_key,
-        groq_api_key=groq_api_key,
-    )
+    try:
+        judge = RagasJudge(
+            model_name=judge_model,
+            openrouter_api_key=openrouter_api_key,
+            nvidia_api_key=nvidia_api_key,
+            groq_api_key=groq_api_key,
+        )
+    except Exception as exc:
+        log.warning("[shadow_eval] RAGAS judge initialization failed trace=%s: %s", trace_id, exc)
+        return []
 
     try:
         return await judge.evaluate(question, answer, contexts, trace_id)
@@ -523,8 +529,7 @@ async def maybe_shadow_eval_commit(
         await _commit_bundle(trace, events, evals)
 
         try:
-            # Use session's OpenRouter key for embeddings
-            embedder = EvalEmbedder(openrouter_api_key=openrouter_api_key)
+            embedder = EvalEmbedder()
             pool = get_shared_pool()
             if pool is not None:
                 await embedder.embed_trace_if_needed(pool, trace, events)

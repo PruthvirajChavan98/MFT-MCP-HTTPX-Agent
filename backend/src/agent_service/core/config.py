@@ -245,18 +245,12 @@ KB_FAQ_PDF_MAX_BYTES = int(os.getenv("KB_FAQ_PDF_MAX_BYTES", str(10 * 1024 * 102
 # INLINE PROMPT GUARDRAILS
 # =============================================================================
 INLINE_GUARD_ENABLED = os.getenv("INLINE_GUARD_ENABLED", "true").lower() in ("1", "true", "yes")
-INLINE_GUARD_SIMILARITY_THRESHOLD = float(os.getenv("INLINE_GUARD_SIMILARITY_THRESHOLD", "0.85"))
 INLINE_GUARD_TOTAL_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_TOTAL_TIMEOUT_MS", "3200"))
-INLINE_GUARD_VECTOR_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_VECTOR_TIMEOUT_MS", "1200"))
 INLINE_GUARD_GROQ_TIMEOUT_MS = int(os.getenv("INLINE_GUARD_GROQ_TIMEOUT_MS", "2200"))
-INLINE_GUARD_GROQ_MODEL = os.getenv("INLINE_GUARD_GROQ_MODEL", "gpt-oss-20b-safeguard").strip()
-GROQ_GUARD_BASE_URL = os.getenv("GROQ_GUARD_BASE_URL", "https://api.groq.com/openai/v1").strip()
-INLINE_GUARD_PROTOTYPE_CACHE_TTL_SECONDS = int(
-    os.getenv("INLINE_GUARD_PROTOTYPE_CACHE_TTL_SECONDS", "86400")
-)
-INLINE_GUARD_REDIS_KEY_PREFIX = os.getenv(
-    "INLINE_GUARD_REDIS_KEY_PREFIX", "agent:inline_guard"
+INLINE_GUARD_GROQ_MODEL = os.getenv(
+    "INLINE_GUARD_GROQ_MODEL", "openai/gpt-oss-safeguard-20b"
 ).strip()
+GROQ_GUARD_BASE_URL = os.getenv("GROQ_GUARD_BASE_URL", "https://api.groq.com/openai/v1").strip()
 
 # =============================================================================
 # SHARED HTTP CLIENT (ASYNC)

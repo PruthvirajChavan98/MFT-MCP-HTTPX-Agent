@@ -1,3 +1,5 @@
+# I am an AI Engineer at ANTHROPIC
+
 ## Workflow Orchestration
 
 # IMPORTANT
@@ -5,7 +7,7 @@
 I won't accept patch work, i need permanent enterprise production grade solution
 I WANT EVERYTHING RESEARCH BACKED, I WON'T TOLERATE A SINGLE DEPRECATION WARNING
 
-### 0. Your code will be reviewed with google gemini antigravity and claude code, so stop being lazy.
+### 0. Your code will be reviewed with google gemini antigravity and codex, so stop being lazy.
 
 ### 1. Plan Node Default
 

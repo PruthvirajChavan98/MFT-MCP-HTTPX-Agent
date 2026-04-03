@@ -67,37 +67,46 @@ export function ChatMessage({ message, sessionId, onFollowUpClick }: Props) {
       {/* Bubble */}
       <div className={cn('group flex flex-col gap-1', isUser ? 'max-w-[80%] items-end' : 'w-full items-start')}>
         <div
+          data-testid={isUser ? undefined : 'assistant-bubble'}
           className={cn(
-            'px-4 py-3 rounded-2xl text-sm leading-relaxed',
+            'rounded-2xl text-sm leading-relaxed',
             isUser
-              ? 'bg-cyan-500 text-white rounded-tr-sm'
-              : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm shadow-sm',
+              ? 'bg-cyan-500 px-4 py-3 text-white rounded-tr-sm'
+              : 'overflow-hidden border border-gray-100 bg-white text-gray-800 rounded-tl-sm shadow-sm',
           )}
         >
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
-            <ChatAssistantMarkdown content={message.content} status={message.status} />
+            <>
+              {message.reasoning && (
+                <div className="border-b border-slate-100 px-4 py-3">
+                  <button
+                    aria-expanded={reasoningOpen}
+                    onClick={() => setReasoningOpen((p) => !p)}
+                    className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-600"
+                    type="button"
+                  >
+                    {reasoningOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    Reasoning
+                  </button>
+                  {reasoningOpen && (
+                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs italic text-slate-600">
+                      {message.reasoning}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div
+                className={cn('px-4 pb-3', message.reasoning ? 'pt-3' : 'py-3')}
+                data-testid="assistant-bubble-content"
+              >
+                <ChatAssistantMarkdown content={message.content} status={message.status} />
+              </div>
+            </>
           )}
         </div>
-
-        {/* Reasoning */}
-        {!isUser && message.reasoning && (
-          <div className="w-full">
-            <button
-              onClick={() => setReasoningOpen((p) => !p)}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              {reasoningOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              Reasoning
-            </button>
-            {reasoningOpen && (
-              <div className="mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 italic">
-                {message.reasoning}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Tool calls */}
         {!isUser && (message.toolCalls?.length ?? 0) > 0 && (

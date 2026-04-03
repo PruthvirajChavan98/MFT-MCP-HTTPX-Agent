@@ -6,11 +6,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import OpenAIEmbeddings
 
-from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from src.agent_service.core.prompts import prompt_manager
-from src.agent_service.llm.client import get_llm
+from src.agent_service.llm.client import get_llm, get_owner_embeddings
 
 from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
 from .schemas import LabelScore, RouterResult
@@ -54,23 +52,14 @@ class RouterService:
         self._sent_proto_vecs: Optional[Dict[str, List[List[float]]]] = None
         self._reason_proto_vecs: Optional[Dict[str, List[List[float]]]] = None
 
-    def _get_embedder(self, api_key: Optional[str] = None):
-        key = api_key or OPENROUTER_API_KEY
-        if not key:
-            raise ValueError("Router requires an OpenRouter API Key (Server or Request).")
-
-        return OpenAIEmbeddings(
-            model="openai/text-embedding-3-small",
-            api_key=key,
-            base_url=OPENROUTER_BASE_URL,
-            check_embedding_ctx_length=False,
-        )
+    def _get_embedder(self):
+        return get_owner_embeddings(model="openai/text-embedding-3-small")
 
     async def warm(self, api_key: Optional[str] = None):
         if self._sent_proto_vecs is not None:
             return
 
-        emb = self._get_embedder(api_key)
+        emb = self._get_embedder()
 
         self._sent_proto_vecs = {}
         for k, texts in SENTIMENT_PROTOTYPES.items():
@@ -101,8 +90,7 @@ class RouterService:
         await self.warm(openrouter_api_key)
         assert self._sent_proto_vecs and self._reason_proto_vecs
 
-        # Use the specific key for this query
-        emb = self._get_embedder(openrouter_api_key)
+        emb = self._get_embedder()
 
         t0 = time.perf_counter()
         qv = await emb.aembed_query(text)

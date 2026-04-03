@@ -7,7 +7,11 @@ from typing import Any
 
 from prometheus_client import Counter, Histogram
 
-from src.agent_service.eval_store.pg_store import EvalPgStore, get_shared_pool
+from src.agent_service.eval_store.pg_store import (
+    EvalPgStore,
+    EvalSchemaUnavailableError,
+    get_shared_pool,
+)
 from src.agent_service.features.question_category import classify_question_category
 
 log = logging.getLogger("runtime_trace_store")
@@ -30,6 +34,12 @@ RUNTIME_TRACE_PERSIST_RETRIES_TOTAL = Counter(
     "Total runtime trace persistence retries.",
 )
 
+RUNTIME_TRACE_PERSIST_FAILURES_TOTAL = Counter(
+    "agent_runtime_trace_persist_failures_total",
+    "Runtime trace persistence failures by kind and blocked-prompt status.",
+    ["kind", "blocked_prompt"],
+)
+
 RUNTIME_TRACE_PERSIST_DURATION_SECONDS = Histogram(
     "agent_runtime_trace_persist_duration_seconds",
     "Runtime trace persistence duration.",
@@ -45,6 +55,40 @@ def _coerce_optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _blocked_prompt_context(trace: dict[str, Any]) -> tuple[str, str | None, str | None]:
+    decision = str(trace.get("inline_guard_decision") or "").strip() or None
+    reason_code = str(trace.get("inline_guard_reason_code") or "").strip() or None
+    return ("true" if decision == "block" else "false", decision, reason_code)
+
+
+def _is_schema_unavailable_error(exc: Exception) -> bool:
+    if isinstance(exc, EvalSchemaUnavailableError):
+        return True
+    sqlstate = getattr(exc, "sqlstate", None)
+    if sqlstate in {"42P01", "3F000"}:
+        return True
+    message = str(exc).lower()
+    return ("relation" in message and "does not exist" in message) or (
+        "eval_traces" in message and "does not exist" in message
+    )
+
+
+def _record_failure_metrics(
+    started: float,
+    *,
+    kind: str,
+    blocked_prompt: str,
+) -> float:
+    elapsed = time.perf_counter() - started
+    RUNTIME_TRACE_PERSIST_TOTAL.labels(status="failure").inc()
+    RUNTIME_TRACE_PERSIST_FAILURES_TOTAL.labels(
+        kind=kind,
+        blocked_prompt=blocked_prompt,
+    ).inc()
+    RUNTIME_TRACE_PERSIST_DURATION_SECONDS.labels(status="failure").observe(elapsed)
+    return elapsed
 
 
 async def persist_runtime_trace(
@@ -103,14 +147,21 @@ async def persist_runtime_trace(
         trace["inline_guard_decision"] = None
         trace["inline_guard_reason_code"] = None
         trace["inline_guard_risk_score"] = None
+    blocked_prompt, inline_guard_decision, inline_guard_reason_code = _blocked_prompt_context(trace)
 
     pool = get_shared_pool()
     if pool is None:
-        RUNTIME_TRACE_PERSIST_TOTAL.labels(status="failure").inc()
-        RUNTIME_TRACE_PERSIST_DURATION_SECONDS.labels(status="failure").observe(
-            time.perf_counter() - started
+        _record_failure_metrics(started, kind="pool_unavailable", blocked_prompt=blocked_prompt)
+        log.error(
+            "Runtime trace persistence skipped: PostgreSQL pool not configured "
+            "session_id=%s trace_id=%s blocked_prompt=%s inline_guard_decision=%s "
+            "inline_guard_reason_code=%s",
+            session_id,
+            trace_id,
+            blocked_prompt,
+            inline_guard_decision,
+            inline_guard_reason_code,
         )
-        log.error("Runtime trace persistence skipped: PostgreSQL pool not configured")
         return False
 
     last_error: Exception | None = None
@@ -136,26 +187,50 @@ async def persist_runtime_trace(
             return True
         except Exception as exc:  # noqa: BLE001
             last_error = exc
+            if _is_schema_unavailable_error(exc):
+                elapsed = _record_failure_metrics(
+                    started,
+                    kind="schema_unavailable",
+                    blocked_prompt=blocked_prompt,
+                )
+                log.error(
+                    "Runtime trace persistence failed: eval schema/table unavailable "
+                    "session_id=%s trace_id=%s blocked_prompt=%s inline_guard_decision=%s "
+                    "inline_guard_reason_code=%s attempt=%s elapsed_ms=%.2f error=%s",
+                    session_id,
+                    trace_id,
+                    blocked_prompt,
+                    inline_guard_decision,
+                    inline_guard_reason_code,
+                    attempt,
+                    elapsed * 1000,
+                    exc,
+                )
+                return False
             log.warning(
-                "Runtime trace persist attempt %s/%s failed for trace_id=%s: %s",
+                "Runtime trace persist attempt %s/%s failed for trace_id=%s blocked_prompt=%s: %s",
                 attempt,
                 max_attempts,
                 trace_id,
+                blocked_prompt,
                 exc,
             )
             if attempt < max_attempts:
                 RUNTIME_TRACE_PERSIST_RETRIES_TOTAL.inc()
                 await asyncio.sleep(initial_backoff_seconds * attempt)
 
-    elapsed = time.perf_counter() - started
-    RUNTIME_TRACE_PERSIST_TOTAL.labels(status="failure").inc()
-    RUNTIME_TRACE_PERSIST_DURATION_SECONDS.labels(status="failure").observe(elapsed)
+    elapsed = _record_failure_metrics(started, kind="write_failure", blocked_prompt=blocked_prompt)
     if last_error is not None:
         log.error(
-            "Runtime trace persistence failed session_id=%s trace_id=%s attempts=%s elapsed_ms=%.2f error=%s",
+            "Runtime trace persistence failed after retries session_id=%s trace_id=%s "
+            "attempts=%s blocked_prompt=%s inline_guard_decision=%s "
+            "inline_guard_reason_code=%s elapsed_ms=%.2f error=%s",
             session_id,
             trace_id,
             max_attempts,
+            blocked_prompt,
+            inline_guard_decision,
+            inline_guard_reason_code,
             elapsed * 1000,
             last_error,
         )

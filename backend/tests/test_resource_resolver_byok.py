@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+
+import src.agent_service.core.resource_resolver as resolver_module
+from src.agent_service.core.resource_resolver import ResourceResolver
+
+
+@pytest.fixture(autouse=True)
+def _stub_default_system_prompt(monkeypatch):
+    monkeypatch.setattr(
+        resolver_module.prompt_manager, "get_default_system_prompt", lambda: "You are helpful."
+    )
+
+
+@pytest.mark.asyncio
+async def test_openrouter_provider_requires_session_key_even_when_env_key_exists(monkeypatch):
+    async def fake_get_config(_session_id: str):
+        return {"provider": "openrouter", "model_name": "openai/o3-mini"}
+
+    monkeypatch.setattr(resolver_module.config_manager, "get_config", fake_get_config)
+    monkeypatch.setattr(resolver_module, "OPENROUTER_API_KEY", "sk-or-env")
+
+    with pytest.raises(
+        ValueError, match="OpenRouter provider requires a session OpenRouter API key"
+    ):
+        await ResourceResolver.resolve_agent_resources("sid-openrouter", SimpleNamespace())
+
+
+@pytest.mark.asyncio
+async def test_nvidia_provider_requires_session_key_even_when_env_key_exists(monkeypatch):
+    async def fake_get_config(_session_id: str):
+        return {"provider": "nvidia", "model_name": "nvidia/meta/llama-3.1-70b-instruct"}
+
+    monkeypatch.setattr(resolver_module.config_manager, "get_config", fake_get_config)
+
+    with pytest.raises(ValueError, match="NVIDIA provider requires a session NVIDIA API key"):
+        await ResourceResolver.resolve_agent_resources("sid-nvidia", SimpleNamespace())
+
+
+@pytest.mark.asyncio
+async def test_openrouter_provider_uses_saved_session_key_instead_of_env_fallback(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_get_config(_session_id: str):
+        return {
+            "provider": "openrouter",
+            "model_name": "openai/o3-mini",
+            "openrouter_api_key": "sk-or-session",
+        }
+
+    def fake_get_llm(**kwargs):
+        captured.update(kwargs)
+        return object(), "openrouter"
+
+    monkeypatch.setattr(resolver_module.config_manager, "get_config", fake_get_config)
+    monkeypatch.setattr(resolver_module, "OPENROUTER_API_KEY", "sk-or-env")
+    monkeypatch.setattr(resolver_module, "get_llm", fake_get_llm)
+    monkeypatch.setattr(
+        resolver_module.mcp_manager, "rebuild_tools_for_user", lambda *_args, **_kwargs: []
+    )
+
+    resources = await ResourceResolver.resolve_agent_resources("sid-openrouter", SimpleNamespace())
+
+    assert captured["openrouter_api_key"] == "sk-or-session"
+    assert resources.openrouter_api_key == "sk-or-session"
+    assert resources.provider == "openrouter"
+
+
+@pytest.mark.asyncio
+async def test_groq_provider_keeps_server_fallback_when_session_key_missing(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_get_config(_session_id: str):
+        return {"provider": "groq", "model_name": "openai/gpt-oss-120b"}
+
+    def fake_get_llm(**kwargs):
+        captured.update(kwargs)
+        return object(), "groq"
+
+    monkeypatch.setattr(resolver_module.config_manager, "get_config", fake_get_config)
+    monkeypatch.setattr(resolver_module, "OPENROUTER_API_KEY", "sk-or-owner")
+    monkeypatch.setattr(resolver_module, "GROQ_API_KEYS", ["gsk-owner"])
+    monkeypatch.setattr(resolver_module, "get_llm", fake_get_llm)
+    monkeypatch.setattr(
+        resolver_module.mcp_manager, "rebuild_tools_for_user", lambda *_args, **_kwargs: []
+    )
+
+    resources = await ResourceResolver.resolve_agent_resources("sid-groq", SimpleNamespace())
+
+    assert captured["groq_api_key"] == "gsk-owner"
+    assert resources.groq_api_key == "gsk-owner"
+    assert resources.openrouter_api_key == "sk-or-owner"
+    assert resources.provider == "groq"

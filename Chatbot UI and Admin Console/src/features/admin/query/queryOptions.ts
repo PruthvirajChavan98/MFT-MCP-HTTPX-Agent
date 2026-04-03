@@ -32,8 +32,6 @@ type FaqSemanticParams = {
   adminKey: string
   query: string
   limit: number
-  openrouterKey?: string
-  groqKey?: string
 }
 
 export function sessionCostSummaryQueryOptions() {
@@ -151,14 +149,7 @@ export function faqCategoriesQueryOptions(adminKey: string) {
 export function faqSemanticSearchQueryOptions(params: FaqSemanticParams) {
   return queryOptions({
     queryKey: ['faq-semantic-search', params.adminKey, params.query, params.limit] as const,
-    queryFn: () =>
-      searchFaqSemantic(
-        params.adminKey,
-        params.query,
-        params.limit,
-        params.openrouterKey,
-        params.groqKey,
-      ),
+    queryFn: () => searchFaqSemantic(params.adminKey, params.query, params.limit),
     enabled: false,
   })
 }

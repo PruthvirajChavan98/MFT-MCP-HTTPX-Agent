@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { fetchSessionConfig, saveSessionConfig } from '@features/admin/api/admin'
+import {
+  fetchSessionConfig,
+  saveSessionConfig,
+  type AgentModel,
+  type SessionConfig,
+} from '@features/admin/api/admin'
 import { useAvailableModels } from '../../../shared/hooks/useModels'
 import { useAdminContext } from '@features/admin/context/AdminContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
@@ -14,6 +19,43 @@ import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Cpu, Save, Search, Server, Sparkles } from 'lucide-react'
+
+function providerRequiresSessionKey(provider: string) {
+  return provider === 'openrouter' || provider === 'nvidia'
+}
+
+function hasSavedProviderKey(provider: string, sessionCfg?: SessionConfig) {
+  if (provider === 'openrouter') return !!sessionCfg?.has_openrouter_key
+  if (provider === 'nvidia') return !!sessionCfg?.has_nvidia_key
+  if (provider === 'groq') return !!sessionCfg?.has_groq_key
+  return false
+}
+
+function hasAdminProviderKey(
+  provider: string,
+  auth: { openrouterKey: string; nvidiaKey: string; groqKey: string },
+) {
+  if (provider === 'openrouter') return auth.openrouterKey.trim().length > 0
+  if (provider === 'nvidia') return auth.nvidiaKey.trim().length > 0
+  if (provider === 'groq') return auth.groqKey.trim().length > 0
+  return false
+}
+
+function providerKeyHelp(provider: string, hasSavedKey: boolean, hasAdminKey: boolean) {
+  if (provider === 'openrouter') {
+    if (hasAdminKey) return 'OpenRouter key will be saved from the API Keys popover for this session.'
+    if (hasSavedKey) return 'This session already has a saved OpenRouter key. You can commit without re-entering it.'
+    return 'OpenRouter sessions require a saved key or a new OpenRouter key in the API Keys popover.'
+  }
+  if (provider === 'nvidia') {
+    if (hasAdminKey) return 'NVIDIA key will be saved from the API Keys popover for this session.'
+    if (hasSavedKey) return 'This session already has a saved NVIDIA key. You can commit without re-entering it.'
+    return 'NVIDIA sessions require a saved key or a new NVIDIA key in the API Keys popover.'
+  }
+  if (hasAdminKey) return 'Groq key will be saved from the API Keys popover for this session.'
+  if (hasSavedKey) return 'This session already has a saved Groq key. You can commit without re-entering it.'
+  return 'Groq BYOK is optional. Without one, runtime can fall back to the server-managed Groq key.'
+}
 
 export function ModelConfig() {
   const auth = useAdminContext()
@@ -39,6 +81,7 @@ export function ModelConfig() {
     config.model_name,
     handleModelChange
   );
+  const selectedModel = availableModels.find((model) => model.id === config.model_name) as AgentModel | undefined
 
   // Fetch specific session config
   const { data: sessionCfg, isLoading: sCfgLoading, refetch } = useQuery({
@@ -59,12 +102,22 @@ export function ModelConfig() {
     }
   }, [sessionCfg])
 
+  const targetSessionId = (fetchedSession || sessionId).trim()
+  const requiresProviderKey = providerRequiresSessionKey(config.provider)
+  const savedProviderKey = hasSavedProviderKey(config.provider, sessionCfg)
+  const adminProviderKey = hasAdminProviderKey(config.provider, auth)
+  const canCommit =
+    !!config.model_name &&
+    !!targetSessionId &&
+    (!requiresProviderKey || savedProviderKey || adminProviderKey)
+
   const saveMut = useMutation({
     mutationFn: () =>
       saveSessionConfig({
-        session_id: fetchedSession || sessionId,
+        session_id: targetSessionId,
         ...config,
         openrouter_api_key: auth.openrouterKey || undefined,
+        nvidia_api_key: auth.nvidiaKey || undefined,
         groq_api_key: auth.groqKey || undefined,
       }),
     onSuccess: () => toast.success('Configuration successfully deployed'),
@@ -140,6 +193,9 @@ export function ModelConfig() {
                   <SelectItem value="nvidia">NVIDIA NIM</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-[10px] text-gray-400 mt-1">
+                {providerKeyHelp(config.provider, savedProviderKey, adminProviderKey)}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -153,14 +209,30 @@ export function ModelConfig() {
                     {availableModels.map((m: any) => (
                       <SelectItem key={m.id} value={m.id}>
                         <div className="flex items-center justify-between w-full pr-4">
-                          <span>{m.name || m.id}</span>
-                          {m.type === 'reasoning' && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Reasoning</span>}
+                          <span>{m.display_name || m.name || m.id}</span>
+                          <div className="ml-2 flex items-center gap-1">
+                            {m.is_reasoning_model && (
+                              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                                Reasoning
+                              </span>
+                            )}
+                            {m.supports_tools && (
+                              <span className="text-[10px] bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                                Tools
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
+              <p className="text-[10px] text-gray-400 mt-1">
+                {selectedModel?.supports_reasoning_effort
+                  ? 'This model accepts reasoning effort controls when you save the session.'
+                  : 'This model ignores the saved reasoning effort setting.'}
+              </p>
             </div>
 
             <div className="space-y-4 pt-2">
@@ -193,7 +265,11 @@ export function ModelConfig() {
                   <SelectItem value="high">High (Deep Thinking)</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-gray-400 mt-1">Only applicable for reasoning models (o1, o3, deepseek-r1).</p>
+              <p className="text-[10px] text-gray-400 mt-1">
+                {selectedModel?.supports_reasoning_effort
+                  ? 'Applied to models that expose reasoning effort controls.'
+                  : 'Visible for all models; unsupported models ignore the saved setting.'}
+              </p>
             </div>
 
             <div className="space-y-2 flex-1 flex flex-col">
@@ -216,7 +292,7 @@ export function ModelConfig() {
         <Button
           size="lg"
           onClick={() => saveMut.mutate()}
-          disabled={saveMut.isPending || !config.model_name || !sessionId.trim()}
+          disabled={saveMut.isPending || !canCommit}
           className="w-full sm:w-auto font-bold text-white shadow-lg disabled:opacity-50 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 border-0"
         >
           {saveMut.isPending ? 'Committing Changes...' : <><Save className="w-4 h-4 mr-2" /> Commit to Session</>}

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "skills": {
+    "devops-cicd": {
+      "source": "miles990/claude-software-skills",
+      "sourceType": "github",
+      "computedHash": "5e6aefebf176e321423861cb36d6379c30159d2941d06f64a1e53d0ea13d8601"
+    },
+    "fastapi-microservices-development": {
+      "source": "manutej/luxor-claude-marketplace",
+      "sourceType": "github",
+      "computedHash": "daa045bde0adba8543c53b04feba43b03423725b0043ea24b3daf4cc8d0bb799"
+    },
+    "langchain-architecture": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "8bcb9750c6e564da50f8a6b4e8a9b60030a48a1323e5dee64c37469d3192c683"
+    },
+    "langgraph": {
+      "source": "davila7/claude-code-templates",
+      "sourceType": "github",
+      "computedHash": "e64c4c4fdf8ff727e8df9a018fb8c51a2a2667d9421d5075255052908ad07aad"
+    },
+    "shadcn-ui": {
+      "source": "existential-birds/beagle",
+      "sourceType": "github",
+      "computedHash": "40d55b35fa5ec40d87b824c4ddab3037e178dbdbd70e4b485a417281ecd528cf"
+    },
+    "tailwind-css": {
+      "source": "bobmatnyc/claude-mpm-skills",
+      "sourceType": "github",
+      "computedHash": "d4d19f6b1d60306895b5c0f5bb57a4640b54ed2b6ef74121781413fc16c1bf3f"
+    },
+    "testing": {
+      "source": "lobehub/lobehub",
+      "sourceType": "github",
+      "computedHash": "fb3807621d5fc072f73559430744b96ca35f232001b668abac3c42f7db5e6a8f"
+    }
+  }
+}

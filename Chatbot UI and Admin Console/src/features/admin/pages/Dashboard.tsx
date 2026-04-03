@@ -83,7 +83,7 @@ export function Dashboard() {
     <div className="space-y-6 max-w-[1600px] mx-auto">
       <div>
         <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>Overview</h1>
-        <p className="text-gray-500 text-sm mt-1">Real-time metrics from the TrustFin Agent Service</p>
+        <p className="text-gray-500 text-sm mt-1">Real-time metrics from the Mock FinTech Agent Service</p>
       </div>
 
       {/* KPIs */}

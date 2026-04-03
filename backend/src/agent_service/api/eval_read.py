@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from src.agent_service.api.admin_auth import require_admin_key
-from src.agent_service.core.config import OPENROUTER_API_KEY
 from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("eval_read_api")
@@ -456,11 +455,6 @@ async def eval_vector_search(
 
     if not use_vector and not query_text:
         raise HTTPException(status_code=400, detail="Provide either 'vector' or 'text'")
-
-    if not use_vector:
-        key = (x_openrouter_key or OPENROUTER_API_KEY or "").strip()
-        if not key:
-            raise HTTPException(status_code=400, detail="No OpenRouter key available")
 
     # Build Milvus metadata filter expression
     filters: list[str] = []

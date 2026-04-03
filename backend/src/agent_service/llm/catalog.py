@@ -16,6 +16,7 @@ from src.agent_service.core.config import (
     NVIDIA_BASE_URL,
     REDIS_URL,
 )
+from src.agent_service.llm.capabilities import decorate_model_name, infer_model_capabilities
 
 log = logging.getLogger("model_service")
 
@@ -163,6 +164,37 @@ def _uniq(seq: Iterable[str]) -> List[str]:
     return [x for x in seq if not (x in seen or seen.add(x))]
 
 
+def _with_capabilities(model: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = dict(model)
+    capabilities = infer_model_capabilities(
+        model_id=str(enriched.get("id") or ""),
+        provider=str(enriched.get("provider") or ""),
+        supported_parameters=enriched.get("supported_parameters") or [],
+        parameter_specs=enriched.get("parameter_specs") or [],
+        model_type=enriched.get("type"),
+        name=enriched.get("name"),
+    )
+    enriched.update(
+        {
+            "is_reasoning_model": bool(capabilities["is_reasoning_model"]),
+            "supports_reasoning_effort": bool(capabilities["supports_reasoning_effort"]),
+            "supports_tools": bool(capabilities["supports_tools"]),
+            "display_name": decorate_model_name(
+                str(enriched.get("name") or enriched.get("id") or ""), capabilities
+            ),
+        }
+    )
+    return enriched
+
+
+def _normalize_categories(categories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    for category in categories or []:
+        models = [_with_capabilities(model) for model in (category.get("models") or [])]
+        normalized.append({"name": category.get("name"), "models": _sort_models(models)})
+    return normalized
+
+
 class ModelService:
     OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
@@ -249,17 +281,19 @@ class ModelService:
             supported = [s["name"] for s in specs] + ["stream"]
 
             results.append(
-                {
-                    "id": mid,
-                    "name": m.get("name") or derive_display_name(mid, provider=provider),
-                    "provider": provider,
-                    "context_length": m.get("context_length", 32000),
-                    "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
-                    "supported_parameters": supported,
-                    "parameter_specs": specs,
-                    "modality": "text",
-                    "type": m.get("type", "chat"),
-                }
+                _with_capabilities(
+                    {
+                        "id": mid,
+                        "name": m.get("name") or derive_display_name(mid, provider=provider),
+                        "provider": provider,
+                        "context_length": m.get("context_length", 32000),
+                        "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
+                        "supported_parameters": supported,
+                        "parameter_specs": specs,
+                        "modality": "text",
+                        "type": m.get("type", "chat"),
+                    }
+                )
             )
         return _sort_models(results)
 
@@ -283,20 +317,27 @@ class ModelService:
                     mid = (m.get("id") or "").strip()
                     if not mid or "whisper" in mid.lower():
                         continue
+                    specs = self._get_groq_specs(mid)
                     results.append(
-                        {
-                            "id": mid,
-                            "name": derive_display_name(mid, provider="groq"),
-                            "provider": "groq",
-                            "context_length": int(m.get("context_window") or 0),
-                            "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
-                            "supported_parameters": _uniq(
-                                [s["name"] for s in self._get_groq_specs(mid)] + ["stream"]
-                            ),
-                            "parameter_specs": self._get_groq_specs(mid),
-                            "modality": "text",
-                            "type": "chat",
-                        }
+                        _with_capabilities(
+                            {
+                                "id": mid,
+                                "name": derive_display_name(mid, provider="groq"),
+                                "provider": "groq",
+                                "context_length": int(m.get("context_window") or 0),
+                                "pricing": {
+                                    "prompt": 0.0,
+                                    "completion": 0.0,
+                                    "unit": "1M tokens",
+                                },
+                                "supported_parameters": _uniq(
+                                    [s["name"] for s in specs] + ["stream"]
+                                ),
+                                "parameter_specs": specs,
+                                "modality": "text",
+                                "type": "chat",
+                            }
+                        )
                     )
                 return _sort_models(results)
         except Exception as e:
@@ -338,22 +379,28 @@ class ModelService:
                     supported = list(m.get("supported_parameters", []) or []) + ["stream"]
 
                     results.append(
-                        {
-                            "id": mid,
-                            "name": derive_display_name(
-                                mid, provider="openrouter", api_name=m.get("name")
-                            ),
-                            "provider": "openrouter",
-                            "context_length": int(m.get("context_length") or 0),
-                            "pricing": {"prompt": ui_p, "completion": ui_c, "unit": "1M tokens"},
-                            "supported_parameters": supported,
-                            "parameter_specs": specs,
-                            "architecture": m.get("architecture") or {},
-                            "modality": str(
-                                (m.get("architecture") or {}).get("modality") or "text"
-                            ).split("->")[0],
-                            "type": "chat",
-                        }
+                        _with_capabilities(
+                            {
+                                "id": mid,
+                                "name": derive_display_name(
+                                    mid, provider="openrouter", api_name=m.get("name")
+                                ),
+                                "provider": "openrouter",
+                                "context_length": int(m.get("context_length") or 0),
+                                "pricing": {
+                                    "prompt": ui_p,
+                                    "completion": ui_c,
+                                    "unit": "1M tokens",
+                                },
+                                "supported_parameters": _uniq(supported),
+                                "parameter_specs": specs,
+                                "architecture": m.get("architecture") or {},
+                                "modality": str(
+                                    (m.get("architecture") or {}).get("modality") or "text"
+                                ).split("->")[0],
+                                "type": "chat",
+                            }
+                        )
                     )
 
                 return _sort_models(results), pricing_map
@@ -391,17 +438,23 @@ class ModelService:
                     # We map 'owned_by' to vendor for better display.
 
                     results.append(
-                        {
-                            "id": mid,
-                            "name": derive_display_name(mid, provider="nvidia"),
-                            "provider": "nvidia",
-                            "context_length": 32000,  # NVIDIA API doesn't return this in list; safe default
-                            "pricing": {"prompt": 0.0, "completion": 0.0, "unit": "1M tokens"},
-                            "supported_parameters": ["temperature", "max_tokens", "stream"],
-                            "parameter_specs": self._std_specs(),
-                            "modality": "text",
-                            "type": "chat",
-                        }
+                        _with_capabilities(
+                            {
+                                "id": mid,
+                                "name": derive_display_name(mid, provider="nvidia"),
+                                "provider": "nvidia",
+                                "context_length": 32000,
+                                "pricing": {
+                                    "prompt": 0.0,
+                                    "completion": 0.0,
+                                    "unit": "1M tokens",
+                                },
+                                "supported_parameters": ["temperature", "max_tokens", "stream"],
+                                "parameter_specs": self._std_specs(),
+                                "modality": "text",
+                                "type": "chat",
+                            }
+                        )
                     )
 
                 return _sort_models(results)
@@ -432,12 +485,12 @@ class ModelService:
     async def get_cached_data(self) -> List[Dict[str, Any]]:
         raw = await self.redis.get(self.CACHE_KEY)
         if raw:
-            return json.loads(raw)
+            return _normalize_categories(json.loads(raw))
 
         # If cache miss (cold start), force a sync refresh immediately
         await self.refresh_cache()
         raw_fresh = await self.redis.get(self.CACHE_KEY)
-        return json.loads(raw_fresh) if raw_fresh else []
+        return _normalize_categories(json.loads(raw_fresh)) if raw_fresh else []
 
     async def get_price(self, model_id: str) -> Optional[Dict[str, float]]:
         raw = await self.redis.get(self.PRICING_KEY)

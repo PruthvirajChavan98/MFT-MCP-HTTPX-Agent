@@ -1,6 +1,6 @@
 import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchModels } from '@features/admin/api/admin';
+import { fetchModels, type AgentModel, type AgentModelCategory } from '@features/admin/api/admin';
 
 export function useAvailableModels(
     provider: string,
@@ -8,14 +8,14 @@ export function useAvailableModels(
     onModelChange: (newModelId: string) => void
 ) {
     // Fetch categorized models from the backend
-    const { data: modelCategories = [], isLoading } = useQuery({
+    const { data: modelCategories = [], isLoading } = useQuery<AgentModelCategory[]>({
         queryKey: ['models'],
         queryFn: fetchModels,
         staleTime: 300000, // Cache for 5 minutes
     });
 
     // Extract models based ONLY on selected provider
-    const availableModels = useMemo(() => {
+    const availableModels = useMemo<AgentModel[]>(() => {
         if (!modelCategories.length) return [];
         const category = modelCategories.find((c) => c.name === provider);
         return category?.models || [];

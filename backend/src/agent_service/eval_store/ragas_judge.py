@@ -5,7 +5,6 @@ import logging
 import uuid
 from typing import Any
 
-from langchain_openai import OpenAIEmbeddings
 from ragas import SingleTurnSample
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
@@ -13,10 +12,8 @@ from ragas.metrics.collections import AnswerRelevancy, ContextRelevance, Faithfu
 
 from src.agent_service.core.config import (
     JUDGE_MODEL_NAME,
-    OPENROUTER_API_KEY,
-    OPENROUTER_BASE_URL,
 )
-from src.agent_service.llm.client import get_llm
+from src.agent_service.llm.client import get_llm, get_owner_embeddings
 
 log = logging.getLogger("ragas_judge")
 
@@ -76,13 +73,7 @@ class RagasJudge:
         wrapped_llm = LangchainLLMWrapper(lc_llm)
 
         # 2. Embeddings for AnswerRelevancy — same config as EvalEmbedder
-        emb_key = openrouter_api_key or OPENROUTER_API_KEY or ""
-        lc_emb = OpenAIEmbeddings(
-            model=_EMBED_MODEL,
-            api_key=emb_key,  # type: ignore[arg-type]
-            base_url=OPENROUTER_BASE_URL,
-            check_embedding_ctx_length=False,
-        )
+        lc_emb = get_owner_embeddings(model=_EMBED_MODEL)
         wrapped_emb = LangchainEmbeddingsWrapper(lc_emb)
 
         # 3. Metrics — each receives the session's wrapped LLM

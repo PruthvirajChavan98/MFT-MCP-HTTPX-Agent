@@ -3,8 +3,7 @@
 import asyncio
 import json
 import logging
-import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
@@ -17,6 +16,7 @@ from src.agent_service.core.config import (
     SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS,
 )
 from src.agent_service.core.cost import calculate_run_cost_detailed
+from src.agent_service.core.follow_ups import extract_follow_ups
 from src.agent_service.core.rate_limiter_manager import (
     enforce_rate_limit,
     get_rate_limiter_manager,
@@ -39,31 +39,6 @@ from src.agent_service.security.inline_guard import evaluate_prompt_safety_decis
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent-stream"])
-
-# ---------------------------------------------------------------------------
-# Follow-up extraction from LLM output
-# ---------------------------------------------------------------------------
-_FOLLOW_UPS_RE = re.compile(r"\n?FOLLOW_UPS:\s*(\[.*?\])\s*$", re.DOTALL)
-
-
-def extract_follow_ups(text: str) -> Tuple[str, List[str]]:
-    """Strip ``FOLLOW_UPS:[...]`` tag from *text*.
-
-    Returns ``(clean_text, questions)`` where *clean_text* has the tag
-    removed and *questions* is a list of up to 5 follow-up strings.
-    """
-    match = _FOLLOW_UPS_RE.search(text)
-    if not match:
-        return text, []
-    try:
-        questions = json.loads(match.group(1))
-        if isinstance(questions, list):
-            clean = text[: match.start()].rstrip()
-            return clean, [str(q).strip() for q in questions if str(q).strip()][:5]
-    except (json.JSONDecodeError, TypeError):
-        pass
-    return text, []
-
 
 _LIFECYCLE_EVENTS = {
     "on_chat_model_start",
@@ -507,8 +482,13 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                 persisted = await persist_runtime_trace(collector)
                 if not persisted:
                     log.warning(
-                        "Runtime trace persistence failed for blocked prompt trace_id=%s",
+                        "Runtime trace persistence failed for blocked prompt "
+                        "session_id=%s trace_id=%s inline_guard_decision=%s "
+                        "inline_guard_reason=%s",
+                        sid,
                         collector.trace_id,
+                        inline_guard_decision.decision,
+                        inline_guard_decision.reason_code,
                     )
                 log.info(
                     "Stream terminal session_id=%s trace_id=%s status=blocked persisted=%s inline_guard_decision=%s inline_guard_reason=%s",
@@ -867,6 +847,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         if getattr(collector, "reasoning", ""):
                             add_kwargs["reasoning"] = collector.reasoning
 
+                        msgs[-1].content = final_output
                         add_kwargs["trace_id"] = collector.trace_id
                         add_kwargs["provider"] = resources.provider
                         add_kwargs["model"] = resources.model_name
@@ -883,6 +864,8 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
                         if follow_ups:
                             add_kwargs["follow_ups"] = follow_ups
+                        else:
+                            add_kwargs.pop("follow_ups", None)
 
                         await graph.aupdate_state(cfg, {"messages": [msgs[-1]]})
                 except Exception as store_err:

@@ -107,15 +107,11 @@ class KnowledgeBaseService:
 
         try:
             results = await kb_milvus_store.semantic_search(query_text, limit=100)
-            to_delete = [r for r in results if r["score"] >= threshold]
         except Exception as exc:  # noqa: BLE001
-            log.warning("Milvus semantic delete search failed, falling back to substring: %s", exc)
-            rows = await self.repo.dump_all(pool)
-            to_delete = [
-                {"question": row["question"]}
-                for row in rows
-                if query_text in row["question"].lower()
-            ]
+            log.warning("Milvus semantic delete search failed: %s", exc)
+            raise RuntimeError(f"Milvus semantic delete search failed: {exc}") from exc
+
+        to_delete = [r for r in results if r["score"] >= threshold]
 
         if not to_delete:
             return 0

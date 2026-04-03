@@ -36,3 +36,5 @@ Reference*
 reference*
 Reference Trace Module/
 Reference UI/
+.claude/settings.local.json
+cloudflared/credentials.json

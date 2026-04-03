@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date, datetime, timezone
 from typing import Any
 
 log = logging.getLogger("eval_store_pg")
@@ -14,34 +15,61 @@ def _json(x: Any) -> str:
         return json.dumps({"_str": str(x)}, ensure_ascii=False)
 
 
+def _coerce_timestamptz(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time(), tzinfo=timezone.utc)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    raise TypeError(f"Unsupported timestamptz value: {type(value).__name__}")
+
+
+class EvalSchemaUnavailableError(RuntimeError):
+    """Raised when the PostgreSQL eval schema is not present."""
+
+
 class EvalPgStore:
     """Relational eval store backed by PostgreSQL (asyncpg pool).
 
     Replaces EvalNeo4jStore — all Cypher MERGE/SET → INSERT ... ON CONFLICT DO UPDATE.
     Schema is created by ``backend/infra/sql/02_eval_schema.sql`` which is mounted as
-    a Docker init script.  ``ensure_schema()`` is a no-op kept for API compatibility.
+    a Docker init script. ``ensure_schema()`` now verifies the required tables exist
+    before the agent starts serving traffic.
     """
 
     _schema_ready: bool = False
 
     async def ensure_schema(self, pool: Any) -> None:
-        """No-op: schema created at startup via 02_eval_schema.sql init script."""
+        """Verify required eval tables exist before serving traffic."""
         if self.__class__._schema_ready:
             return
+        if pool is None:
+            raise EvalSchemaUnavailableError(
+                "PostgreSQL pool unavailable while verifying eval schema."
+            )
         # Verify tables exist; if not, schema SQL was not applied
         row = await pool.fetchrow("SELECT to_regclass('public.eval_traces') AS tbl")
         if row and row["tbl"] is not None:
             self.__class__._schema_ready = True
             log.info("eval_store: PostgreSQL schema verified")
-        else:
-            log.warning(
-                "eval_traces table not found — " "ensure 02_eval_schema.sql ran in PostgreSQL init"
-            )
+            return
+        raise EvalSchemaUnavailableError(
+            "eval_traces table not found; ensure 02_eval_schema.sql ran before agent startup."
+        )
 
     async def upsert_trace(self, pool: Any, trace: dict[str, Any]) -> None:
         trace_id = str(trace.get("trace_id") or "").strip()
         if not trace_id:
             raise ValueError("trace.trace_id missing")
+        started_at = _coerce_timestamptz(trace.get("started_at"))
+        ended_at = _coerce_timestamptz(trace.get("ended_at"))
 
         await pool.execute(
             """
@@ -99,8 +127,8 @@ class EvalPgStore:
             trace.get("provider"),
             trace.get("model"),
             trace.get("endpoint"),
-            trace.get("started_at"),
-            trace.get("ended_at"),
+            started_at,
+            ended_at,
             trace.get("latency_ms"),
             trace.get("status"),
             trace.get("error"),
@@ -135,7 +163,7 @@ class EvalPgStore:
                     event_key,
                     trace_id,
                     seq,
-                    e.get("ts"),
+                    _coerce_timestamptz(e.get("ts")),
                     e.get("event_type"),
                     e.get("name"),
                     e.get("text"),

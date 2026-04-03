@@ -64,7 +64,6 @@ function safeParseMessages(raw: string | null): ChatMessage[] {
 export function useChatStream() {
   const [sessionId, setSessionId] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [followUps, setFollowUps] = useState<string[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
@@ -80,7 +79,6 @@ export function useChatStream() {
       localStorage.setItem(SESSION_KEY, sid)
       setSessionId(sid)
       setMessages([])
-      setFollowUps([])
       setError('')
     } catch (err) {
       console.error('Failed to initialize session:', err)
@@ -130,7 +128,6 @@ export function useChatStream() {
       if (!trimmed || isStreaming || !sessionId) return
 
       setError('')
-      setFollowUps([])
 
       const userMsg: ChatMessage = {
         id: makeId('msg'),
@@ -248,7 +245,6 @@ export function useChatStream() {
                   const payload = parsed as FollowUpsPayload | undefined
                   if (payload?.questions) {
                     const questions = payload.questions.slice(0, 5)
-                    setFollowUps(questions)
                     patchAssistant((last) => ({
                       ...last,
                       followUps: questions,
@@ -325,7 +321,6 @@ export function useChatStream() {
   return {
     sessionId,
     messages,
-    followUps,
     isStreaming,
     error,
     sendMessage,

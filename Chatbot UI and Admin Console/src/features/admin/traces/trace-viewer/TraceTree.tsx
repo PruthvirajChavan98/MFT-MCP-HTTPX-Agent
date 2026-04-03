@@ -1,5 +1,5 @@
 // src/app/components/admin/trace/TraceTree.tsx
-import { Minimize2, CheckCircle2, Eye, ChevronRight } from 'lucide-react'
+import { X, CheckCircle2, Eye, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@components/ui/skeleton'
 import { getNodeIcon, getNodeChipClasses, getBarColor } from './nodeUtils'
 import type { FlatNode } from './types'
@@ -20,8 +20,14 @@ export function TraceTree({ nodes, selectedNodeId, onSelect, onClose, isLoading 
           <span className="text-[10px] font-bold text-muted-foreground tracking-[0.12em] uppercase">
             Trace Explorer
           </span>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
-            <Minimize2 size={13} />
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Close trace explorer"
+            title="Close trace explorer"
+            type="button"
+          >
+            <X size={13} />
           </button>
         </div>
       </div>

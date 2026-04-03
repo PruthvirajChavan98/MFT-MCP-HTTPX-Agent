@@ -8,6 +8,9 @@ from langchain.embeddings import init_embeddings
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 
+from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+from src.agent_service.llm.capabilities import model_supports_reasoning_effort
+
 try:
     from langchain_openrouter import ChatOpenRouter
 except Exception:  # pragma: no cover - optional dependency fallback
@@ -88,9 +91,20 @@ def get_llm(
     if reasoning_effort:
         normalized_reasoning_effort = reasoning_effort.strip().lower()
 
-    has_reasoning = bool(
-        normalized_reasoning_effort and normalized_reasoning_effort not in ("none", "default")
+    supports_reasoning_effort = model_supports_reasoning_effort(
+        model_name, provider=actual_provider
     )
+    has_reasoning = bool(
+        supports_reasoning_effort
+        and normalized_reasoning_effort
+        and normalized_reasoning_effort not in ("none", "default")
+    )
+    if normalized_reasoning_effort and not supports_reasoning_effort:
+        log.info(
+            "Ignoring reasoning_effort for model=%s provider=%s because the model does not support it",
+            model_name,
+            actual_provider,
+        )
 
     # OpenRouter path: prefer ChatOpenRouter when available.
     if actual_provider == "openrouter":
@@ -134,7 +148,7 @@ def get_llm(
 def get_embeddings(
     api_key: str,
     model: str = "openai/text-embedding-3-small",
-    base_url: str = "https://openrouter.ai/api/v1",
+    base_url: str = OPENROUTER_BASE_URL,
 ) -> Embeddings:
     """
     Unified embeddings factory using init_embeddings.
@@ -152,3 +166,16 @@ def get_embeddings(
         base_url=base_url,
         check_embedding_ctx_length=False,
     )
+
+
+def get_owner_embeddings(
+    model: str = "openai/text-embedding-3-small",
+    base_url: str = OPENROUTER_BASE_URL,
+) -> Embeddings:
+    """
+    Owner-managed embeddings factory.
+    Embedding-backed subsystems intentionally do not honor session/request BYOK keys.
+    """
+    if not OPENROUTER_API_KEY:
+        raise ValueError("Server OpenRouter API key required for embeddings.")
+    return get_embeddings(api_key=OPENROUTER_API_KEY, model=model, base_url=base_url)
