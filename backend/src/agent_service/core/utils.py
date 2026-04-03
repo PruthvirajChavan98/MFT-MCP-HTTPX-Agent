@@ -26,6 +26,11 @@ def normalize_result(result: Any) -> Any:
             except Exception:
                 return text
 
+        dump = json.dumps(result, ensure_ascii=False, indent=2)
+        if len(dump) > 8000:
+            return dump[:8000] + "... [TRUNCATED]"
+        return dump
+
     if isinstance(result, dict):
         dump = json.dumps(result, ensure_ascii=False)
         if len(dump) > 8000:

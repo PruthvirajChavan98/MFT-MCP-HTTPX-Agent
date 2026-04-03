@@ -16,6 +16,7 @@ import { Button } from '@components/ui/button'
 import { Input } from '@components/ui/input'
 import { Label } from '@components/ui/label'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@components/ui/input-otp'
+import { RadioGroup, RadioGroupItem } from '@components/ui/radio-group'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ interface FormFields {
   firstname: string
   lastname: string
   dob: string
+  keepMeFor: string
 }
 
 type Step = 'form' | 'otp' | 'success'
@@ -36,6 +38,12 @@ interface Props {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const OTP_RESEND_COOLDOWN = 60
+
+const KEEP_ME_FOR_OPTIONS = [
+  { value: '7d', label: '7 days', hint: 'Recommended' },
+  { value: '30d', label: '30 days', hint: 'Longer access' },
+  { value: '90d', label: '90 days', hint: 'Extended demo' },
+] as const
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -52,8 +60,16 @@ export function RegisterDialog({ open, onOpenChange }: Props) {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors },
-  } = useForm<FormFields>()
+  } = useForm<FormFields>({
+    defaultValues: {
+      keepMeFor: '7d',
+    },
+  })
+
+  const selectedKeepMeFor = watch('keepMeFor')
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -87,7 +103,7 @@ export function RegisterDialog({ open, onOpenChange }: Props) {
       firstname: fields.firstname.trim(),
       lastname: fields.lastname.trim(),
       ...(fields.dob ? { dob: fields.dob } : {}),
-      keepMeFor: '7d',
+      keepMeFor: fields.keepMeFor,
     }
     try {
       await requestOtp(input)
@@ -234,6 +250,36 @@ export function RegisterDialog({ open, onOpenChange }: Props) {
                     className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus-visible:ring-teal-500 [color-scheme:dark]"
                     {...register('dob')}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Keep me signed in for</Label>
+                  <input type="hidden" {...register('keepMeFor')} />
+                  <RadioGroup
+                    value={selectedKeepMeFor}
+                    onValueChange={(value) => setValue('keepMeFor', value, { shouldDirty: true })}
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+                  >
+                    {KEEP_ME_FOR_OPTIONS.map((option) => {
+                      const inputId = `keep-me-for-${option.value}`
+                      return (
+                        <div key={option.value} className="relative">
+                          <RadioGroupItem
+                            id={inputId}
+                            value={option.value}
+                            className="peer sr-only"
+                          />
+                          <Label
+                            htmlFor={inputId}
+                            className="flex cursor-pointer flex-col rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2.5 text-left transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-teal-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-slate-900 peer-data-[state=checked]:border-teal-400 peer-data-[state=checked]:bg-teal-500/10"
+                          >
+                            <span className="text-sm font-semibold text-white">{option.label}</span>
+                            <span className="mt-1 text-xs text-slate-400">{option.hint}</span>
+                          </Label>
+                        </div>
+                      )
+                    })}
+                  </RadioGroup>
                 </div>
 
                 {/* Error */}

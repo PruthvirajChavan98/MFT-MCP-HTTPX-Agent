@@ -13,7 +13,6 @@ from src.agent_service.core.recursive_rag_graph import (
 from src.agent_service.core.resource_resolver import resource_resolver
 from src.agent_service.core.schemas import AgentRequest
 from src.agent_service.core.session_utils import session_utils
-from src.agent_service.features.kb_first import kb_first_payload
 from src.agent_service.features.nbfc_router import nbfc_router_service
 
 log = logging.getLogger(__name__)
@@ -79,18 +78,6 @@ async def query_agent(request: AgentRequest):
             except Exception as e:
                 log.warning(f"Router classification failed: {e}")
                 router_out = None
-
-        kb_payload = await kb_first_payload(request.question, resources.tools)
-        if kb_payload:
-            out = {
-                "response": str(kb_payload["output"]),
-                "kb_first": True,
-                "provider": resources.provider,
-                "model": resources.model_name,
-            }
-            if AGENT_INLINE_ROUTER_ENABLED and AGENT_INLINE_ROUTER_EXPOSE and router_out:
-                out["router"] = router_out
-            return out
 
         if not resources.tools:
             raise HTTPException(status_code=500, detail="No tools loaded")

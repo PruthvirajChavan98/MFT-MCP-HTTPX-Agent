@@ -21,6 +21,7 @@ import { formatDateTime } from '@shared/lib/format'
 import { parseToLangsmithTree } from './trace-viewer/parse'
 import { TraceInspector } from './trace-viewer/TraceInspector'
 import { TraceTree } from './trace-viewer/TraceTree'
+import { clearTraceIdSearchParams, setTraceIdSearchParams } from '@features/admin/lib/admin-links'
 import {
   adminTraceQueryOptions,
   tracesPageInfiniteQueryOptions,
@@ -40,14 +41,22 @@ export function ChatTracesPage() {
   const initialSearch = searchParams.get('search') || ''
   const [search, setSearch] = useState(initialSearch)
   const deferredSearch = useDeferredValue(search)
+  const normalizedSearch = search.trim()
+  const currentSearchParam = searchParams.get('search') || ''
 
   useEffect(() => {
-    setSearchParams((prev) => {
-      if (search.trim()) prev.set('search', search.trim())
-      else prev.delete('search')
-      return prev
-    })
-  }, [search, setSearchParams])
+    if (currentSearchParam === normalizedSearch) return
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (normalizedSearch) next.set('search', normalizedSearch)
+        else next.delete('search')
+        return next
+      },
+      { replace: true },
+    )
+  }, [currentSearchParam, normalizedSearch, setSearchParams])
 
   const tracesQuery = useInfiniteQuery(
     tracesPageInfiniteQueryOptions({
@@ -63,16 +72,7 @@ export function ChatTracesPage() {
   )
 
   const rows = useMemo(() => mapTraceListRows(traces), [traces])
-  const selectedTraceId = searchParams.get('traceId') || rows[0]?.traceId || null
-
-  useEffect(() => {
-    if (!rows.length || searchParams.get('traceId')) return
-
-    setSearchParams((prev) => {
-      prev.set('traceId', rows[0].traceId)
-      return prev
-    })
-  }, [rows, searchParams, setSearchParams])
+  const selectedTraceId = searchParams.get('traceId')
 
   const [selectedNodeId, setSelectedNodeId] = useState('root')
   useEffect(() => {
@@ -88,10 +88,11 @@ export function ChatTracesPage() {
   const selectedNode = traceNodes.find((node) => node.id === selectedNodeId) || traceNodes[0] || null
 
   const openTrace = (traceId: string) => {
-    setSearchParams((prev) => {
-      prev.set('traceId', traceId)
-      return prev
-    })
+    setSearchParams((prev) => setTraceIdSearchParams(prev, traceId), { replace: false })
+  }
+
+  const closeTrace = () => {
+    setSearchParams((prev) => clearTraceIdSearchParams(prev), { replace: true })
   }
 
   if (!hasAdminKey) {
@@ -264,10 +265,7 @@ export function ChatTracesPage() {
                     nodes={traceNodes}
                     selectedNodeId={selectedNodeId}
                     onSelect={setSelectedNodeId}
-                    onClose={() => setSearchParams((prev) => {
-                      prev.delete('traceId')
-                      return prev
-                    })}
+                    onClose={closeTrace}
                     isLoading={false}
                   />
                   <TraceInspector node={selectedNode} />

@@ -1,146 +1,275 @@
 // src/app/components/admin/trace/parse.ts
 import type { FlatNode, TraceDetail, TraceEvent } from './types'
 
+type SegmentKind = 'llm' | 'parser' | 'tool'
+
+type Segment = {
+  key: string
+  type: SegmentKind
+  name: string
+  tokens: number
+  input?: unknown
+  output?: unknown
+  model?: string
+  startMs?: number
+  endMs?: number
+}
+
+function parseIsoMs(value?: string): number | undefined {
+  if (!value) return undefined
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function formatLatency(ms?: number): string {
+  if (!Number.isFinite(ms) || ms === undefined || ms <= 0) return '—'
+  return (ms / 1000).toFixed(2)
+}
+
+function clampPct(value: number): number {
+  return Math.max(0, Math.min(100, value))
+}
+
+function isToolEvent(eventType?: string): boolean {
+  if (!eventType) return false
+  return (
+    eventType === 'tool_call' ||
+    eventType === 'tool_start' ||
+    eventType === 'tool_end' ||
+    eventType === 'action' ||
+    eventType.includes('tool')
+  )
+}
+
 export function parseToLangsmithTree(traceDetail: TraceDetail): FlatNode[] {
   if (!traceDetail) return []
 
-  const nodes: FlatNode[] = []
   const trace = traceDetail.trace
-  const events: TraceEvent[] = traceDetail.events ?? []
+  const events = traceDetail.events ?? []
+  const traceStartMs = parseIsoMs(trace.started_at)
+  const traceEndMs = parseIsoMs(trace.ended_at)
+  const totalLatencyLabel =
+    trace.latency_ms !== undefined && trace.latency_ms !== null ? formatLatency(trace.latency_ms) : '—'
 
-  const totalS = trace.latency_ms ? (trace.latency_ms / 1000).toFixed(2) : '0.00'
+  const nodes: FlatNode[] = [
+    {
+      id: 'root',
+      type: 'trace',
+      name: trace.name ?? 'Agent Trace',
+      latencyS: totalLatencyLabel,
+      status: trace.status === 'success' ? 'success' : 'error',
+      tokens: 0,
+      depth: 0,
+      input: trace.inputs_json,
+      output: trace.final_output,
+      model: trace.model,
+      offsetPct: 0,
+      durationPct: 100,
+    },
+    {
+      id: 'chain-1',
+      type: 'chain',
+      name: 'RunnableSequence',
+      latencyS: totalLatencyLabel,
+      status: 'success',
+      tokens: 0,
+      depth: 1,
+      input: trace.inputs_json,
+      output: trace.final_output,
+      offsetPct: 0,
+      durationPct: 100,
+    },
+  ]
 
-  nodes.push({
-    id: 'root',
-    type: 'trace',
-    name: trace.name ?? 'Agent Trace',
-    latencyS: totalS,
-    status: trace.status === 'success' ? 'success' : 'error',
-    tokens: 0,
-    depth: 0,
-    input: trace.inputs_json,
-    output: trace.final_output,
-    model: trace.model,
-  })
-
-  nodes.push({
-    id: 'chain-1',
-    type: 'chain',
-    name: 'RunnableSequence',
-    latencyS: totalS,
-    status: 'success',
-    tokens: 0,
-    depth: 1,
-    input: trace.inputs_json,
-    output: trace.final_output,
-  })
-
+  const segments: Segment[] = []
   let pendingReasoning: TraceEvent[] = []
   let pendingOutput: TraceEvent[] = []
+  let pendingTool: TraceEvent[] = []
   let seq = 0
 
-  const getText = (e: TraceEvent): string => e.data ?? e.text ?? ''
+  const getText = (event: TraceEvent) => event.data ?? event.text ?? ''
+  const getPayload = (event: TraceEvent) => event.payload_json
+  const getEventMs = (event: TraceEvent) => parseIsoMs(event.ts)
 
   const flushReasoning = () => {
-    if (pendingReasoning.length === 0) return
-    nodes.push({
-      id: `res-${seq++}`,
+    if (!pendingReasoning.length) return
+    segments.push({
+      key: `res-${seq++}`,
       type: 'llm',
       name: 'ReasoningEngine',
-      latencyS: '0.00',
-      status: 'success',
       tokens: pendingReasoning.length,
-      depth: 2,
       input: 'System: You are an internal reasoning agent…',
       output: pendingReasoning.map(getText).join(''),
       model: trace.model,
+      startMs: getEventMs(pendingReasoning[0]),
+      endMs: getEventMs(pendingReasoning[pendingReasoning.length - 1]),
     })
     pendingReasoning = []
   }
 
   const flushOutput = () => {
-    if (pendingOutput.length === 0) return
-    nodes.push({
-      id: `out-${seq++}`,
+    if (!pendingOutput.length) return
+    segments.push({
+      key: `out-${seq++}`,
       type: 'llm',
       name: 'GenerationEngine',
-      latencyS: '0.00',
-      status: 'success',
       tokens: pendingOutput.length,
-      depth: 2,
       input: 'System: You are a helpful assistant generation node…',
       output: pendingOutput.map(getText).join(''),
       model: trace.model,
+      startMs: getEventMs(pendingOutput[0]),
+      endMs: getEventMs(pendingOutput[pendingOutput.length - 1]),
     })
     pendingOutput = []
   }
 
-  for (const ev of events) {
-    const etype = ev.event_type ?? ev.name ?? ev.event_key
+  const flushTool = () => {
+    if (!pendingTool.length) return
+    const first = pendingTool[0]
+    const last = pendingTool[pendingTool.length - 1]
+    const payload = getPayload(last) ?? getPayload(first)
+    const parserStartMs = getEventMs(first)
+    const executionStartEvent =
+      pendingTool.find((event) => {
+        const eventType = event.event_type ?? event.name ?? event.event_key
+        return eventType === 'tool_start' || eventType === 'action' || eventType === 'tool_end'
+      }) ?? first
+    const executionStartMs = getEventMs(executionStartEvent)
 
-    if (etype === 'reasoning' || etype === 'reasoning_token') {
+    segments.push({
+      key: `tool-parse-${seq++}`,
+      type: 'parser',
+      name: 'ToolParser',
+      tokens: 0,
+      input: payload ?? first.text,
+      output: 'Parsed tool call successfully',
+      startMs: parserStartMs,
+      endMs:
+        parserStartMs !== undefined &&
+        executionStartMs !== undefined &&
+        executionStartMs > parserStartMs
+          ? executionStartMs
+          : undefined,
+    })
+
+    segments.push({
+      key: `tool-exec-${seq++}`,
+      type: 'tool',
+      name:
+        (payload?.tool as string) ??
+        (payload?.name as string) ??
+        last.name ??
+        last.event_key ??
+        'execute_tool',
+      tokens: 0,
+      input: payload?.input ?? payload,
+      output: payload?.output ?? last.text ?? 'Tool executed successfully',
+      startMs: executionStartMs,
+      endMs: getEventMs(last),
+    })
+
+    pendingTool = []
+  }
+
+  for (const event of events) {
+    const eventType = event.event_type ?? event.name ?? event.event_key
+
+    if (eventType === 'reasoning' || eventType === 'reasoning_token') {
+      flushTool()
       flushOutput()
-      pendingReasoning.push(ev)
-    } else if (etype === 'token') {
-      flushReasoning()
-      pendingOutput.push(ev)
-    } else if (
-      etype === 'tool_call' ||
-      etype === 'tool_start' ||
-      etype === 'tool_end' ||
-      etype === 'action' ||
-      (etype && etype.includes('tool'))
-    ) {
-      flushReasoning()
-      flushOutput()
-
-      const payload = ev.payload_json
-
-      nodes.push({
-        id: `tool-parse-${seq++}`,
-        type: 'parser',
-        name: 'ToolParser',
-        latencyS: '0.00',
-        status: 'success',
-        tokens: 0,
-        depth: 2,
-        input: payload ?? ev.text,
-        output: 'Parsed tool call successfully',
-      })
-
-      nodes.push({
-        id: `tool-exec-${seq++}`,
-        type: 'tool',
-        name: (payload?.tool as string) ?? (payload?.name as string) ?? ev.name ?? ev.event_key ?? 'execute_tool',
-        latencyS: '0.00',
-        status: 'success',
-        tokens: 0,
-        depth: 2,
-        input: payload?.input ?? payload,
-        output: payload?.output ?? ev.text ?? 'Tool executed successfully',
-      })
+      pendingReasoning.push(event)
+      continue
     }
+
+    if (eventType === 'token') {
+      flushTool()
+      flushReasoning()
+      pendingOutput.push(event)
+      continue
+    }
+
+    if (isToolEvent(eventType)) {
+      flushReasoning()
+      flushOutput()
+      pendingTool.push(event)
+      continue
+    }
+
+    flushTool()
   }
 
   flushReasoning()
   flushOutput()
+  flushTool()
 
-  const totalTokens = nodes.reduce((acc, n) => acc + (n.tokens ?? 0), 0)
-  nodes[0].tokens = totalTokens
-  if (nodes[1]) nodes[1].tokens = totalTokens
+  const timedSegments = segments.filter((segment) => segment.startMs !== undefined)
+  const timelineStartMs = traceStartMs ?? timedSegments[0]?.startMs
+  const totalDurationMs =
+    trace.latency_ms && trace.latency_ms > 0
+      ? trace.latency_ms
+      : timelineStartMs !== undefined && traceEndMs !== undefined && traceEndMs > timelineStartMs
+        ? traceEndMs - timelineStartMs
+        : undefined
+  const timelineEndMs =
+    traceEndMs ??
+    (timelineStartMs !== undefined && totalDurationMs !== undefined
+      ? timelineStartMs + totalDurationMs
+      : undefined)
 
-  const children = nodes.slice(2)
-  const childCount = children.length || 1
-  children.forEach((n, i) => {
-    n.offsetPct = (i / childCount) * 100
-    n.durationPct = Math.max(4, 100 / childCount)
+  const childNodes = segments.map<FlatNode>((segment, index) => {
+    const nextTimedStart = segments
+      .slice(index + 1)
+      .map((item) => item.startMs)
+      .find((value) => value !== undefined)
+
+    const durationMs =
+      segment.startMs !== undefined
+        ? segment.endMs && segment.endMs > segment.startMs
+          ? segment.endMs - segment.startMs
+          : nextTimedStart && nextTimedStart > segment.startMs
+            ? nextTimedStart - segment.startMs
+            : timelineEndMs && timelineEndMs > segment.startMs
+              ? timelineEndMs - segment.startMs
+              : undefined
+        : undefined
+
+    const offsetPct =
+      timelineStartMs !== undefined &&
+      totalDurationMs !== undefined &&
+      totalDurationMs > 0 &&
+      segment.startMs !== undefined
+        ? clampPct(((segment.startMs - timelineStartMs) / totalDurationMs) * 100)
+        : undefined
+
+    const durationPct =
+      totalDurationMs !== undefined &&
+      totalDurationMs > 0 &&
+      durationMs !== undefined &&
+      durationMs > 0
+        ? clampPct((durationMs / totalDurationMs) * 100)
+        : undefined
+
+    return {
+      id: segment.key,
+      type: segment.type,
+      name: segment.name,
+      latencyS: formatLatency(durationMs),
+      status: 'success',
+      tokens: segment.tokens,
+      depth: 2,
+      input: segment.input,
+      output: segment.output,
+      model: segment.model,
+      offsetPct,
+      durationPct,
+    }
   })
-  nodes[0].offsetPct = 0
-  nodes[0].durationPct = 100
-  if (nodes[1]) {
-    nodes[1].offsetPct = 0
-    nodes[1].durationPct = 100
-  }
+
+  nodes.push(...childNodes)
+
+  const totalTokens = nodes.reduce((sum, node) => sum + (node.tokens ?? 0), 0)
+  nodes[0].tokens = totalTokens
+  nodes[1].tokens = totalTokens
 
   return nodes
 }

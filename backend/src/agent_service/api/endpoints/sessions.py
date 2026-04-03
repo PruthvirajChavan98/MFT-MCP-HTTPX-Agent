@@ -5,7 +5,7 @@ import logging
 import uuid_utils  # Added dependency
 from fastapi import APIRouter, HTTPException, Query
 
-from src.agent_service.core.config import MODEL_NAME
+from src.agent_service.core.config import DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER
 from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.core.resource_resolver import ResourceResolver
 from src.agent_service.core.schemas import SessionConfig, SessionInitResponse
@@ -28,8 +28,8 @@ async def initialize_session():
         sid = str(uuid_utils.uuid7())
 
         default_prompt = prompt_manager.get_default_system_prompt()
-        default_model = MODEL_NAME
-        default_provider = ResourceResolver.infer_provider_from_model_name(default_model)
+        default_model = DEFAULT_CHAT_MODEL
+        default_provider = DEFAULT_CHAT_PROVIDER
 
         # Persist default configuration explicitly (BYOK - no keys set yet)
         await config_manager.set_config(
@@ -84,17 +84,24 @@ async def get_session_config(session_id: str):
     try:
         sid = session_utils.validate_session_id(session_id)
         stored = await config_manager.get_config(sid)
+        stored_model_name = stored.get("model_name") or None
+        stored_provider = stored.get("provider") or None
 
         return {
             "session_id": sid,
             "system_prompt": stored.get("system_prompt")
             or prompt_manager.get_default_system_prompt(),
-            "model_name": stored.get("model_name") or MODEL_NAME,
+            "model_name": stored_model_name or DEFAULT_CHAT_MODEL,
             "reasoning_effort": stored.get("reasoning_effort"),
             "has_openrouter_key": bool(stored.get("openrouter_api_key")),
             "has_nvidia_key": bool(stored.get("nvidia_api_key")),
             "has_groq_key": bool(stored.get("groq_api_key")),
-            "provider": stored.get("provider"),
+            "provider": stored_provider
+            or (
+                ResourceResolver.infer_provider_from_model_name(stored_model_name)
+                if stored_model_name
+                else DEFAULT_CHAT_PROVIDER
+            ),
             "is_customized": bool(stored),
         }
     except ValueError as e:

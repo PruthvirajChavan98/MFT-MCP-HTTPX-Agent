@@ -85,6 +85,121 @@ async def test_stream_agent_blocks_when_inline_guard_fails(monkeypatch):
     assert persisted_collectors[0].trace_id == json.loads(first_chunk["data"])["trace_id"]
 
 
+@pytest.mark.asyncio
+async def test_stream_agent_former_kb_first_question_uses_normal_graph_path(monkeypatch):
+    persisted_collectors: list[object] = []
+    graph_flags = {"built": False, "streamed": False}
+
+    async def _noop_enforce(*args, **kwargs):
+        return None
+
+    async def _resolve_resources(*args, **kwargs):
+        return SimpleNamespace(
+            provider="openrouter",
+            model_name="dummy-model",
+            system_prompt="system",
+            tools=["mock_fintech_knowledge_base"],
+            model=object(),
+            openrouter_api_key="key",
+            nvidia_api_key=None,
+            groq_api_key=None,
+        )
+
+    async def _fake_app_id(session_id: str):
+        return "tenant-1"
+
+    async def _persist_runtime_trace(collector):
+        persisted_collectors.append(collector)
+        return True
+
+    class _FakeTracker:
+        async def add_cost(self, **kwargs):
+            return None
+
+    class _FakeGraph:
+        def __init__(self):
+            self.state = SimpleNamespace(
+                values={
+                    "messages": [
+                        SimpleNamespace(
+                            type="ai",
+                            content="Graph KB answer",
+                            additional_kwargs={},
+                            response_metadata={},
+                        )
+                    ]
+                }
+            )
+
+        async def astream_events(self, *args, **kwargs):
+            graph_flags["streamed"] = True
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": SimpleNamespace(content="Graph KB answer", additional_kwargs={})},
+            }
+
+        async def aget_state(self, _cfg):
+            return self.state
+
+        async def aupdate_state(self, _cfg, payload):
+            return None
+
+    async def _noop_shadow_eval(*args, **kwargs):
+        return None
+
+    async def _noop_enqueue_trace(*args, **kwargs):
+        return None
+
+    def _build_graph(**kwargs):
+        graph_flags["built"] = True
+        return _FakeGraph()
+
+    fake_main_agent = ModuleType("src.main_agent")
+    fake_main_agent.app = SimpleNamespace(state=SimpleNamespace(checkpointer=object()))
+
+    monkeypatch.setattr(agent_stream, "get_rate_limiter_manager", lambda: _FakeLimiterManager())
+    monkeypatch.setattr(agent_stream, "enforce_rate_limit", _noop_enforce)
+    monkeypatch.setattr(agent_stream.session_utils, "validate_session_id", lambda sid: sid)
+    monkeypatch.setattr(
+        agent_stream.resource_resolver, "resolve_agent_resources", _resolve_resources
+    )
+    monkeypatch.setattr(agent_stream.session_utils, "get_app_id_for_session", _fake_app_id)
+    monkeypatch.setattr(agent_stream, "AGENT_INLINE_ROUTER_ENABLED", False)
+    monkeypatch.setattr(
+        agent_stream,
+        "evaluate_prompt_safety_decision",
+        lambda prompt: _async_decision(
+            allow=True,
+            decision="allow",
+            reason_code="safe",
+            risk_score=0.0,
+        ),
+    )
+    monkeypatch.setattr(agent_stream, "persist_runtime_trace", _persist_runtime_trace)
+    monkeypatch.setattr(agent_stream, "get_session_cost_tracker", lambda: _FakeTracker())
+    monkeypatch.setattr(agent_stream, "build_recursive_rag_graph", _build_graph)
+    monkeypatch.setattr(agent_stream, "maybe_shadow_eval_commit", _noop_shadow_eval)
+    monkeypatch.setattr(agent_stream.trace_queue, "enqueue_trace", _noop_enqueue_trace)
+    monkeypatch.setitem(sys.modules, "src.main_agent", fake_main_agent)
+
+    req = AgentRequest(session_id="session-1", question="stop my emi")
+    response = await agent_stream.stream_agent(req, _FakeRequest())
+    events = [chunk async for chunk in response.body_iterator]
+
+    assert graph_flags == {"built": True, "streamed": True}
+    assert any(chunk["event"] == "token" and chunk["data"] == "Graph KB answer" for chunk in events)
+    assert all(
+        not (
+            chunk["event"] == "tool_call"
+            and isinstance(chunk.get("data"), dict)
+            and chunk["data"].get("tool_call_id") == "kb_first"
+        )
+        for chunk in events
+    )
+    assert events[-1]["event"] == "done"
+    assert persisted_collectors[0].build_trace_dict()["final_output"] == "Graph KB answer"
+
+
 async def _async_bool(value: bool) -> bool:
     return value
 
@@ -200,9 +315,6 @@ async def test_stream_agent_persists_stripped_follow_ups_in_checkpoint(monkeypat
             risk_score=0.0,
         ),
     )
-    monkeypatch.setattr(
-        agent_stream, "kb_first_payload", lambda *args, **kwargs: _async_payload(None)
-    )
     monkeypatch.setattr(agent_stream, "persist_runtime_trace", _persist_runtime_trace)
     monkeypatch.setattr(agent_stream, "get_session_cost_tracker", lambda: _FakeTracker())
     monkeypatch.setattr(agent_stream, "build_recursive_rag_graph", lambda **kwargs: fake_graph)
@@ -223,7 +335,3 @@ async def test_stream_agent_persists_stripped_follow_ups_in_checkpoint(monkeypat
         "Follow-up two",
     ]
     assert persisted_collectors[0].build_trace_dict()["final_output"] == "Answer text"
-
-
-async def _async_payload(value):
-    return value

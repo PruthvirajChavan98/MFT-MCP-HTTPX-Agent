@@ -117,6 +117,7 @@ export function TraceInspector({ node, cost }: { node: FlatNode | null, cost?: T
     return <div className="flex-1 flex items-center justify-center text-muted-foreground text-[14px]">Select a node to inspect</div>
   }
 
+  const latencyLabel = node.latencyS === '—' ? '—' : `${node.latencyS}s`
   const showCostPanel = node.type === 'trace' && !!cost
 
   return (
@@ -138,7 +139,7 @@ export function TraceInspector({ node, cost }: { node: FlatNode | null, cost?: T
           <div className="flex flex-wrap items-center gap-2">
             {node.status === 'success' && <span className="flex items-center gap-1 text-emerald-600 border border-emerald-200 bg-emerald-50 px-2.5 py-1 rounded-full text-[12px] font-medium"><CheckCircle2 size={12} /> Success</span>}
             {node.status === 'error' && <span className="flex items-center gap-1 text-rose-600 border border-rose-200 bg-rose-50 px-2.5 py-1 rounded-full text-[12px] font-medium"><AlertCircle size={12} /> Error</span>}
-            <span className="border border-rose-200 bg-rose-50 text-rose-600 text-[12px] font-mono px-2.5 py-1 rounded-full">{node.latencyS}s</span>
+            <span className="border border-rose-200 bg-rose-50 text-rose-600 text-[12px] font-mono px-2.5 py-1 rounded-full">{latencyLabel}</span>
             {node.tokens > 0 && <span className="border border-border bg-muted text-muted-foreground text-[12px] font-mono px-2.5 py-1 rounded-full flex items-center gap-1.5"><Eye size={12} /> {node.tokens.toLocaleString()} tokens</span>}
           </div>
         </div>

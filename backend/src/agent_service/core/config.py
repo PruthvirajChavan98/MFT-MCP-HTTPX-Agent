@@ -54,7 +54,11 @@ OPENROUTER_EMBED_MODEL_DEFAULT = os.getenv(
 ).strip()
 
 # --- MODEL DEFAULTS ---
-MODEL_NAME = os.getenv("MODEL", "deepseek/deepseek-v3.2")
+DEFAULT_CHAT_PROVIDER = os.getenv("DEFAULT_CHAT_PROVIDER", "groq").strip().lower()
+DEFAULT_CHAT_MODEL = os.getenv(
+    "DEFAULT_CHAT_MODEL", os.getenv("MODEL", "openai/gpt-oss-120b")
+).strip()
+MODEL_NAME = DEFAULT_CHAT_MODEL
 
 # --- NBFC ROUTER CONFIGURATION ---
 NBFC_ROUTER_ENABLED = os.getenv("NBFC_ROUTER_ENABLED", "true").lower() in ("1", "true", "yes", "y")

@@ -7,6 +7,7 @@ import { Input } from '@components/ui/input';
 import { Button } from '@components/ui/button';
 import { Skeleton } from '@components/ui/skeleton';
 import { formatDateTime } from '@shared/lib/format';
+import { buildTraceHref } from '@features/admin/lib/admin-links';
 
 export function SemanticSearchUI() {
     const auth = useAdminContext();
@@ -83,12 +84,16 @@ export function SemanticSearchUI() {
                                             {trace.status}
                                         </span>
                                     </div>
-                                    <a
-                                        href={`/admin/traces?traceId=${trace.trace_id}`}
-                                        className="text-xs font-medium text-indigo-600 flex items-center gap-1 hover:underline"
-                                    >
-                                        View Trace <ExternalLink className="w-3 h-3" />
-                                    </a>
+                                    {buildTraceHref(trace.trace_id) ? (
+                                        <a
+                                            href={buildTraceHref(trace.trace_id)!}
+                                            className="text-xs font-medium text-indigo-600 flex items-center gap-1 hover:underline"
+                                        >
+                                            View Trace <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                    ) : (
+                                        <span className="text-xs font-medium text-slate-400">Trace unavailable</span>
+                                    )}
                                 </div>
                                 <p className="text-sm font-semibold text-slate-800 line-clamp-2 mt-2">
                                     {trace.question || trace.event_key || 'Unknown Event'}

@@ -1,5 +1,5 @@
 // src/app/components/admin/trace/TraceTree.tsx
-import { X, CheckCircle2, Eye, ChevronRight } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Eye, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@components/ui/skeleton'
 import { getNodeIcon, getNodeChipClasses, getBarColor } from './nodeUtils'
 import type { FlatNode } from './types'
@@ -22,12 +22,13 @@ export function TraceTree({ nodes, selectedNodeId, onSelect, onClose, isLoading 
           </span>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Close trace explorer"
-            title="Close trace explorer"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Back to traces"
+            title="Back to traces"
             type="button"
           >
-            <X size={13} />
+            <ArrowLeft size={13} />
+            <span>Back</span>
           </button>
         </div>
       </div>
@@ -54,6 +55,7 @@ export function TraceTree({ nodes, selectedNodeId, onSelect, onClose, isLoading 
 function NodeRow({ node, isSelected, onSelect }: { node: FlatNode, isSelected: boolean, onSelect: (id: string) => void }) {
   const indentPx = node.depth * 20 + 16
   const barColor = getBarColor(node.type)
+  const latencyLabel = node.latencyS === '—' ? '—' : `${node.latencyS}s`
 
   return (
     <div
@@ -80,14 +82,14 @@ function NodeRow({ node, isSelected, onSelect }: { node: FlatNode, isSelected: b
               {node.type === 'trace' && node.status === 'success' && <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-muted-foreground text-[11px] font-mono tabular-nums">{node.latencyS}s</span>
+              <span className="text-muted-foreground text-[11px] font-mono tabular-nums">{latencyLabel}</span>
               <ChevronRight size={12} className={`text-muted-foreground transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'}`} />
             </div>
           </div>
 
           {node.type === 'trace' && (
             <div className="flex items-center gap-1.5">
-              <span className="bg-rose-50 border border-rose-200 text-rose-600 text-[10px] font-mono px-1.5 py-px rounded">{node.latencyS}s</span>
+              <span className="bg-rose-50 border border-rose-200 text-rose-600 text-[10px] font-mono px-1.5 py-px rounded">{latencyLabel}</span>
               <span className="border border-border text-muted-foreground text-[10px] font-mono px-1.5 py-px rounded flex items-center gap-1">
                 <Eye size={9} /> {node.tokens.toLocaleString()} tok
               </span>

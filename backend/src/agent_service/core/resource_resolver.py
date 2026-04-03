@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from src.agent_service.core.config import (
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_CHAT_PROVIDER,
     GROQ_API_KEYS,
-    MODEL_NAME,
     OPENROUTER_API_KEY,
 )
 from src.agent_service.core.prompts import prompt_manager
@@ -89,14 +90,20 @@ class ResourceResolver:
         try:
             saved_config = await config_manager.get_config(session_id)
 
-            model_name = saved_config.get("model_name") or MODEL_NAME
+            saved_model_name = saved_config.get("model_name") or None
+            saved_provider = saved_config.get("provider") or None
+
+            model_name = saved_model_name or DEFAULT_CHAT_MODEL
             system_prompt = (
                 saved_config.get("system_prompt") or prompt_manager.get_default_system_prompt()
             )
             reasoning_effort = saved_config.get("reasoning_effort")
-            provider = saved_config.get(
-                "provider"
-            ) or ResourceResolver.infer_provider_from_model_name(model_name)
+            if saved_provider:
+                provider = saved_provider
+            elif saved_model_name:
+                provider = ResourceResolver.infer_provider_from_model_name(model_name)
+            else:
+                provider = DEFAULT_CHAT_PROVIDER
 
             session_openrouter_key = saved_config.get("openrouter_api_key") or None
             session_nvidia_key = saved_config.get("nvidia_api_key") or None

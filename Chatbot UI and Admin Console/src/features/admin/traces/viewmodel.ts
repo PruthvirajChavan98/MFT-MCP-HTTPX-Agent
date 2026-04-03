@@ -60,6 +60,8 @@ export function mapTraceDetailToViewer(detail?: EvalTraceDetail | null): TraceDe
   return {
     trace: {
       name: detail.trace?.trace_id || 'Agent Trace',
+      started_at: detail.trace?.started_at,
+      ended_at: detail.trace?.ended_at,
       latency_ms: detail.trace?.latency_ms,
       status: detail.trace?.status,
       inputs_json: detail.trace?.inputs_json,
@@ -67,6 +69,8 @@ export function mapTraceDetailToViewer(detail?: EvalTraceDetail | null): TraceDe
       model: detail.trace?.model,
     },
     events: detail.events?.map((event) => ({
+      seq: event.seq,
+      ts: event.ts,
       event_type: event.event_type,
       name: event.name,
       event_key: event.event_key,

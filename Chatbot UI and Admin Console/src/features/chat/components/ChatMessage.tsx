@@ -4,6 +4,7 @@ import { cn } from '@components/ui/utils'
 import { formatCurrency } from '@shared/lib/format'
 import type { ChatMessage as ChatMessageType } from '@shared/types/chat'
 import { submitFeedback } from '@features/chat/api/chat'
+import { buildTraceHref } from '@features/admin/lib/admin-links'
 import { toast } from 'sonner'
 import { copyToClipboard } from '@shared/lib/clipboard'
 import { ChatAssistantMarkdown } from './ChatAssistantMarkdown'
@@ -17,8 +18,21 @@ interface Props {
 export function ChatMessage({ message, sessionId, onFollowUpClick }: Props) {
   const isUser = message.role === 'user'
   const [reasoningOpen, setReasoningOpen] = useState(false)
+  const [toolCallsOpen, setToolCallsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [feedbackState, setFeedbackState] = useState<'idle' | 'thumbs_up' | 'thumbs_down'>('idle')
+  const hasReasoning = !!message.reasoning
+  const hasToolCalls = (message.toolCalls?.length ?? 0) > 0
+  const traceHref = buildTraceHref(message.traceId)
+
+  const formatToolOutput = (output: string) => {
+    if (!output.trim()) return output
+    try {
+      return JSON.stringify(JSON.parse(output), null, 2)
+    } catch {
+      return output
+    }
+  }
 
   const handleCopy = async () => {
     const result = await copyToClipboard(message.content)
@@ -79,27 +93,57 @@ export function ChatMessage({ message, sessionId, onFollowUpClick }: Props) {
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
             <>
-              {message.reasoning && (
+              {(hasReasoning || hasToolCalls) && (
                 <div className="border-b border-slate-100 px-4 py-3">
-                  <button
-                    aria-expanded={reasoningOpen}
-                    onClick={() => setReasoningOpen((p) => !p)}
-                    className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-600"
-                    type="button"
-                  >
-                    {reasoningOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    Reasoning
-                  </button>
-                  {reasoningOpen && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    {hasReasoning && (
+                      <button
+                        aria-expanded={reasoningOpen}
+                        onClick={() => setReasoningOpen((p) => !p)}
+                        className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-600"
+                        type="button"
+                      >
+                        {reasoningOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        Reasoning
+                      </button>
+                    )}
+                    {hasToolCalls && (
+                      <button
+                        aria-expanded={toolCallsOpen}
+                        onClick={() => setToolCallsOpen((p) => !p)}
+                        className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-600"
+                        type="button"
+                      >
+                        {toolCallsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        Raw tool calls
+                      </button>
+                    )}
+                  </div>
+                  {hasReasoning && reasoningOpen && (
                     <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs italic text-slate-600">
                       {message.reasoning}
+                    </div>
+                  )}
+                  {hasToolCalls && toolCallsOpen && (
+                    <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+                      {message.toolCalls?.map((toolCall, index) => (
+                        <div key={`${toolCall.tool_call_id}-${index}`} className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                            <span className="font-semibold text-slate-100">{toolCall.name}</span>
+                            <span className="font-mono text-slate-400">{toolCall.tool_call_id}</span>
+                          </div>
+                          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded border border-slate-800 bg-slate-900 px-2 py-1.5 font-mono text-[11px] text-slate-100">
+                            {formatToolOutput(toolCall.output)}
+                          </pre>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
 
               <div
-                className={cn('px-4 pb-3', message.reasoning ? 'pt-3' : 'py-3')}
+                className={cn('px-4 pb-3', hasReasoning || hasToolCalls ? 'pt-3' : 'py-3')}
                 data-testid="assistant-bubble-content"
               >
                 <ChatAssistantMarkdown content={message.content} status={message.status} />
@@ -139,9 +183,9 @@ export function ChatMessage({ message, sessionId, onFollowUpClick }: Props) {
         )}
 
         {/* Trace Link */}
-        {!isUser && message.traceId && (
+        {!isUser && traceHref && (
           <a
-            href={`/admin/traces?traceId=${message.traceId}`}
+            href={traceHref}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 mt-1.5 text-[11px] text-slate-400 hover:text-cyan-600 transition-colors w-max font-medium group/trace border border-transparent hover:border-cyan-100 px-2 py-1 -ml-2 rounded-md"

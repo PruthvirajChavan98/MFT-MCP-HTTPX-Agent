@@ -53,6 +53,35 @@ describe('ChatMessage', () => {
     expect(within(bubble).getByText('model reasoning')).toBeInTheDocument()
   })
 
+  it('renders a raw tool calls toggle beside reasoning and shows tool payloads when expanded', () => {
+    render(
+      <ChatMessage
+        message={makeAssistant({
+          reasoning: 'model reasoning',
+          toolCalls: [
+            {
+              name: 'mock_fintech_knowledge_base',
+              tool_call_id: 'tool_123',
+              output: '{"answer":"Sure"}',
+            },
+          ],
+        })}
+      />,
+    )
+
+    const bubble = screen.getByTestId('assistant-bubble')
+    const reasoningButton = within(bubble).getByRole('button', { name: /reasoning/i })
+    const rawToolButton = within(bubble).getByRole('button', { name: /raw tool calls/i })
+    expect(reasoningButton.compareDocumentPosition(rawToolButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(rawToolButton).toBeInTheDocument()
+
+    fireEvent.click(rawToolButton)
+
+    expect(within(bubble).getByText('mock_fintech_knowledge_base')).toBeInTheDocument()
+    expect(within(bubble).getByText('tool_123')).toBeInTheDocument()
+    expect(within(bubble).getByText(/"answer": "Sure"/)).toBeInTheDocument()
+  })
+
   it('renders follow-up chips once on the assistant message and forwards clicks', () => {
     const onFollowUpClick = vi.fn()
 
@@ -84,6 +113,12 @@ describe('ChatMessage', () => {
     expect(screen.queryByRole('button', { name: 'Should stay hidden' })).not.toBeInTheDocument()
   })
 
+  it('does not render a raw tool calls toggle when no tool calls exist', () => {
+    render(<ChatMessage message={makeAssistant({ reasoning: 'model reasoning', toolCalls: [] })} />)
+
+    expect(screen.queryByRole('button', { name: /raw tool calls/i })).not.toBeInTheDocument()
+  })
+
   it('renders clickable View trace link when traceId is present', () => {
     render(<ChatMessage message={makeAssistant({ traceId: 'trace_123' })} />)
 
@@ -98,4 +133,5 @@ describe('ChatMessage', () => {
     expect(screen.queryByRole('link', { name: /view trace/i })).not.toBeInTheDocument()
     expect(screen.getByText('Trace unavailable for this failed stream')).toBeInTheDocument()
   })
+
 })

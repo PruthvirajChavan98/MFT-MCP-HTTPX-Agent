@@ -94,3 +94,32 @@ async def test_groq_provider_keeps_server_fallback_when_session_key_missing(monk
     assert resources.groq_api_key == "gsk-owner"
     assert resources.openrouter_api_key == "sk-or-owner"
     assert resources.provider == "groq"
+
+
+@pytest.mark.asyncio
+async def test_missing_saved_config_uses_explicit_default_groq_pair(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_get_config(_session_id: str):
+        return {}
+
+    def fake_get_llm(**kwargs):
+        captured.update(kwargs)
+        return object(), "groq"
+
+    monkeypatch.setattr(resolver_module.config_manager, "get_config", fake_get_config)
+    monkeypatch.setattr(resolver_module, "DEFAULT_CHAT_MODEL", "openai/gpt-oss-120b")
+    monkeypatch.setattr(resolver_module, "DEFAULT_CHAT_PROVIDER", "groq")
+    monkeypatch.setattr(resolver_module, "OPENROUTER_API_KEY", "sk-or-owner")
+    monkeypatch.setattr(resolver_module, "GROQ_API_KEYS", ["gsk-owner"])
+    monkeypatch.setattr(resolver_module, "get_llm", fake_get_llm)
+    monkeypatch.setattr(
+        resolver_module.mcp_manager, "rebuild_tools_for_user", lambda *_args, **_kwargs: []
+    )
+
+    resources = await ResourceResolver.resolve_agent_resources("sid-default", SimpleNamespace())
+
+    assert captured["provider"] == "groq"
+    assert captured["model_name"] == "openai/gpt-oss-120b"
+    assert resources.provider == "groq"
+    assert resources.model_name == "openai/gpt-oss-120b"

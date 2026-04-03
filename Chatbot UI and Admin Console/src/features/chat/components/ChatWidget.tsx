@@ -49,6 +49,9 @@ const STARTER_PROMPTS = [
   },
 ] as const
 
+const DEFAULT_CHAT_PROVIDER = 'groq'
+const DEFAULT_CHAT_MODEL = 'openai/gpt-oss-120b'
+
 function providerRequiresSessionKey(provider: string) {
   return provider === 'openrouter' || provider === 'nvidia'
 }
@@ -87,8 +90,8 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
   const qc = useQueryClient()
 
   const [formData, setFormData] = useState({
-    provider: 'groq',
-    model_name: '',
+    provider: DEFAULT_CHAT_PROVIDER,
+    model_name: DEFAULT_CHAT_MODEL,
     reasoning_effort: 'medium',
     system_prompt: '',
     apiKey: '',
@@ -115,8 +118,8 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
 
   useEffect(() => {
     setFormData({
-      provider: sessionCfg?.provider || 'groq',
-      model_name: sessionCfg?.model_name || '',
+      provider: sessionCfg?.provider || DEFAULT_CHAT_PROVIDER,
+      model_name: sessionCfg?.model_name || DEFAULT_CHAT_MODEL,
       reasoning_effort: sessionCfg?.reasoning_effort || 'medium',
       system_prompt: sessionCfg?.system_prompt || '',
       apiKey: '',

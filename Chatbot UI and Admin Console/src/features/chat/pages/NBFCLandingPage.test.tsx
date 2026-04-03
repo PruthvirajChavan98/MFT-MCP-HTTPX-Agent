@@ -100,9 +100,26 @@ describe('NBFCLandingPage', () => {
     expect(ctaRail).not.toBeNull()
 
     const scoped = within(ctaRail as HTMLElement)
-    expect(scoped.getByRole('link', { name: 'Admin' })).toHaveClass('rounded-full', 'min-h-12')
+    const adminLink = scoped.getByRole('link', { name: 'Admin' })
+    expect(adminLink).toHaveClass('rounded-full', 'min-h-12')
+    expect(adminLink).toHaveAttribute('href', '/admin')
     expect(scoped.getByRole('button', { name: 'Register' })).toHaveClass('rounded-full', 'min-h-12')
     expect(scoped.getByRole('button', { name: 'Apply Now' })).toHaveClass('rounded-full', 'min-h-12')
+  })
+
+  it('shows the admin demo notice on hover without changing navigation', async () => {
+    renderLandingPage()
+
+    const adminLink = screen.getByRole('link', { name: 'Admin' })
+    fireEvent.focus(adminLink)
+
+    expect(await screen.findByText('Demo admin console')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'This admin area is part of the demo. Production-grade access controls can be added with OTP, MFA, or OAuth.',
+      ),
+    ).toBeInTheDocument()
+    expect(adminLink).toHaveAttribute('href', '/admin')
   })
 
   it('advances the spotlight, persists dismissal, and supports manual reopen', async () => {

@@ -31,7 +31,6 @@ from src.agent_service.core.session_cost import get_session_cost_tracker
 from src.agent_service.core.session_utils import session_utils
 from src.agent_service.core.streaming_utils import StreamingState, sse_formatter, streaming_utils
 from src.agent_service.eval_store.shadow_queue import trace_queue
-from src.agent_service.features.kb_first import kb_first_payload
 from src.agent_service.features.nbfc_router import nbfc_router_service
 from src.agent_service.features.runtime_trace_store import persist_runtime_trace
 from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_shadow_eval_commit
@@ -540,97 +539,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     log.warning("Failed to enqueue shadow trace for session %s: %s", sid, exc)
 
             asyncio.create_task(_enqueue())
-
-        kb_payload = await kb_first_payload(request.question, resources.tools)
-        if kb_payload:
-
-            async def kb_event_generator():
-                try:
-                    tool_name = kb_payload.get("tool", "kb")
-                    tool_input = kb_payload.get("input", {})
-                    output = _truncate_text(str(kb_payload.get("output", "")), 6000)
-
-                    collector.on_tool_start(tool_name, tool_input)
-                    collector.on_tool_end(tool_name, output, tool_call_id="kb_first")
-
-                    yield sse_formatter.tool_call_event(tool_name, output, "kb_first")
-                    yield sse_formatter.token_event(output)
-
-                    collector.on_token(output)
-                    collector.on_done(final_output=output, error=None)
-
-                    yield sse_formatter.cost_event(
-                        total_cost=0.0,
-                        usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                        model=resources.model_name,
-                        provider=resources.provider,
-                        cached=True,
-                    )
-
-                    tracker = get_session_cost_tracker()
-                    await tracker.add_cost(
-                        session_id=sid,
-                        cost=0.0,
-                        usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                        model=resources.model_name,
-                        provider="kb_cache",
-                        metadata={"endpoint": "/agent/stream", "cached": True},
-                    )
-
-                    persisted = await persist_runtime_trace(collector)
-                    if not persisted:
-                        log.warning(
-                            "Runtime trace persistence failed for KB stream trace_id=%s",
-                            collector.trace_id,
-                        )
-                    log.info(
-                        "Stream terminal session_id=%s trace_id=%s status=success source=kb persisted=%s",
-                        sid,
-                        collector.trace_id,
-                        persisted,
-                    )
-                    yield sse_formatter.trace_event(collector.trace_id)
-                    yield sse_formatter.done_event()
-
-                except Exception as e:
-                    collector.on_done(final_output="", error=str(e))
-                    persisted = await persist_runtime_trace(collector)
-                    if not persisted:
-                        log.warning(
-                            "Runtime trace persistence failed for KB stream error trace_id=%s",
-                            collector.trace_id,
-                        )
-                    log.info(
-                        "Stream terminal session_id=%s trace_id=%s status=error source=kb persisted=%s error=%s",
-                        sid,
-                        collector.trace_id,
-                        persisted,
-                        str(e),
-                    )
-                    yield sse_formatter.trace_event(collector.trace_id)
-                    yield sse_formatter.error_event(str(e))
-                    yield sse_formatter.done_event()
-                finally:
-                    if router_task is not None:
-                        try:
-                            r_out = await router_task
-                            if r_out:
-                                collector.set_router_outcome(r_out)
-                        except Exception:
-                            pass
-                    asyncio.create_task(
-                        maybe_shadow_eval_commit(
-                            collector,
-                            openrouter_api_key=resources.openrouter_api_key,
-                            nvidia_api_key=resources.nvidia_api_key,
-                            groq_api_key=resources.groq_api_key,
-                            model_name=resources.model_name,
-                            provider=resources.provider,
-                        )
-                    )
-                    schedule_shadow_trace_enqueue(output if "output" in locals() else "")
-
-            return EventSourceResponse(kb_event_generator(), headers={"Cache-Control": "no-cache"})
 
         if not resources.tools:
             raise HTTPException(status_code=500, detail="No tools loaded")

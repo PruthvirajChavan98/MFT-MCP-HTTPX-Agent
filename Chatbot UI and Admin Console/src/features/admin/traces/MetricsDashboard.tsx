@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@components/ui/alert';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from 'recharts';
 import { Activity, AlertTriangle, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
 import { formatDateTime } from '@shared/lib/format';
+import { buildTraceHref } from '@features/admin/lib/admin-links';
 
 const COLORS = ['#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fb923c', '#fbbf24', '#2dd4bf'];
 
@@ -144,9 +145,13 @@ export function MetricsDashboard() {
                                 failures.map((f, i) => (
                                     <tr key={`${f.trace_id}-${f.metric_name}-${i}`} className="hover:bg-slate-50/80 transition-colors">
                                         <td className="px-6 py-4 font-mono text-xs text-indigo-600 font-medium">
-                                            <a href={`/admin/traces?traceId=${f.trace_id}`} className="hover:underline">
-                                                {f.trace_id.split('-')[0]}...
-                                            </a>
+                                            {buildTraceHref(f.trace_id) ? (
+                                                <a href={buildTraceHref(f.trace_id)!} className="hover:underline">
+                                                    {f.trace_id.split('-')[0]}...
+                                                </a>
+                                            ) : (
+                                                <span>{f.trace_id.split('-')[0]}...</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 font-bold text-slate-700">{f.metric_name}</td>
                                         <td className="px-6 py-4">

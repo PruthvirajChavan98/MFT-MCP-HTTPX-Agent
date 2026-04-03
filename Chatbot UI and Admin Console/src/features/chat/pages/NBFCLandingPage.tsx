@@ -2,6 +2,11 @@ import { Sparkles } from 'lucide-react'
 import { motion, useInView } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@components/ui/hover-card'
 import { ChatWidget } from '../components/ChatWidget'
 import { RegisterDialog } from '../components/RegisterDialog'
 
@@ -424,12 +429,27 @@ export function NBFCLandingPage() {
           </div>
 
           <div data-highlight-id="landing-nav-ctas" className="flex items-center gap-3">
-            <Link
-              to="/admin"
-              className={`hidden md:inline-flex ${CTA_TERTIARY}`}
-            >
-              Admin
-            </Link>
+            <HoverCard openDelay={0} closeDelay={120}>
+              <HoverCardTrigger asChild>
+                <Link
+                  to="/admin"
+                  className={`hidden md:inline-flex ${CTA_TERTIARY}`}
+                >
+                  Admin
+                </Link>
+              </HoverCardTrigger>
+              <HoverCardContent
+                align="center"
+                side="bottom"
+                className="z-[70] w-80 border-white/10 bg-slate-950/95 p-4 text-slate-100 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.95)] backdrop-blur-xl"
+              >
+                <p className="text-sm font-semibold text-white">Demo admin console</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                  This admin area is part of the demo. Production-grade access controls can
+                  be added with OTP, MFA, or OAuth.
+                </p>
+              </HoverCardContent>
+            </HoverCard>
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}

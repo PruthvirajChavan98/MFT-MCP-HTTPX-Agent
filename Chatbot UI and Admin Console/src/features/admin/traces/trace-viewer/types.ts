@@ -32,6 +32,8 @@ export interface TraceCost {
 }
 
 export interface TraceEvent {
+  seq?: number
+  ts?: string
   event_type?: string
   name?: string
   event_key?: string
@@ -45,6 +47,8 @@ export interface TraceDetail {
     name?: string
     latency_ms?: number
     status?: string
+    started_at?: string
+    ended_at?: string
     inputs_json?: unknown
     final_output?: unknown
     model?: string

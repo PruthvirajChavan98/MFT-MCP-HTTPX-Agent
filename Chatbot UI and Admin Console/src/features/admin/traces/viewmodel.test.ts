@@ -3,6 +3,7 @@ import {
   extractTraceQuestionFromDetail,
   getTraceInputPreview,
   mapTraceListRows,
+  mapTraceDetailToViewer,
 } from './viewmodel'
 
 describe('traces viewmodel', () => {
@@ -60,5 +61,35 @@ describe('traces viewmodel', () => {
     })
 
     expect(question).toBe('Explain X')
+  })
+
+  it('preserves trace event timestamps for the viewer parser', () => {
+    const detail = mapTraceDetailToViewer({
+      trace: {
+        trace_id: 'trace-1',
+        session_id: 'session-1',
+        started_at: '2026-04-03T10:00:00.000Z',
+        ended_at: '2026-04-03T10:00:02.500Z',
+        latency_ms: 2500,
+      },
+      events: [
+        {
+          event_key: 'evt-1',
+          seq: 1,
+          ts: '2026-04-03T10:00:01.000Z',
+          event_type: 'token',
+          text: 'hello',
+        },
+      ],
+      evals: [],
+    })
+
+    expect(detail?.trace.started_at).toBe('2026-04-03T10:00:00.000Z')
+    expect(detail?.trace.ended_at).toBe('2026-04-03T10:00:02.500Z')
+    expect(detail?.events?.[0]).toMatchObject({
+      seq: 1,
+      ts: '2026-04-03T10:00:01.000Z',
+      event_type: 'token',
+    })
   })
 })

@@ -29,3 +29,17 @@
 ### 7. Update this file after every correction
 **Trigger:** User corrected me multiple times in one session and I never captured the lessons until called out.
 **Rule:** The moment a correction happens, add it here. Don't batch.
+
+## 2026-04-03
+
+### 8. Lock interaction semantics before implementing CTA behavior
+**Trigger:** The user narrowed the Admin CTA behavior from click-popup to hover-only notice with normal navigation.
+**Rule:** For CTA changes, explicitly lock hover, click, and focus behavior before implementation. Do not assume a popup should intercept navigation unless the user says so.
+
+### 9. Use tasks/todo.md and tasks/lessons.md — not just TodoWrite
+**Trigger:** Used the floating TodoWrite widget instead of writing plans to `tasks/todo.md`. Never updated `tasks/lessons.md` after the session.
+**Rule:** CLAUDE.md mandates: (1) Write plans to `tasks/todo.md` with checkable items. (2) Update `tasks/lessons.md` after every correction. The TodoWrite widget is supplementary — it does NOT replace the repo files. Both must be kept in sync.
+
+### 10. Do not infer provider from an ambiguous model ID when setting product defaults
+**Trigger:** The product default needed to be Groq `openai/gpt-oss-120b`, but the existing model-name inference logic would classify that ID as OpenRouter.
+**Rule:** For product defaults and first-run session bootstrapping, store an explicit provider/model pair. Keep string-based provider inference only as a fallback for legacy or partially saved configs, not for default UX.
