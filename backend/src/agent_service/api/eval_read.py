@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Literal, Optional
 
@@ -8,11 +7,20 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.eval_store.status import (
+    SHADOW_TIMED_OUT_SECONDS,
+    SHADOW_WORKER_BACKLOG_SECONDS,
+    TRACE_STATUS_GRACE_SECONDS,
+    build_eval_status_payload,
+    json_load_maybe,
+)
 from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("eval_read_api")
 router = APIRouter(dependencies=[Depends(require_admin_key)])
-
+_TRACE_STATUS_GRACE_SECONDS = TRACE_STATUS_GRACE_SECONDS
+_SHADOW_WORKER_BACKLOG_SECONDS = SHADOW_WORKER_BACKLOG_SECONDS
+_SHADOW_TIMED_OUT_SECONDS = SHADOW_TIMED_OUT_SECONDS
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -20,17 +28,7 @@ router = APIRouter(dependencies=[Depends(require_admin_key)])
 
 
 def _json_load_maybe(s: Any) -> Any:
-    if not isinstance(s, str):
-        return s
-    ss = s.strip()
-    if not ss:
-        return s
-    if (ss.startswith("{") and ss.endswith("}")) or (ss.startswith("[") and ss.endswith("]")):
-        try:
-            return json.loads(ss)
-        except Exception:
-            return s
-    return s
+    return json_load_maybe(s)
 
 
 def _get_pool(request: Request) -> Any:
@@ -345,6 +343,68 @@ async def eval_trace(request: Request, trace_id: str):
         r["evidence_json"] = _json_load_maybe(r.get("evidence_json"))
 
     return {"trace": trace_obj, "events": _compress_events(events), "evals": evals}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /eval/trace/{trace_id}/eval-status
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/trace/{trace_id}/eval-status")
+async def trace_eval_status(request: Request, trace_id: str) -> dict[str, Any]:
+    """Return evaluation status for a trace (polled by frontend after chat response)."""
+    pool = _get_pool(request)
+
+    try:
+        trace_row = await pool.fetchrow(
+            """
+            SELECT trace_id, meta_json, ended_at, updated_at
+            FROM eval_traces
+            WHERE trace_id = $1
+            """,
+            trace_id,
+        )
+
+        if not trace_row:
+            return {
+                "trace_id": trace_id,
+                "status": "not_found",
+                "reason": None,
+                "inline_evals": None,
+                "shadow_judge": None,
+            }
+
+        # 2. Fetch inline eval results
+        result_rows = await pool.fetch(
+            """
+            SELECT metric_name, score, passed
+            FROM eval_results
+            WHERE trace_id = $1
+            ORDER BY metric_name ASC
+            """,
+            trace_id,
+        )
+
+        # 3. Fetch shadow judge evaluation
+        shadow_row = await pool.fetchrow(
+            """
+            SELECT helpfulness, faithfulness, policy_adherence, summary, evaluated_at
+            FROM shadow_judge_evals
+            WHERE trace_id = $1
+            ORDER BY evaluated_at DESC
+            LIMIT 1
+            """,
+            trace_id,
+        )
+    except Exception as exc:
+        _raise_db_error(exc, "trace_eval_status")
+
+    return build_eval_status_payload(
+        trace_id=trace_id,
+        trace_row=dict(trace_row),
+        result_rows=[dict(row) for row in result_rows],
+        shadow_row=dict(shadow_row) if shadow_row else None,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -74,7 +74,7 @@ export function GlobalTraceSheet() {
               onClose={handleClose}
               isLoading={isLoading}
             />
-            <TraceInspector node={selectedNode} />
+            <TraceInspector node={selectedNode} evals={traceDetail?.evals} />
             </div>
           </div>
         )}

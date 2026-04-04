@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
-import { Search, MessageSquare, Database, Microscope, DollarSign, Hash } from 'lucide-react'
+import { Search, MessageSquare, Database, Microscope, DollarSign, Hash, Bot } from 'lucide-react'
 import {
   fetchConversationsPage,
   fetchEvalSessions,
@@ -18,8 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@components/ui/resizable'
 import { ScrollArea } from '@components/ui/scroll-area'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
-import { ChatMessage } from '@features/chat/components/ChatMessage'
-import type { ChatMessage as ChatMessageType } from '@shared/types/chat'
+import { TranscriptMessage } from '@features/admin/components/TranscriptMessage'
 
 const PAGE_SIZE = 80
 
@@ -117,8 +116,6 @@ export function Conversations() {
       return prev
     })
   }
-
-  const conversationMessages = sessionTraces as ChatMessageType[]
 
   if (!hasAdminKey) {
     return (
@@ -280,22 +277,35 @@ export function Conversations() {
                         </div>
                       </div>
 
-                      <div className="p-6 space-y-6 max-w-3xl">
-                        {sessionLoading ? (
-                          <div className="space-y-6">
-                            <Skeleton className="h-20 w-3/4 rounded-xl ml-auto" />
-                            <Skeleton className="h-32 w-5/6 rounded-xl" />
-                            <Skeleton className="h-20 w-3/4 rounded-xl ml-auto" />
+                      <div className="flex-1 min-h-0 p-6 max-w-3xl">
+                        <div className="flex flex-col rounded-2xl border border-border overflow-hidden h-full">
+                          <header className="flex shrink-0 items-center gap-3 border-b border-cyan-400/20 bg-gradient-to-r from-cyan-500 to-teal-500 p-4 text-white">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+                              <Bot size={18} />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="truncate text-sm font-bold tracking-tight">Mock FinTech Assistant</h3>
+                              <p className="text-xs text-white/80">Session replay</p>
+                            </div>
+                          </header>
+                          <div className="flex-1 overflow-y-auto bg-slate-50/80 px-4 py-4 space-y-4">
+                            {sessionLoading ? (
+                              <div className="space-y-6">
+                                <Skeleton className="h-20 w-3/4 rounded-xl ml-auto" />
+                                <Skeleton className="h-32 w-5/6 rounded-xl" />
+                                <Skeleton className="h-20 w-3/4 rounded-xl ml-auto" />
+                              </div>
+                            ) : sessionTraces.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center text-sm text-gray-400 py-20">
+                                No messages found in this session history.
+                              </div>
+                            ) : (
+                              sessionTraces.map((msg) => (
+                                <TranscriptMessage key={msg.id} message={msg} />
+                              ))
+                            )}
                           </div>
-                        ) : conversationMessages.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center text-sm text-gray-400 py-20">
-                            No messages found in this session history.
-                          </div>
-                        ) : (
-                          conversationMessages.map((msg) => (
-                            <ChatMessage key={msg.id} message={msg} />
-                          ))
-                        )}
+                        </div>
                       </div>
                     </div>
                   )}

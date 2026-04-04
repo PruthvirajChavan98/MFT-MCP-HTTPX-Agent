@@ -80,6 +80,7 @@ export function mapTraceDetailToViewer(detail?: EvalTraceDetail | null): TraceDe
           ? (event.payload_json as Record<string, unknown>)
           : undefined,
     })),
+    evals: detail.evals,
   }
 }
 

@@ -184,24 +184,135 @@ async def test_session_traces_returns_additive_assistant_metadata(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_session_traces_omits_synthetic_trace_id_when_checkpoint_message_has_none():
+    assistant = SimpleNamespace(
+        type="ai",
+        content="Answer text",
+        additional_kwargs={},
+        response_metadata={"created": 1700000000},
+    )
+    user = SimpleNamespace(
+        type="human", content="Question text", additional_kwargs={}, response_metadata={}
+    )
+    checkpoint = {"channel_values": {"messages": [user, assistant]}}
+    fake_ckp = SimpleNamespace(checkpoint=checkpoint)
+
+    class _FakeCheckpointer:
+        async def aget_tuple(self, _config):
+            return fake_ckp
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
+    )
+
+    response = await admin_analytics.session_traces(
+        request=request, session_id="session-1", limit=50
+    )
+    assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
+
+    assert "traceId" not in assistant_row
+
+
+@pytest.mark.asyncio
+async def test_session_traces_adds_static_eval_status_for_assistant_messages(monkeypatch):
+    assistant = SimpleNamespace(
+        type="ai",
+        content="Answer text",
+        additional_kwargs={"trace_id": "trace-123"},
+        response_metadata={"created": 1700000000},
+    )
+    user = SimpleNamespace(
+        type="human", content="Question text", additional_kwargs={}, response_metadata={}
+    )
+    checkpoint = {"channel_values": {"messages": [user, assistant]}}
+    fake_ckp = SimpleNamespace(checkpoint=checkpoint)
+
+    class _FakeCheckpointer:
+        async def aget_tuple(self, _config):
+            return fake_ckp
+
+    async def _fake_pg_rows(_pool, query: str, *args):
+        trace_ids = args[0]
+        assert trace_ids == ["trace-123"]
+        if "FROM eval_traces" in query:
+            return [
+                {
+                    "trace_id": "trace-123",
+                    "meta_json": {},
+                    "ended_at": "2026-04-04T10:00:00Z",
+                    "updated_at": "2026-04-04T10:00:00Z",
+                }
+            ]
+        if "FROM eval_results" in query:
+            return [
+                {
+                    "trace_id": "trace-123",
+                    "metric_name": "faithfulness",
+                    "score": 0.95,
+                    "passed": True,
+                },
+                {
+                    "trace_id": "trace-123",
+                    "metric_name": "groundedness",
+                    "score": 0.22,
+                    "passed": False,
+                },
+            ]
+        if "FROM shadow_judge_evals" in query:
+            return []
+        raise AssertionError(f"Unexpected query: {query}")
+
+    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer(), pool=object()))
+    )
+
+    response = await admin_analytics.session_traces(
+        request=request, session_id="session-1", limit=50
+    )
+    assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
+
+    assert assistant_row["evalStatus"] == {
+        "status": "complete",
+        "reason": None,
+        "passed": 1,
+        "failed": 1,
+        "shadowJudge": None,
+    }
+
+
+@pytest.mark.asyncio
 async def test_session_traces_reconstructs_from_eval_trace_when_checkpoint_missing(monkeypatch):
     class _FakeCheckpointer:
         async def aget_tuple(self, _config):
             return None
 
-    async def _fake_pg_rows(_pool, _query: str, *args):
-        return [
-            {
-                "trace_id": "trace-xyz",
-                "started_at": "2026-02-27T22:18:36Z",
-                "inputs_json": '{"question":"use html span to say something in green"}',
-                "final_output": "This text is in green using HTML span!",
-                "status": "success",
-                "model": "deepseek/deepseek-v3.2",
-                "provider": "openrouter",
-                "meta_json": '{"inline_guard":{"reason_code":"infra_degraded"}}',
-            }
-        ]
+    async def _fake_pg_rows(_pool, query: str, *args):
+        if "WHERE session_id = $1" in query:
+            return [
+                {
+                    "trace_id": "trace-xyz",
+                    "started_at": "2026-02-27T22:18:36Z",
+                    "inputs_json": '{"question":"use html span to say something in green"}',
+                    "final_output": "This text is in green using HTML span!",
+                    "status": "success",
+                    "model": "deepseek/deepseek-v3.2",
+                    "provider": "openrouter",
+                    "meta_json": '{"inline_guard":{"reason_code":"infra_degraded"}}',
+                }
+            ]
+        if "FROM eval_traces" in query:
+            return [
+                {
+                    "trace_id": "trace-xyz",
+                    "meta_json": '{"inline_guard":{"reason_code":"infra_degraded"}}',
+                    "ended_at": "2026-02-27T22:18:36Z",
+                    "updated_at": "2026-02-27T22:18:36Z",
+                }
+            ]
+        if "FROM eval_results" in query or "FROM shadow_judge_evals" in query:
+            return []
+        raise AssertionError(f"Unexpected query: {query}")
 
     monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
     fake_pool = object()

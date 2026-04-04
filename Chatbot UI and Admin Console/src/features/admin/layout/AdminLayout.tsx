@@ -4,14 +4,13 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard, Database, DollarSign, Activity, MessageSquare,
   Shield as ShieldIcon, Gauge, Cpu, Heart, ChevronLeft, Menu,
-  Settings, LogOut, Search, Bell, Tag, Key, Eye, EyeOff, AlertCircle, Users
+  Settings, LogOut, Search, Bell, Tag, Key, AlertCircle, Users
 } from "lucide-react";
 import { AdminProvider, useAdminContext } from "@features/admin/context/AdminContext";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalTraceSheet } from "@features/admin/traces/trace-viewer/GlobalTraceSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/ui/popover";
-import { Input } from "@components/ui/input";
-import { Label } from "@components/ui/label";
+import { KeyInput } from "@components/ui/key-input";
 import { useLiveGlobalFeed } from "@features/admin/hooks/useLiveGlobalFeed";
 
 const NAV_ITEMS = [
@@ -27,30 +26,7 @@ const NAV_ITEMS = [
   { path: "/admin/health", label: "System Health", icon: Heart },
 ];
 
-function KeyInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-semibold text-slate-600">{label}</Label>
-      <div className="relative">
-        <Input
-          type={visible ? "text" : "password"}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={`Enter ${label}...`}
-          className="pr-8 text-xs font-mono"
-        />
-        <button
-          type="button"
-          onClick={() => setVisible((p) => !p)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          {visible ? <EyeOff size={14} /> : <Eye size={14} />}
-        </button>
-      </div>
-    </div>
-  );
-}
+// KeyInput extracted to @components/ui/key-input
 
 function AdminShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);

@@ -5,11 +5,9 @@ import {
   Activity,
   ArrowLeft,
   ArrowRight,
-  Boxes,
   CircleCheckBig,
   Cpu,
   Database,
-  GitBranch,
   MessageSquareText,
   Network,
   Server,
@@ -17,7 +15,6 @@ import {
   TerminalSquare,
   Workflow,
   Wrench,
-  Zap,
 } from 'lucide-react'
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -95,11 +92,13 @@ type DiagramColor = keyof typeof DIAGRAM_NODE_BORDER
 
 function DiagramNode({
   icon: Icon,
+  imgSrc,
   label,
   subtext,
   color = 'cyan',
 }: {
-  icon: ElementType
+  icon?: ElementType
+  imgSrc?: string
   label: string
   subtext?: string
   color?: DiagramColor
@@ -108,7 +107,13 @@ function DiagramNode({
     <div
       className={`relative z-10 flex min-w-[130px] flex-col items-center justify-center rounded-2xl border bg-slate-900/80 p-4 ${DIAGRAM_NODE_BORDER[color]}`}
     >
-      <Icon className={`mb-2 h-7 w-7 ${DIAGRAM_NODE_ICON[color]}`} />
+      <div className="mb-2 flex h-10 w-10 items-center justify-center">
+        {imgSrc ? (
+          <img src={imgSrc} alt={label} className="max-h-10 max-w-10 object-contain" />
+        ) : Icon ? (
+          <Icon className={`h-7 w-7 ${DIAGRAM_NODE_ICON[color]}`} />
+        ) : null}
+      </div>
       <span className="text-center text-sm font-semibold text-white">{label}</span>
       {subtext && <span className="mt-1 text-xs text-slate-500">{subtext}</span>}
     </div>
@@ -195,13 +200,13 @@ export function ArchitecturePage() {
               <div className="flex w-full flex-col items-center justify-center gap-0 lg:flex-row lg:flex-wrap lg:justify-center lg:gap-0">
                 <DiagramNode icon={MessageSquareText} label="NL Query" subtext="User Input" color="cyan" />
                 <FlowArrow />
-                <DiagramNode icon={Shield} label="Nginx" subtext="Ingress" color="indigo" />
+                <DiagramNode imgSrc="/icons/nginx-svgrepo-com.svg" label="Nginx" subtext="Ingress" color="indigo" />
                 <FlowArrow />
-                <DiagramNode icon={Server} label="FastAPI" subtext="API Gateway" color="cyan" />
+                <DiagramNode imgSrc="/icons/FastAPI.svg" label="FastAPI" subtext="API Gateway" color="cyan" />
                 <FlowArrow />
-                <DiagramNode icon={Workflow} label="LangGraph" subtext="Agent Engine" color="cyan" />
+                <DiagramNode imgSrc="/icons/langgraph.svg" label="LangGraph" subtext="Agent Engine" color="cyan" />
                 <FlowArrow />
-                <DiagramNode icon={Cpu} label="MCP Server" subtext="Protocol" color="emerald" />
+                <DiagramNode imgSrc="/icons/mcp.webp" label="MCP Server" subtext="Protocol" color="emerald" />
                 <FlowArrow />
                 <DiagramNode icon={Wrench} label="Tools" subtext="Execution" color="emerald" />
                 <FlowArrow />
@@ -240,10 +245,10 @@ export function ArchitecturePage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6">
-            <DiagramNode icon={Database} label="PostgreSQL" subtext="State & Traces" color="indigo" />
-            <DiagramNode icon={Boxes} label="Milvus" subtext="Vector DB" color="indigo" />
-            <DiagramNode icon={Zap} label="Redis" subtext="Cache / State" color="emerald" />
-            <DiagramNode icon={GitBranch} label="Memgraph" subtext="Graph DB" color="emerald" />
+            <DiagramNode imgSrc="/icons/postgresql-logo-svgrepo-com.svg" label="PostgreSQL" subtext="State & Traces" color="indigo" />
+            <DiagramNode imgSrc="/icons/milvus.png" label="Milvus" subtext="Vector DB" color="indigo" />
+            <DiagramNode imgSrc="/icons/Redis.svg" label="Redis" subtext="Cache / State" color="emerald" />
+            <DiagramNode imgSrc="/icons/memgraph-seeklogo.svg" label="Memgraph" subtext="Graph DB" color="emerald" />
           </div>
         </motion.div>
 

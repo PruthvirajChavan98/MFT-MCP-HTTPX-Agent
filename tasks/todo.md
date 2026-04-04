@@ -1,5 +1,64 @@
 # Task Plan
 
+## 2026-04-04 - Admin console enhancements (5 items)
+
+- [x] Item 3: Show eval/judge scores in trace viewer (types + viewmodel + TraceInspector + GlobalTraceSheet)
+- [x] Item 5: Add sorting arrows on guardrails Events Log table
+- [x] Item 4: Inline BYOK key input in model-config (extract KeyInput + ModelConfig)
+- [x] Item 1: ChatWidget-style conversation replay with markdown
+- [x] Item 2: Context-aware welcome prompts (public vs authenticated)
+- [x] Run frontend verification: typecheck clean, build clean, 79/79 tests passed
+
+## 2026-04-04 - Admin transcript tool calls + NVIDIA diagnosis + eval status UI
+
+- [ ] Fix admin conversation transcript: extract toolCalls from LangChain messages in `admin_analytics.py`
+- [ ] Diagnose NVIDIA NIM: curl the endpoint, check logs, identify failure
+- [x] Diagnose NVIDIA NIM: key empty in .env, added log warning. User will set key manually.
+- [x] Add eval status polling endpoint `GET /eval/trace/{trace_id}/eval-status` in eval_read.py.
+- [x] Add `useEvalStatus` hook with 5s polling, 10 attempt max, auto-stop on complete/not_found.
+- [x] Add eval status badge on chat messages: pending (pulsing), passed (green), failed (amber).
+- [x] Fix URL mismatch: hook now correctly calls `/eval/trace/...` matching backend router prefix.
+- [x] Run verification: typecheck clean, build clean, 66/66 tests passed.
+
+## 2026-04-04 - Fix eval lifecycle, judge truthfulness, admin replay, and safe HTML rendering
+
+- [x] Phase 0: Update task/lesson docs for eval lifecycle + replay/rendering work.
+- [x] Phase 1: Standardize `ENABLE_LLM_JUDGE` parsing and persist eval lifecycle metadata in trace `meta_json`.
+- [x] Phase 1: Extend `/eval/trace/{trace_id}/eval-status` with terminal `unavailable` states and reason codes.
+- [x] Phase 1: Add backend tests for `disabled`, `sampled_out`, `queued`, `worker_backlog`, `failed`, and `timed_out`.
+- [x] Phase 1 verification: `cd backend && uv run mypy --explicit-package-bases --follow-imports=skip --ignore-missing-imports src/agent_service/api/admin.py && uv run ruff check . && uv run python -m pytest tests/ -v`
+- [x] Phase 2: Extend frontend eval-status typing and stop indefinite pending UI.
+- [x] Phase 2: Enable strict-allowlist HTML rendering in `ChatAssistantMarkdown`.
+- [x] Phase 2: Extract `AssistantMessageCard` and finish live chat eval badge behavior for terminal unavailable states.
+- [x] Phase 2: Add frontend hook/message/renderer tests for unavailable eval states and safe HTML rendering.
+- [x] Phase 2 verification: targeted frontend checks passed for `useEvalStatus`, `ChatAssistantMarkdown`, and `ChatMessage`, plus `npm run typecheck`.
+- [x] Phase 3: Separate admin replay from live `ChatMessage` polling/controls.
+- [x] Phase 3: Batch-enrich admin session transcript messages with static `evalStatus`.
+- [x] Phase 3: Add admin conversations replay tests for no polling, reasoning/raw tool calls, and rendered HTML parity.
+- [x] Phase 3 verification: `cd backend && uv run mypy --explicit-package-bases --follow-imports=skip --ignore-missing-imports src/agent_service/api/admin.py && uv run ruff check . && uv run python -m pytest tests/ -v` and `cd "Chatbot UI and Admin Console" && npm run typecheck && npm run build && npm run test`
+
+Review
+- Phase 1 is complete and verified. Backend now persists eval lifecycle hints on traces, treats `ENABLE_LLM_JUDGE=1` as enabled, and returns terminal `unavailable` states instead of indefinite `pending` for legacy/non-terminal traces.
+- Backend verification after Phase 1: `mypy` clean, `ruff` clean, `pytest` clean (`133 passed`).
+- Phase 2 is complete and verified with targeted frontend checks:
+  - `npm run test -- --run src/features/chat/hooks/useEvalStatus.test.ts`
+  - `npm run test -- --run src/features/chat/components/ChatAssistantMarkdown.test.tsx`
+  - `npm run test -- --run src/features/chat/components/ChatMessage.test.tsx`
+  - `npm run typecheck`
+- Live chat now terminates stale eval polling as `unavailable/timed_out`, renders safe allowlisted inline HTML color styling, and uses the shared `AssistantMessageCard` for assistant-only presentation ahead of admin replay separation.
+- Phase 3 is complete and verified. Admin session transcripts now carry optional static `evalStatus`, replay messages no longer invent fallback `traceId` values, and `/admin/conversations` uses a read-only `TranscriptMessage` surface that reuses the shared assistant card without live eval polling or interactive follow-up/feedback behavior.
+- Additional verification after Phase 3:
+  - Backend: `uv run mypy --explicit-package-bases --follow-imports=skip --ignore-missing-imports src/agent_service/api/admin.py`, `uv run ruff check .`, `uv run python -m pytest tests/ -v` (`136 passed`)
+  - Frontend: `npm run typecheck`, `npm run build`, `npm run test` (`23 files, 87 tests passed`)
+
+## 2026-04-04 - Replace Lucide icons with custom tech logos in architecture page
+
+- [x] Move icon files from `/icons/` to `Chatbot UI and Admin Console/public/icons/`.
+- [x] Update `DiagramNode` to support `imgSrc` prop alongside `icon`.
+- [x] Replace Lucide icons with custom SVGs/PNG in flow diagram nodes (Nginx, FastAPI, LangGraph, MCP Server).
+- [x] Replace Lucide icons in data layer nodes (PostgreSQL, Milvus, Redis, Memgraph).
+- [x] Run frontend verification: typecheck clean, build clean.
+
 ## 2026-04-04 - Landing page updates + architecture page
 
 - [x] Phase 1: Remove "Explore site" button from hero section.

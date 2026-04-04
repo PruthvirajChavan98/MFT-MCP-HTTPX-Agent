@@ -121,7 +121,7 @@ ADMIN_CURSOR_APIS_V2 = os.getenv("ADMIN_CURSOR_APIS_V2", "true").lower() in ("1"
 
 # --- JUDGE CONFIGURATION ---
 JUDGE_MODEL_NAME = os.getenv("JUDGE_MODEL_NAME", "openai/gpt-4o")
-ENABLE_LLM_JUDGE = os.getenv("ENABLE_LLM_JUDGE", "true").lower() == "true"
+ENABLE_LLM_JUDGE = os.getenv("ENABLE_LLM_JUDGE", "true").lower() in ("1", "true", "yes")
 
 # =============================================================================
 # RATE LIMITING CONFIGURATION (Production-Grade)

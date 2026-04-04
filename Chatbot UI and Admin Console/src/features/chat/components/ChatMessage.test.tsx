@@ -2,9 +2,23 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChatMessage } from './ChatMessage'
 import type { ChatMessage as ChatMessageType } from '@shared/types/chat'
+import type { EvalStatusResult } from '@features/chat/hooks/useEvalStatus'
+
+const { useEvalStatusMock } = vi.hoisted(() => ({
+  useEvalStatusMock: vi.fn<(traceId: string | undefined) => EvalStatusResult | null>(),
+}))
+
+vi.mock('@features/chat/hooks/useEvalStatus', () => ({
+  useEvalStatus: useEvalStatusMock,
+}))
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
 
 afterEach(() => {
   cleanup()
+  useEvalStatusMock.mockReset()
 })
 
 function makeAssistant(overrides: Partial<ChatMessageType> = {}): ChatMessageType {
@@ -134,4 +148,130 @@ describe('ChatMessage', () => {
     expect(screen.getByText('Trace unavailable for this failed stream')).toBeInTheDocument()
   })
 
+})
+
+describe('ChatMessage eval badge', () => {
+  it('shows no eval badge when evalStatus is null', () => {
+    useEvalStatusMock.mockReturnValue(null)
+
+    render(<ChatMessage message={makeAssistant()} />)
+
+    expect(screen.queryByText('Evaluating...')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Eval passed/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Eval:/)).not.toBeInTheDocument()
+  })
+
+  it('shows "Evaluating..." when status is pending', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'pending',
+      passed: undefined,
+      failed: undefined,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeAssistant({ traceId: 'trace-1' })} />)
+
+    expect(screen.getByText('Evaluating...')).toBeInTheDocument()
+  })
+
+  it('shows "Eval passed" when complete with 0 failures', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'complete',
+      passed: 3,
+      failed: 0,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeAssistant({ traceId: 'trace-2' })} />)
+
+    expect(screen.getByText('Eval passed')).toBeInTheDocument()
+    expect(screen.queryByText('Evaluating...')).not.toBeInTheDocument()
+  })
+
+  it('shows "Eval: X/Y passed" when complete with failures', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'complete',
+      passed: 2,
+      failed: 1,
+      reason: undefined,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeAssistant({ traceId: 'trace-3' })} />)
+
+    expect(screen.getByText('Eval: 2/3 passed')).toBeInTheDocument()
+  })
+
+  it('hides eval badge when status is not_found', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'not_found',
+      passed: undefined,
+      failed: undefined,
+      reason: undefined,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeAssistant({ traceId: 'trace-nf' })} />)
+
+    expect(screen.queryByText('Evaluating...')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Eval passed/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Eval:/)).not.toBeInTheDocument()
+  })
+
+  it('does not render eval badge for user messages', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'complete',
+      passed: 1,
+      failed: 0,
+      reason: undefined,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeUser({ traceId: 'trace-u' })} />)
+
+    expect(screen.queryByText('Eval passed')).not.toBeInTheDocument()
+  })
+
+  it('shows "Eval skipped" when unavailable because the trace was sampled out', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'unavailable',
+      reason: 'sampled_out',
+      passed: undefined,
+      failed: undefined,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeAssistant({ traceId: 'trace-sampled' })} />)
+
+    expect(screen.getByText('Eval skipped')).toBeInTheDocument()
+    expect(screen.queryByText('Evaluating...')).not.toBeInTheDocument()
+  })
+
+  it('shows "Eval timed out" when polling exhausts locally', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'unavailable',
+      reason: 'timed_out',
+      passed: undefined,
+      failed: undefined,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeAssistant({ traceId: 'trace-timeout' })} />)
+
+    expect(screen.getByText('Eval timed out')).toBeInTheDocument()
+  })
+
+  it('shows "Eval unavailable" for other unavailable terminal states', () => {
+    useEvalStatusMock.mockReturnValue({
+      status: 'unavailable',
+      reason: 'failed',
+      passed: undefined,
+      failed: undefined,
+      shadowJudge: undefined,
+    })
+
+    render(<ChatMessage message={makeAssistant({ traceId: 'trace-failed' })} />)
+
+    expect(screen.getByText('Eval unavailable')).toBeInTheDocument()
+  })
 })

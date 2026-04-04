@@ -22,6 +22,28 @@ export interface CostEvent {
 export type MessageRole = 'user' | 'assistant'
 export type MessageStatus = 'pending' | 'streaming' | 'done' | 'error'
 
+export interface EvalShadowJudge {
+  helpfulness: number
+  faithfulness: number
+  policy_adherence: number
+}
+
+export type EvalStatusReason =
+  | 'queued'
+  | 'disabled'
+  | 'sampled_out'
+  | 'worker_backlog'
+  | 'failed'
+  | 'timed_out'
+
+export interface EvalStatus {
+  status: 'pending' | 'complete' | 'not_found' | 'unavailable'
+  reason?: EvalStatusReason
+  passed?: number
+  failed?: number
+  shadowJudge?: EvalShadowJudge | null
+}
+
 export interface ChatMessage {
   id: string
   role: MessageRole
@@ -37,4 +59,5 @@ export interface ChatMessage {
   provider?: string
   model?: string
   totalTokens?: number
+  evalStatus?: EvalStatus
 }

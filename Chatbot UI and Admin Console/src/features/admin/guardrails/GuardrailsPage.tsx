@@ -3,10 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   BarChart2,
   Ban,
   CheckCheck,
   CheckCircle2,
+  ChevronsUpDown,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -220,6 +223,45 @@ function FailureCard({ failure }: { failure: GuardrailJudgeFailure }) {
   )
 }
 
+type SortField = 'time' | 'session' | 'risk' | 'decision' | 'path'
+type SortDir = 'asc' | 'desc'
+
+const SORT_FIELD_TO_KEY: Record<SortField, keyof GuardrailEvent> = {
+  time: 'event_time',
+  session: 'session_id',
+  risk: 'risk_score',
+  decision: 'risk_decision',
+  path: 'request_path',
+}
+
+function SortHeader({
+  label,
+  field,
+  active,
+  dir,
+  onSort,
+}: {
+  label: string
+  field: SortField
+  active: boolean
+  dir: SortDir
+  onSort: (field: SortField) => void
+}) {
+  return (
+    <th
+      className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors"
+      onClick={() => onSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active
+          ? (dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+          : <ChevronsUpDown size={10} className="opacity-30" />}
+      </span>
+    </th>
+  )
+}
+
 export function GuardrailsPage() {
   const [tenantId, setTenantId] = useState('default')
   const [decisionFilter, setDecisionFilter] = useState('all')
@@ -227,6 +269,8 @@ export function GuardrailsPage() {
   const [offset, setOffset] = useState(0)
   const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<GuardrailEvent | null>(null)
+  const [sortField, setSortField] = useState<SortField>('time')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const adminContext = useAdminContext()
 
@@ -261,6 +305,25 @@ export function GuardrailsPage() {
   )
 
   const decisionOptions = useMemo(() => uniqueDecisionOptions(events), [events])
+
+  const handleSort = (field: SortField) => {
+    if (field === sortField) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortDir('desc')
+    }
+  }
+
+  const sortedEvents = useMemo(() => {
+    const key = SORT_FIELD_TO_KEY[sortField]
+    return [...events].sort((a, b) => {
+      const aVal = String(a[key] ?? '')
+      const bVal = String(b[key] ?? '')
+      const cmp = aVal.localeCompare(bVal, undefined, { numeric: true })
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [events, sortField, sortDir])
 
   const trendData = useMemo<TrendDatum[]>(() => {
     return (trendsQuery.data ?? []).map((item) => ({
@@ -453,15 +516,17 @@ export function GuardrailsPage() {
               <thead>
                 <tr className="bg-muted/40">
                   <th className="w-8 px-4 py-3" />
-                  {['Time', 'Session', 'Risk', 'Decision', 'Path', 'Reasons', 'Action'].map((header) => (
-                    <th key={header} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                      {header}
-                    </th>
-                  ))}
+                  <SortHeader label="Time" field="time" active={sortField === 'time'} dir={sortDir} onSort={handleSort} />
+                  <SortHeader label="Session" field="session" active={sortField === 'session'} dir={sortDir} onSort={handleSort} />
+                  <SortHeader label="Risk" field="risk" active={sortField === 'risk'} dir={sortDir} onSort={handleSort} />
+                  <SortHeader label="Decision" field="decision" active={sortField === 'decision'} dir={sortDir} onSort={handleSort} />
+                  <SortHeader label="Path" field="path" active={sortField === 'path'} dir={sortDir} onSort={handleSort} />
+                  <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Reasons</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {events.map((event, index) => {
+                {sortedEvents.map((event, index) => {
                   const key = buildEventKey(event, index)
                   const isExpanded = expandedEventKey === key
 

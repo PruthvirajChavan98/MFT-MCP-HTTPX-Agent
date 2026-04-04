@@ -110,7 +110,7 @@ describe('ModelConfig', () => {
 
     expect(
       await screen.findByText(
-        'OpenRouter sessions require a saved key or a new OpenRouter key in the API Keys popover.',
+        'OpenRouter requires an API key. Enter your key below to continue.',
       ),
     ).toBeInTheDocument()
 
@@ -165,7 +165,7 @@ describe('ModelConfig', () => {
     await loadSession('sid-nvidia')
 
     expect(
-      await screen.findByText('NVIDIA key will be saved from the API Keys popover for this session.'),
+      await screen.findByText('NVIDIA key provided. It will be saved when you commit this session.'),
     ).toBeInTheDocument()
 
     await waitFor(() => {
@@ -201,7 +201,7 @@ describe('ModelConfig', () => {
 
     expect(
       await screen.findByText(
-        'Groq BYOK is optional. Without one, runtime can fall back to the server-managed Groq key.',
+        'Groq BYOK is optional. Without one, the server-managed Groq key is used.',
       ),
     ).toBeInTheDocument()
 

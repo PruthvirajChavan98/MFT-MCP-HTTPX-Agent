@@ -30,7 +30,7 @@ import {
 import { useAvailableModels } from '@shared/hooks/useModels'
 import { cn } from '@components/ui/utils'
 
-const STARTER_PROMPTS = [
+const PUBLIC_PROMPTS = [
   {
     label: 'Home loan rates',
     text: 'What are your current home loan interest rates and processing fees?',
@@ -40,12 +40,31 @@ const STARTER_PROMPTS = [
     text: 'Help me estimate EMI options for a 40 lakh loan over 15, 20, and 25 years.',
   },
   {
-    label: 'Business loan docs',
-    text: 'Which documents do you need for a secured business loan application?',
+    label: 'Check eligibility',
+    text: 'What are the eligibility criteria for a personal loan?',
   },
   {
-    label: 'Application tracking',
-    text: 'How do I check the status of my current loan application?',
+    label: 'Documents needed',
+    text: 'Which documents do you need for a home loan application?',
+  },
+] as const
+
+const AUTHENTICATED_PROMPTS = [
+  {
+    label: 'My loan status',
+    text: 'Show me the current status and details of my loan.',
+  },
+  {
+    label: 'Download statement',
+    text: 'I need my statement of account for the last 6 months.',
+  },
+  {
+    label: 'Foreclosure details',
+    text: 'What are the foreclosure charges and process for my loan?',
+  },
+  {
+    label: 'Overdue charges',
+    text: 'Show me any overdue charges or pending payments on my account.',
   },
 ] as const
 
@@ -278,6 +297,11 @@ export function ChatWidget() {
   const { messages, isStreaming, error, sendMessage, stopGeneration, clearConversation, sessionId } =
     useChatStream()
 
+  const isAuthenticated = messages.some((m) =>
+    m.toolCalls?.some((tc) => tc.name === 'validate_otp'),
+  )
+  const starterPrompts = isAuthenticated ? AUTHENTICATED_PROMPTS : PUBLIC_PROMPTS
+
   useEffect(() => {
     if (!isOpen || view !== 'chat') return
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -459,11 +483,13 @@ export function ChatWidget() {
                           </div>
                           <h4 className="text-lg font-semibold text-slate-900">What can I help you with?</h4>
                           <p className="mt-2 max-w-[270px] text-sm leading-6 text-slate-500">
-                            Ask about rates, loan eligibility, repayment plans, and your current application status.
+                            {isAuthenticated
+                              ? 'Manage your loans, download documents, and check account details.'
+                              : 'Ask about rates, loan eligibility, repayment plans, and your current application status.'}
                           </p>
 
                           <div className="mt-5 grid w-full max-w-[560px] grid-cols-1 gap-2.5 sm:grid-cols-2">
-                            {STARTER_PROMPTS.map((prompt) => (
+                            {starterPrompts.map((prompt) => (
                               <button
                                 className="inline-flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left text-[13px] font-medium text-slate-600 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50/60 hover:text-slate-900"
                                 key={prompt.label}

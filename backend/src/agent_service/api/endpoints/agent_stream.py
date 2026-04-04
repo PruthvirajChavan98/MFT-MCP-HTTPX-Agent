@@ -13,6 +13,7 @@ from src.agent_service.core.config import (
     AGENT_INLINE_ROUTER_EXPOSE,
     AGENT_STREAM_EXPOSE_INTERNAL_EVENTS,
     AGENT_STREAM_EXPOSE_REASONING,
+    SHADOW_JUDGE_ENABLED,
     SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS,
 )
 from src.agent_service.core.cost import calculate_run_cost_detailed
@@ -478,6 +479,9 @@ async def stream_agent(request: AgentRequest, http_request: Request):
             async def blocked_event_generator():
                 blocked_err = "Prompt violates security policy"
                 collector.on_done(final_output="", error=blocked_err)
+                collector.set_eval_lifecycle("inline", "disabled", reason="disabled")
+                collector.set_eval_lifecycle("shadow", "disabled", reason="disabled")
+
                 persisted = await persist_runtime_trace(collector)
                 if not persisted:
                     log.warning(
@@ -518,6 +522,9 @@ async def stream_agent(request: AgentRequest, http_request: Request):
             )
 
         def schedule_shadow_trace_enqueue(latest_output: str) -> None:
+            if not SHADOW_JUDGE_ENABLED:
+                return
+
             async def _enqueue() -> None:
                 try:
                     trace_data = collector.build_trace_dict()
@@ -536,7 +543,15 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                             },
                         )
                 except Exception as exc:  # noqa: BLE001
-                    log.warning("Failed to enqueue shadow trace for session %s: %s", sid, exc)
+                    collector.set_eval_lifecycle("shadow", "failed", reason="failed")
+                    persisted = await persist_runtime_trace(collector)
+                    log.warning(
+                        "Failed to enqueue shadow trace for session %s trace_id=%s persisted=%s: %s",
+                        sid,
+                        collector.trace_id,
+                        persisted,
+                        exc,
+                    )
 
             asyncio.create_task(_enqueue())
 
@@ -736,6 +751,10 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                 final_output, follow_ups = extract_follow_ups(final_output)
 
                 collector.on_done(final_output=final_output, error=None)
+                if SHADOW_JUDGE_ENABLED:
+                    collector.mark_shadow_judge_queued()
+                else:
+                    collector.set_eval_lifecycle("shadow", "disabled", reason="disabled")
 
                 yield sse_formatter.cost_event(
                     total_cost=state.total_cost,
@@ -817,6 +836,10 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                 err = str(e)
                 log.error(f"Stream error: {err}")
                 collector.on_done(final_output=final_output, error=err)
+                if SHADOW_JUDGE_ENABLED:
+                    collector.mark_shadow_judge_queued()
+                else:
+                    collector.set_eval_lifecycle("shadow", "disabled", reason="disabled")
                 persisted = await persist_runtime_trace(collector)
                 if not persisted:
                     log.warning(

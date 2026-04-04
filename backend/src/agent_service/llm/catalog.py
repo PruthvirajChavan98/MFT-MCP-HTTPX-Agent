@@ -412,6 +412,7 @@ class ModelService:
         # ✅ FIX: Properly implemented NVIDIA parser
         api_key = os.getenv("NVIDIA_API_KEY")
         if not api_key:
+            log.info("NVIDIA_API_KEY not set, using fallback catalog")
             return self._hydrate_fallback("nvidia")
 
         try:

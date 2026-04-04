@@ -18,6 +18,7 @@ from src.agent_service.core.config import (
 )
 from src.agent_service.core.follow_ups import normalize_follow_up_content
 from src.agent_service.core.session_utils import get_redis
+from src.agent_service.eval_store.status import build_eval_status_payload
 
 router = APIRouter(
     prefix="/agent/admin/analytics",
@@ -90,6 +91,85 @@ def _decode_cursor(cursor: str | None, *, operation: str) -> dict[str, Any] | No
         ) from exc
 
 
+def _extract_text_content(content: Any) -> str:
+    """Extract plain text from LangChain message content.
+
+    AI messages with tool calls may store content as a list of typed blocks,
+    e.g. ``[{"type": "text", "text": "..."}, {"type": "tool_use", ...}]``.
+    This helper normalises both the ``str`` and ``list[dict]`` forms into a
+    single text string, discarding non-text blocks so that raw tool-call
+    JSON never leaks into the rendered message content.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+            # skip tool_use / image / other non-text blocks
+        return "\n".join(parts)
+    return str(content)
+
+
+def _build_tool_call_lookup(
+    messages: list[Any],
+) -> dict[int, list[dict[str, str]]]:
+    """Build a mapping from AI-message index to resolved ``toolCalls``.
+
+    Iterates the checkpoint message list once and pairs each ``ToolMessage``
+    with the tool-call request on the preceding ``AIMessage`` using
+    ``tool_call_id``.  The returned dict is keyed by the *enumerate index*
+    (1-based, matching the serialisation loop) so the caller can cheaply look
+    up whether a given AI message has tool calls.
+
+    Each entry in the list matches the frontend ``ToolCallEvent`` shape::
+
+        {"name": str, "output": str, "tool_call_id": str}
+    """
+    # Phase 1: index AI-message tool-call requests by tool_call_id.
+    # Each value is (ai_message_enumerate_index, tool_call_name).
+    request_index: dict[str, tuple[int, str]] = {}
+    for idx, msg in enumerate(messages, start=1):
+        if getattr(msg, "type", "") != "ai":
+            continue
+        # LangChain stores parsed tool calls on the ``tool_calls`` attribute
+        # (preferred) and also mirrors them in ``additional_kwargs["tool_calls"]``.
+        raw_tool_calls: list[dict[str, Any]] = getattr(msg, "tool_calls", []) or []
+        if not raw_tool_calls:
+            raw_tool_calls = getattr(msg, "additional_kwargs", {}).get("tool_calls") or []
+        for tc in raw_tool_calls:
+            tc_id = str(tc.get("id") or "").strip()
+            tc_name = str(tc.get("name") or "tool").strip()
+            if tc_id:
+                request_index[tc_id] = (idx, tc_name)
+
+    if not request_index:
+        return {}
+
+    # Phase 2: walk ToolMessages and resolve outputs.
+    result: dict[int, list[dict[str, str]]] = {}
+    for msg in messages:
+        if getattr(msg, "type", "") != "tool":
+            continue
+        tc_id = str(getattr(msg, "tool_call_id", "") or "").strip()
+        if not tc_id or tc_id not in request_index:
+            continue
+        ai_idx, tc_name = request_index[tc_id]
+        raw_output = getattr(msg, "content", "")
+        output_str = (
+            raw_output
+            if isinstance(raw_output, str)
+            else json.dumps(raw_output, ensure_ascii=False)
+        )
+        result.setdefault(ai_idx, []).append(
+            {"name": tc_name, "output": output_str, "tool_call_id": tc_id}
+        )
+    return result
+
+
 def _extract_question_preview(inputs_json: Any) -> str:
     parsed = _json_load_maybe(inputs_json)
     if isinstance(parsed, dict):
@@ -107,6 +187,79 @@ async def _pg_rows(pool: Any, query: str, *args: Any) -> list[dict[str, Any]]:
         return [dict(r) for r in rows]
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+
+
+def _to_admin_eval_status(payload: dict[str, Any]) -> dict[str, Any]:
+    inline_evals = payload.get("inline_evals") or {}
+    return {
+        "status": payload["status"],
+        "reason": payload.get("reason"),
+        "passed": inline_evals.get("passed"),
+        "failed": inline_evals.get("failed"),
+        "shadowJudge": payload.get("shadow_judge"),
+    }
+
+
+async def _load_session_eval_statuses(
+    pool: Any, items: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    trace_ids = [
+        str(item.get("traceId")).strip()
+        for item in items
+        if item.get("role") == "assistant" and str(item.get("traceId") or "").strip()
+    ]
+    unique_trace_ids = list(dict.fromkeys(trace_ids))
+    if not unique_trace_ids:
+        return {}
+
+    trace_rows = await _pg_rows(
+        pool,
+        """
+        SELECT trace_id, meta_json, ended_at, updated_at
+        FROM eval_traces
+        WHERE trace_id = ANY($1::text[])
+        """,
+        unique_trace_ids,
+    )
+    inline_rows = await _pg_rows(
+        pool,
+        """
+        SELECT trace_id, metric_name, score, passed
+        FROM eval_results
+        WHERE trace_id = ANY($1::text[])
+        ORDER BY trace_id ASC, metric_name ASC
+        """,
+        unique_trace_ids,
+    )
+    shadow_rows = await _pg_rows(
+        pool,
+        """
+        SELECT DISTINCT ON (trace_id)
+               trace_id, helpfulness, faithfulness, policy_adherence, summary, evaluated_at
+        FROM shadow_judge_evals
+        WHERE trace_id = ANY($1::text[])
+        ORDER BY trace_id ASC, evaluated_at DESC
+        """,
+        unique_trace_ids,
+    )
+
+    trace_by_id = {str(row["trace_id"]): row for row in trace_rows}
+    shadow_by_id = {str(row["trace_id"]): row for row in shadow_rows}
+    inline_by_id: dict[str, list[dict[str, Any]]] = {}
+    for row in inline_rows:
+        inline_by_id.setdefault(str(row["trace_id"]), []).append(row)
+
+    return {
+        trace_id: _to_admin_eval_status(
+            build_eval_status_payload(
+                trace_id=trace_id,
+                trace_row=trace_by_id.get(trace_id),
+                result_rows=inline_by_id.get(trace_id, []),
+                shadow_row=shadow_by_id.get(trace_id),
+            )
+        )
+        for trace_id in unique_trace_ids
+    }
 
 
 def _risk_level(score: float) -> str:
@@ -442,14 +595,24 @@ async def session_traces(
     ckp = await checkpointer.aget_tuple(config)
 
     items = []
+    pool = getattr(request.app.state, "pool", None)
 
     if ckp and ckp.checkpoint:
         state = ckp.checkpoint.get("channel_values", {})
         messages = state.get("messages", [])
 
+        # Pre-compute tool-call lookup so AI messages include resolved outputs.
+        tool_call_lookup = _build_tool_call_lookup(messages)
+
         for idx, msg in enumerate(messages, start=1):
             msg_type = getattr(msg, "type", "")
-            content = getattr(msg, "content", "")
+
+            # Skip ToolMessages — their output is attached to the preceding
+            # AI message via the ``toolCalls`` field.
+            if msg_type == "tool":
+                continue
+
+            content = _extract_text_content(getattr(msg, "content", ""))
             add_kwargs = getattr(msg, "additional_kwargs", {})
             resp_meta = getattr(msg, "response_metadata", {})
             role = (
@@ -493,26 +656,30 @@ async def session_traces(
 
             seq_id = f"{session_id}~{idx}"
 
-            items.append(
-                {
-                    "id": seq_id,
-                    "role": role,
-                    "content": content,
-                    "reasoning": reasoning,
-                    "timestamp": timestamp,
-                    "status": "done",
-                    "traceId": trace_id or seq_id,
-                    "followUps": follow_ups[:8],
-                    "cost": cost,
-                    "provider": provider,
-                    "model": model,
-                    "totalTokens": total_tokens,
-                }
-            )
+            # Resolved tool calls for this AI message (empty list for non-AI).
+            tool_calls = tool_call_lookup.get(idx, []) if msg_type == "ai" else []
+
+            item: dict[str, Any] = {
+                "id": seq_id,
+                "role": role,
+                "content": content,
+                "reasoning": reasoning,
+                "timestamp": timestamp,
+                "status": "done",
+                "followUps": follow_ups[:8],
+                "cost": cost,
+                "provider": provider,
+                "model": model,
+                "totalTokens": total_tokens,
+            }
+            if trace_id:
+                item["traceId"] = trace_id
+            if tool_calls:
+                item["toolCalls"] = tool_calls
+            items.append(item)
 
     if not items:
         # Fallback for sessions with missing checkpointer data: reconstruct from eval_traces.
-        pool = request.app.state.pool
         rows = await _pg_rows(
             pool,
             """
@@ -570,6 +737,12 @@ async def session_traces(
             )
 
     items = items[:limit]
+    if pool:
+        eval_statuses = await _load_session_eval_statuses(pool, items)
+        for item in items:
+            trace_id = str(item.get("traceId") or "").strip()
+            if item.get("role") == "assistant" and trace_id in eval_statuses:
+                item["evalStatus"] = eval_statuses[trace_id]
     return {"items": items, "count": len(items), "next_cursor": None}
 
 

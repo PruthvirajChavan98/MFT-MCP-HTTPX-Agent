@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { getNodeIcon, getNodeChipClasses, getNodeTypeLabel } from './nodeUtils'
 import { JsonViewer } from './JsonViewer'
-import type { FlatNode, TraceCost } from './types'
+import type { FlatNode, TraceCost, TraceEval } from './types'
 
 interface SectionProps {
   title: string
@@ -112,7 +112,7 @@ function DataCard({ data }: { data: unknown }) {
   return <div className="rounded-xl border border-border bg-card min-h-[60px] overflow-hidden"><JsonViewer data={data} /></div>
 }
 
-export function TraceInspector({ node, cost }: { node: FlatNode | null, cost?: TraceCost }) {
+export function TraceInspector({ node, cost, evals }: { node: FlatNode | null, cost?: TraceCost, evals?: TraceEval[] }) {
   if (!node) {
     return <div className="flex-1 flex items-center justify-center text-muted-foreground text-[14px]">Select a node to inspect</div>
   }
@@ -159,6 +159,29 @@ export function TraceInspector({ node, cost }: { node: FlatNode | null, cost?: T
         <Section title="Output">
           <DataCard data={node.output} />
         </Section>
+
+        {evals && evals.length > 0 && (
+          <Section title="Evaluation" badge={`${evals.length} metrics`}>
+            <div className="space-y-2">
+              {evals.map((ev) => (
+                <div key={ev.eval_id} className="rounded-xl border border-border bg-card px-4 py-3 flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-foreground">{ev.metric_name}</span>
+                    {ev.reasoning && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{ev.reasoning}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 ml-4 shrink-0">
+                    <span className="text-sm font-mono tabular-nums">{(ev.score * 100).toFixed(0)}%</span>
+                    {ev.passed
+                      ? <CheckCircle2 size={14} className="text-emerald-500" />
+                      : <AlertCircle size={14} className="text-rose-500" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
       </div>
     </div>
   )

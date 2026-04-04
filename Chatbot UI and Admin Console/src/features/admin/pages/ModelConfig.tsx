@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Cpu, Save, Search, Server, Sparkles } from 'lucide-react'
+import { KeyInput } from '@components/ui/key-input'
 
 function providerRequiresSessionKey(provider: string) {
   return provider === 'openrouter' || provider === 'nvidia'
@@ -43,18 +44,18 @@ function hasAdminProviderKey(
 
 function providerKeyHelp(provider: string, hasSavedKey: boolean, hasAdminKey: boolean) {
   if (provider === 'openrouter') {
-    if (hasAdminKey) return 'OpenRouter key will be saved from the API Keys popover for this session.'
+    if (hasAdminKey) return 'OpenRouter key provided. It will be saved when you commit this session.'
     if (hasSavedKey) return 'This session already has a saved OpenRouter key. You can commit without re-entering it.'
-    return 'OpenRouter sessions require a saved key or a new OpenRouter key in the API Keys popover.'
+    return 'OpenRouter requires an API key. Enter your key below to continue.'
   }
   if (provider === 'nvidia') {
-    if (hasAdminKey) return 'NVIDIA key will be saved from the API Keys popover for this session.'
+    if (hasAdminKey) return 'NVIDIA key provided. It will be saved when you commit this session.'
     if (hasSavedKey) return 'This session already has a saved NVIDIA key. You can commit without re-entering it.'
-    return 'NVIDIA sessions require a saved key or a new NVIDIA key in the API Keys popover.'
+    return 'NVIDIA NIM requires an API key. Enter your key below to continue.'
   }
-  if (hasAdminKey) return 'Groq key will be saved from the API Keys popover for this session.'
+  if (hasAdminKey) return 'Groq key provided. It will be saved when you commit this session.'
   if (hasSavedKey) return 'This session already has a saved Groq key. You can commit without re-entering it.'
-  return 'Groq BYOK is optional. Without one, runtime can fall back to the server-managed Groq key.'
+  return 'Groq BYOK is optional. Without one, the server-managed Groq key is used.'
 }
 
 export function ModelConfig() {
@@ -196,6 +197,30 @@ export function ModelConfig() {
               <p className="text-[10px] text-gray-400 mt-1">
                 {providerKeyHelp(config.provider, savedProviderKey, adminProviderKey)}
               </p>
+              {config.provider === 'openrouter' && (
+                <KeyInput
+                  label="OpenRouter API Key"
+                  value={auth.openrouterKey}
+                  onChange={auth.setOpenrouterKey}
+                  placeholder="sk-or-v1-..."
+                />
+              )}
+              {config.provider === 'nvidia' && (
+                <KeyInput
+                  label="NVIDIA NIM API Key"
+                  value={auth.nvidiaKey}
+                  onChange={auth.setNvidiaKey}
+                  placeholder="nvapi-..."
+                />
+              )}
+              {config.provider === 'groq' && (
+                <KeyInput
+                  label="Groq API Key (optional)"
+                  value={auth.groqKey}
+                  onChange={auth.setGroqKey}
+                  placeholder="gsk_..."
+                />
+              )}
             </div>
 
             <div className="space-y-2">

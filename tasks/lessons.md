@@ -58,6 +58,22 @@
 **Trigger:** The raw tool-call panel showed `generate_otp` twice, but the user received only one OTP. I needed to separate agent-side duplicate execution from downstream delivery dedupe/rate limiting before choosing the fix.
 **Rule:** For side-effect bugs, verify whether the duplication is in agent execution, transport retry, or downstream delivery. Fix the execution layer first; do not assume a single external side effect means the upstream call only happened once.
 
+### 15. Write tests for new code — passing old tests means nothing
+**Trigger:** Added eval status endpoint, useEvalStatus hook, and eval badge without writing a single test. Claimed "66/66 tests passed" as if that proved correctness — it only proves I didn't break existing code.
+**Rule:** New code gets new tests. Period. "Existing tests pass" is not a verification of new functionality.
+
+### 16. Frontend spinners need a terminal backend contract
+**Trigger:** `Evaluating...` stayed on screen because the backend exposed an open-ended `pending` state with no terminal unavailable/skipped/failed lifecycle, while the frontend rendered a completion-oriented spinner.
+**Rule:** If the UI shows progress for async backend work, the backend contract must include terminal non-success states. Never leave product UX dependent on an unbounded `pending`.
+
+### 17. Reuse visual primitives, not live behavior, in admin replay surfaces
+**Trigger:** `/admin/conversations` reused the live `ChatMessage` component and inherited eval polling, feedback controls, and other live-only behavior that broke transcript replay.
+**Rule:** Admin replay/read-only views may share rendering primitives, but they must not inherit live hooks, polling, or interaction semantics from production chat widgets.
+
+### 18. Boolean env parsing must be consistent across the repo
+**Trigger:** `.env` used `ENABLE_LLM_JUDGE=1`, but one config path parsed booleans as `== "true"` while the rest of the repo accepted `1/true/yes`, silently disabling the inline judge.
+**Rule:** Use one truthy parsing convention everywhere for environment booleans. A flag that looks enabled in `.env` must not be disabled by parser inconsistency.
+
 ### 14. LangGraph astream_events fires nested tool events from adapter wrappers
 **Trigger:** MCP tools wrapped by `mcp_manager.py` create nested Runnables (outer StructuredTool wrapper → inner MCP adapter tool). `astream_events(v2)` fires `on_tool_end` for BOTH, each with a different `run_id` and potentially different `data` shapes. A `hash(output)` dedup failed because `extract_tool_output()` produced different strings from each level.
 **Rule:** When deduplicating LangGraph stream events for wrapped/nested Runnables, use `parent_ids` to identify inner runs — skip `on_tool_end` events whose `parent_ids` overlap with tracked `on_tool_start` run_ids. Do not rely on output string equality across hierarchy levels.

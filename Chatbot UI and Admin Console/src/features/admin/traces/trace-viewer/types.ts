@@ -42,6 +42,14 @@ export interface TraceEvent {
   payload_json?: Record<string, unknown>
 }
 
+export interface TraceEval {
+  eval_id: string
+  metric_name: string
+  score: number
+  passed: boolean
+  reasoning?: string
+}
+
 export interface TraceDetail {
   trace: {
     name?: string
@@ -55,4 +63,5 @@ export interface TraceDetail {
   }
   events?: TraceEvent[]
   cost?: TraceCost
+  evals?: TraceEval[]
 }

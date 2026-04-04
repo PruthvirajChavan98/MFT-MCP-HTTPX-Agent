@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const useQueryMock = vi.fn()
@@ -13,6 +14,16 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('@features/admin/context/AdminContext', () => ({
   useAdminContext: () => useAdminContextMock(),
+}))
+
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  BarChart: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Bar: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  CartesianGrid: () => null,
+  Tooltip: () => null,
 }))
 
 const queryResultByKey: Record<string, unknown> = {

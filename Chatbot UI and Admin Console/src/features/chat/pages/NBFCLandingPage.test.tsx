@@ -110,6 +110,7 @@ describe('NBFCLandingPage', () => {
   })
 
   it('shows the admin demo notice on hover without changing navigation', async () => {
+    window.localStorage.setItem('mft_register_notice_shown_v1', 'true')
     renderLandingPage()
 
     const adminLink = screen.getByRole('link', { name: 'Admin' })

@@ -8,6 +8,7 @@ import random
 import re
 import time
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set
@@ -119,14 +120,21 @@ async def _throttle_ok() -> bool:
         return True
 
 
-async def should_shadow_eval() -> bool:
+async def _shadow_eval_decision() -> tuple[bool, str]:
     if not SHADOW_EVAL_ENABLED:
-        return False
+        return False, "disabled"
     if SHADOW_EVAL_SAMPLE_RATE <= 0:
-        return False
+        return False, "disabled"
     if random.random() > SHADOW_EVAL_SAMPLE_RATE:
-        return False
-    return await _throttle_ok()
+        return False, "sampled_out"
+    if not await _throttle_ok():
+        return False, "sampled_out"
+    return True, "eligible"
+
+
+async def should_shadow_eval() -> bool:
+    should_run, _ = await _shadow_eval_decision()
+    return should_run
 
 
 # -----------------------------
@@ -160,6 +168,7 @@ class ShadowEvalCollector:
     case_id: Optional[str] = None
     _router_outcome: Optional[Dict[str, Any]] = None
     _inline_guard_decision: Optional[Dict[str, Any]] = None
+    _eval_lifecycle: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def __init__(
         self,
@@ -200,6 +209,7 @@ class ShadowEvalCollector:
         self.status = "success"
         self._router_outcome = None
         self._inline_guard_decision = None
+        self._eval_lifecycle = {}
 
     def set_router_outcome(self, outcome: Dict[str, Any]) -> None:
         """Store the router result to be saved with the trace."""
@@ -208,6 +218,46 @@ class ShadowEvalCollector:
     def set_inline_guard_decision(self, decision: Dict[str, Any]) -> None:
         """Store inline guard decision metadata on the trace."""
         self._inline_guard_decision = decision
+
+    def set_eval_lifecycle(
+        self,
+        branch: str,
+        state: str,
+        *,
+        reason: Optional[str] = None,
+        queued_at: Optional[str] = None,
+    ) -> None:
+        current = dict(self._eval_lifecycle.get(branch) or {})
+        payload: Dict[str, Any] = {
+            "state": state,
+            "updated_at": _utc_iso(),
+        }
+        if reason:
+            payload["reason"] = reason
+        elif current.get("reason") and current.get("state") == state:
+            payload["reason"] = current["reason"]
+
+        if branch == "shadow":
+            existing_queued_at = current.get("queued_at")
+            if queued_at:
+                payload["queued_at"] = queued_at
+            elif state in {"queued", "failed", "worker_backlog", "timed_out", "complete"}:
+                if existing_queued_at:
+                    payload["queued_at"] = existing_queued_at
+
+        self._eval_lifecycle[branch] = payload
+
+    def mark_shadow_judge_queued(self) -> None:
+        current = dict(self._eval_lifecycle.get("shadow") or {})
+        self.set_eval_lifecycle(
+            "shadow",
+            "queued",
+            reason="queued",
+            queued_at=str(current.get("queued_at") or _utc_iso()),
+        )
+
+    def eval_lifecycle(self) -> Dict[str, Dict[str, Any]]:
+        return deepcopy(self._eval_lifecycle)
 
     def _next_seq(self) -> int:
         self._seq += 1
@@ -310,6 +360,10 @@ class ShadowEvalCollector:
                 "history_len": len(self.chat_history),
             },
         }
+
+        eval_lifecycle = self.eval_lifecycle()
+        if eval_lifecycle:
+            trace_data["meta"]["eval_lifecycle"] = eval_lifecycle
 
         if self._inline_guard_decision:
             trace_data["meta"]["inline_guard"] = self._inline_guard_decision
@@ -494,14 +548,15 @@ async def maybe_shadow_eval_commit(
     openrouter_api_key: Optional[str] = None,
     nvidia_api_key: Optional[str] = None,
     groq_api_key: Optional[str] = None,
-    model_name: Optional[str] = None,  # ← ADD THIS
-    provider: Optional[str] = None,  # ← ADD THIS
+    model_name: Optional[str] = None,
+    provider: Optional[str] = None,
 ) -> None:
     try:
-        if not await should_shadow_eval():
+        should_run, skip_reason = await _shadow_eval_decision()
+        if not should_run:
+            collector.set_eval_lifecycle("inline", skip_reason, reason=skip_reason)
+            await _commit_bundle(collector.build_trace_dict(), [], [])
             return
-
-        trace = collector.build_trace_dict()
 
         if SHADOW_EVAL_CAPTURE != "full":
             events = [
@@ -512,6 +567,7 @@ async def maybe_shadow_eval_commit(
         else:
             events = collector.events
 
+        trace = collector.build_trace_dict()
         evals = compute_non_llm_metrics(trace, events, collector.tool_names)
 
         # Pass session's model to judge
@@ -521,11 +577,13 @@ async def maybe_shadow_eval_commit(
             openrouter_api_key=openrouter_api_key,
             nvidia_api_key=nvidia_api_key,
             groq_api_key=groq_api_key,
-            model_name=model_name,  # ← Pass session model
-            provider=provider,  # ← Pass provider
+            model_name=model_name,
+            provider=provider,
         )
         evals.extend(llm_evals)
 
+        collector.set_eval_lifecycle("inline", "complete")
+        trace = collector.build_trace_dict()
         await _commit_bundle(trace, events, evals)
 
         try:
@@ -542,4 +600,13 @@ async def maybe_shadow_eval_commit(
             f"[shadow_eval] committed trace_id={collector.trace_id} events={len(events)} evals={len(evals)}"
         )
     except Exception as e:
+        collector.set_eval_lifecycle("inline", "failed", reason="failed")
+        try:
+            await _commit_bundle(collector.build_trace_dict(), [], [])
+        except Exception as persist_exc:
+            log.warning(
+                "[shadow_eval] failed to persist inline lifecycle failure trace=%s: %s",
+                collector.trace_id,
+                persist_exc,
+            )
         log.exception(f"[shadow_eval] commit failed: {e}")

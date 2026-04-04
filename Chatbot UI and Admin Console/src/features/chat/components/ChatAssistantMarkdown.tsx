@@ -10,7 +10,7 @@ import {
   type TableHTMLAttributes,
 } from 'react'
 import { toast } from 'sonner'
-import { Streamdown, type StreamdownProps } from 'streamdown'
+import { Streamdown, defaultRehypePlugins, type StreamdownProps } from 'streamdown'
 import type { ChatMessage as ChatMessageType } from '@shared/types/chat'
 import {
   copyToClipboard,
@@ -28,6 +28,95 @@ interface ChatAssistantMarkdownProps {
 
 type CopyOutcome = 'success' | 'manual' | 'error'
 type MarkdownComponents = NonNullable<StreamdownProps['components']>
+type RehypePlugins = NonNullable<StreamdownProps['rehypePlugins']>
+
+interface HastNode {
+  type?: string
+  children?: HastNode[]
+  properties?: Record<string, unknown>
+}
+
+interface SanitizeSchema {
+  tagNames?: string[]
+  attributes?: Record<string, string[]>
+  [key: string]: unknown
+}
+
+const ALLOWED_HTML_TAGS: Record<string, string[]> = {
+  span: ['style'],
+  a: ['href', 'title', 'target', 'rel'],
+  strong: [],
+  em: [],
+  b: [],
+  i: [],
+  u: [],
+  br: [],
+  p: [],
+  ul: [],
+  ol: [],
+  li: [],
+  code: [],
+  pre: [],
+}
+
+const SAFE_COLOR_VALUE_PATTERN = /^(?:#[\da-f]{3,8}|(?:rgb|hsl)a?\([^)]*\)|[a-z]+|currentColor|inherit|var\(--[a-z0-9-_]+\))$/i
+
+const streamdownRehypeDefaults = defaultRehypePlugins as unknown as {
+  raw: RehypePlugins[number]
+  sanitize: [RehypePlugins[number], SanitizeSchema]
+  harden: RehypePlugins[number]
+}
+
+function normalizeAllowedColor(styleValue: string): string | null {
+  for (const declaration of styleValue.split(';')) {
+    const separatorIndex = declaration.indexOf(':')
+    if (separatorIndex === -1) continue
+
+    const property = declaration.slice(0, separatorIndex).trim().toLowerCase()
+    const value = declaration.slice(separatorIndex + 1).trim().replace(/\s+/g, ' ')
+
+    if (property !== 'color' || !SAFE_COLOR_VALUE_PATTERN.test(value)) continue
+    return `color: ${value}`
+  }
+
+  return null
+}
+
+function scrubNodeProperties(node: HastNode) {
+  if (!node.properties) return
+
+  for (const key of Object.keys(node.properties)) {
+    if (/^on/i.test(key)) {
+      delete node.properties[key]
+    }
+  }
+
+  const sanitizedStyle =
+    typeof node.properties.style === 'string' ? normalizeAllowedColor(node.properties.style) : null
+
+  if (sanitizedStyle) {
+    node.properties.style = sanitizedStyle
+  } else {
+    delete node.properties.style
+  }
+}
+
+function visitHastTree(node: HastNode) {
+  if (node.type === 'element') {
+    scrubNodeProperties(node)
+  }
+
+  if (!Array.isArray(node.children)) return
+  for (const child of node.children) {
+    visitHastTree(child)
+  }
+}
+
+function rehypeRestrictInlineColorStyles() {
+  return (tree: HastNode) => {
+    visitHastTree(tree)
+  }
+}
 
 function nodeToText(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node)
@@ -179,6 +268,26 @@ export function ChatAssistantMarkdown({ content, status, onCopyFallback }: ChatA
     [handleCopy],
   )
 
+  const rehypePlugins = useMemo<RehypePlugins>(() => {
+    const [sanitizePlugin, sanitizeSchema] = streamdownRehypeDefaults.sanitize
+    return [
+      streamdownRehypeDefaults.raw,
+      [
+        sanitizePlugin as RehypePlugins[number],
+        {
+          ...sanitizeSchema,
+          tagNames: [...new Set([...(sanitizeSchema.tagNames ?? []), ...Object.keys(ALLOWED_HTML_TAGS)])],
+          attributes: {
+            ...sanitizeSchema.attributes,
+            ...ALLOWED_HTML_TAGS,
+          },
+        },
+      ] as RehypePlugins[number],
+      rehypeRestrictInlineColorStyles,
+      streamdownRehypeDefaults.harden,
+    ] as RehypePlugins
+  }, [])
+
   if (status === 'streaming' && !content.trim()) {
     return (
       <div className="tf-chat-thinking" role="status" aria-label="Assistant is thinking">
@@ -199,6 +308,7 @@ export function ChatAssistantMarkdown({ content, status, onCopyFallback }: ChatA
           controls={false}
           isAnimating={status === 'streaming'}
           mode={status === 'streaming' ? 'streaming' : 'static'}
+          rehypePlugins={rehypePlugins}
         >
           {content || ' '}
         </Streamdown>
