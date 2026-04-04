@@ -269,6 +269,9 @@ export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
   const [view, setView] = useState<'chat' | 'settings'>('chat')
+  const [showConfigHint, setShowConfigHint] = useState(
+    () => !localStorage.getItem('mft_config_hint_shown_v1'),
+  )
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -386,14 +389,40 @@ export function ChatWidget() {
                           <Trash2 size={14} />
                         </button>
                       )}
-                      <button
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/20"
-                        onClick={() => setView('settings')}
-                        title="Configure session"
-                        type="button"
-                      >
-                        <Settings size={15} />
-                      </button>
+                      <div className="relative">
+                        <button
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/20"
+                          onClick={() => {
+                            setView('settings')
+                            if (showConfigHint) {
+                              setShowConfigHint(false)
+                              localStorage.setItem('mft_config_hint_shown_v1', 'true')
+                            }
+                          }}
+                          title="Configure session"
+                          type="button"
+                        >
+                          <Settings size={15} />
+                        </button>
+                        {showConfigHint && (
+                          <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.95)] backdrop-blur-xl">
+                            <p className="text-xs font-semibold text-white">Configure me!</p>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                              Switch LLM providers, models, or bring your own API key.
+                            </p>
+                            <button
+                              className="mt-2 text-[10px] font-medium text-cyan-400 hover:text-cyan-300"
+                              onClick={() => {
+                                setShowConfigHint(false)
+                                localStorage.setItem('mft_config_hint_shown_v1', 'true')
+                              }}
+                              type="button"
+                            >
+                              Got it
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </>
                   )}
 

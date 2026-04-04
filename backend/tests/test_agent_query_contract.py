@@ -26,7 +26,7 @@ def test_public_streaming_event_formatters():
     assert thinking == {"event": "reasoning", "data": "token"}
     assert reasoning == {"event": "reasoning", "data": "token"}
     assert tool_call["event"] == "tool_call"
-    assert tool_call["data"]["name"] == "search_kb"
+    assert tool_call["data"] == '{"name": "search_kb", "output": "ok", "tool_call_id": "call-1"}'
 
 
 @pytest.mark.asyncio

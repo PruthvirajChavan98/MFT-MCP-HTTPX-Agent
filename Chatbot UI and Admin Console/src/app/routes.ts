@@ -54,11 +54,20 @@ const SystemHealth = lazy(async () => {
   const module = await import('@features/admin/pages/SystemHealth')
   return { default: module.SystemHealth }
 })
+const ArchitecturePage = lazy(async () => {
+  const module = await import('@features/chat/pages/ArchitecturePage')
+  return { default: module.ArchitecturePage }
+})
 
 export const router = createBrowserRouter([
   {
     path: '/',
     Component: LandingPage,
+    errorElement: createElement(RouteErrorBoundary),
+  },
+  {
+    path: '/architecture',
+    Component: ArchitecturePage,
     errorElement: createElement(RouteErrorBoundary),
   },
   {

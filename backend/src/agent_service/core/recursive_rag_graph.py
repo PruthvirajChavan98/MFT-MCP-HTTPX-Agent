@@ -11,6 +11,11 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+from src.agent_service.tools.tool_execution_policy import (
+    build_same_turn_dedupe_key,
+    get_tool_execution_policy,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -20,6 +25,7 @@ class RecursiveRAGState(TypedDict):
     messages: Annotated[list, add_messages]
     iteration: int
     max_iterations: int
+    tool_execution_cache: dict[str, str]
 
 
 def _safe_tool_output(value: Any) -> str:
@@ -64,23 +70,39 @@ def build_recursive_rag_graph(
     async def run_tools(state: RecursiveRAGState) -> dict[str, Any]:
         messages = state.get("messages", [])
         if not messages:
-            return {"iteration": state.get("iteration", 0)}
+            return {
+                "iteration": state.get("iteration", 0),
+                "tool_execution_cache": dict(state.get("tool_execution_cache", {}) or {}),
+            }
 
         last_message = messages[-1]
         if not isinstance(last_message, AIMessage):
-            return {"iteration": state.get("iteration", 0)}
+            return {
+                "iteration": state.get("iteration", 0),
+                "tool_execution_cache": dict(state.get("tool_execution_cache", {}) or {}),
+            }
 
         tool_calls = getattr(last_message, "tool_calls", []) or []
         if not tool_calls:
-            return {"iteration": state.get("iteration", 0)}
+            return {
+                "iteration": state.get("iteration", 0),
+                "tool_execution_cache": dict(state.get("tool_execution_cache", {}) or {}),
+            }
 
         tool_messages: list[ToolMessage] = []
+        tool_execution_cache = dict(state.get("tool_execution_cache", {}) or {})
         for tool_call in tool_calls:
             tool_name = tool_call.get("name", "")
             tool_args = tool_call.get("args", {}) or {}
             if not isinstance(tool_args, dict):
                 tool_args = {"input": tool_args}
             tool_call_id = tool_call.get("id") or tool_name or "tool-call"
+            policy = get_tool_execution_policy(tool_name)
+            dedupe_key = (
+                build_same_turn_dedupe_key(tool_name, tool_args)
+                if policy.same_turn_dedupe
+                else None
+            )
 
             tool = tools_by_name.get(tool_name)
             if tool is None:
@@ -93,12 +115,22 @@ def build_recursive_rag_graph(
                 )
                 continue
 
-            try:
-                result = await tool.ainvoke(tool_args)
-                content = _safe_tool_output(result)
-            except Exception as exc:
-                log.warning("Tool invocation failed for %s: %r", tool_name, exc)
-                content = f"Tool '{tool_name}' failed: {exc}"
+            if dedupe_key and dedupe_key in tool_execution_cache:
+                content = tool_execution_cache[dedupe_key]
+                log.info(
+                    "Suppressing duplicate side-effect tool call within run tool=%s dedupe_key=%s",
+                    tool_name,
+                    dedupe_key,
+                )
+            else:
+                try:
+                    result = await tool.ainvoke(tool_args)
+                    content = _safe_tool_output(result)
+                except Exception as exc:
+                    log.warning("Tool invocation failed for %s: %r", tool_name, exc)
+                    content = f"Tool '{tool_name}' failed: {exc}"
+                if dedupe_key:
+                    tool_execution_cache[dedupe_key] = content
 
             tool_messages.append(
                 ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name)
@@ -107,6 +139,7 @@ def build_recursive_rag_graph(
         return {
             "messages": tool_messages,
             "iteration": state.get("iteration", 0) + 1,
+            "tool_execution_cache": tool_execution_cache,
         }
 
     def route_after_llm(state: RecursiveRAGState) -> Literal["run_tools", "__end__"]:
@@ -146,4 +179,5 @@ def initial_recursive_rag_state(question: str, *, max_iterations: int = 6) -> Re
         "messages": [HumanMessage(content=question)],
         "iteration": 0,
         "max_iterations": max_iterations,
+        "tool_execution_cache": {},
     }

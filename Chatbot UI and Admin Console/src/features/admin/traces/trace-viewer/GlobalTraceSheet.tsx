@@ -1,6 +1,6 @@
 // src/app/components/admin/trace/GlobalTraceSheet.tsx
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAdminTrace } from '@features/admin/api/admin'
 import { useAdminContext } from '@features/admin/context/AdminContext'
@@ -12,7 +12,6 @@ import { TraceInspector } from './TraceInspector'
 import { parseToLangsmithTree } from './parse'
 
 export function GlobalTraceSheet() {
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const traceId = searchParams.get('traceId')
   const [selectedNodeId, setSelectedNodeId] = useState<string>('root')
@@ -38,10 +37,6 @@ export function GlobalTraceSheet() {
   const selectedNode = nodes.find(n => n.id === selectedNodeId) || nodes[0] || null
   const sessionId = typeof detail?.trace?.session_id === 'string' ? detail.trace.session_id : undefined
   const conversationHref = buildConversationHref(sessionId)
-
-  if (location.pathname === '/admin/traces') {
-    return null
-  }
 
   return (
     <Sheet open={!!traceId} onOpenChange={(open) => !open && handleClose()}>

@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.22.2'
           cache: 'npm'
           cache-dependency-path: Chatbot UI and Admin Console/package-lock.json
 

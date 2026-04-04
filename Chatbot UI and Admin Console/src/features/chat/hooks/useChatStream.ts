@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL, requestJson } from '@shared/api/http'
 import { streamSse } from '@shared/api/sse'
+import { parseMaybeJson } from '@shared/lib/json'
 import type { ChatMessage, CostEvent, ToolCallEvent } from '@shared/types/chat'
 
 const SESSION_KEY = 'nbfc_chat_session_id'
@@ -23,6 +24,35 @@ interface ErrorEventPayload {
 
 interface TraceEventPayload {
   trace_id?: string
+}
+
+function parseToolCallEvent(payload: unknown, data: string): ToolCallEvent | undefined {
+  const rawCandidate =
+    payload && typeof payload === 'object'
+      ? payload
+      : (parseMaybeJson(data) as Record<string, unknown> | undefined)
+
+  if (!rawCandidate || typeof rawCandidate !== 'object') return undefined
+
+  const candidate = rawCandidate as Record<string, unknown>
+
+  const name = typeof candidate.name === 'string' ? candidate.name.trim() : ''
+  const toolCallId =
+    typeof candidate.tool_call_id === 'string' ? candidate.tool_call_id.trim() : ''
+  const output =
+    typeof candidate.output === 'string'
+      ? candidate.output
+      : candidate.output !== undefined
+        ? JSON.stringify(candidate.output)
+        : ''
+
+  if (!name) return undefined
+
+  return {
+    name,
+    tool_call_id: toolCallId || name,
+    output,
+  }
 }
 
 function makeId(prefix: string): string {
@@ -176,12 +206,15 @@ export function useChatStream() {
                   appendAssistant('reasoning', data)
                   break
                 case 'tool_call': {
-                  const payload = parsed as ToolCallEvent | undefined
+                  const payload = parseToolCallEvent(parsed, data)
                   if (payload?.name) {
-                    patchAssistant((last) => ({
-                      ...last,
-                      toolCalls: [...last.toolCalls, payload],
-                    }))
+                    patchAssistant((last) => {
+                      const isDupe = last.toolCalls.some(
+                        (tc) => tc.tool_call_id === payload.tool_call_id,
+                      )
+                      if (isDupe) return last
+                      return { ...last, toolCalls: [...last.toolCalls, payload] }
+                    })
                   }
                   break
                 }

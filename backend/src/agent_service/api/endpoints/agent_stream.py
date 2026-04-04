@@ -558,6 +558,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
             router_handled = False
             final_output = ""
             metered_run_ids: set[str] = set()
+            tool_start_run_ids: set[str] = set()
             saw_chat_model_events = False
 
             async def maybe_handle_router_outcome():
@@ -623,6 +624,9 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
                     if event_name == "on_tool_start":
                         tool_name = str(event.get("name") or "tool")
+                        run_id = str(event.get("run_id") or "")
+                        if run_id:
+                            tool_start_run_ids.add(run_id)
                         tool_input = data.get("input", data) if isinstance(data, dict) else data
                         tool_input = _safe_json(tool_input)
                         collector.on_tool_start(tool_name, tool_input)
@@ -631,6 +635,14 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         continue
 
                     if event_name == "on_tool_end":
+                        # Skip inner/nested tool runs (MCP adapter creates nested
+                        # Runnables — outer wrapper + inner MCP call).  If any of
+                        # this event's parent run_ids is itself a tool run we
+                        # already track, this is the inner duplicate.
+                        parent_ids = event.get("parent_ids") or []
+                        if any(pid in tool_start_run_ids for pid in parent_ids):
+                            continue
+
                         tool_name = str(event.get("name") or "tool")
                         tool_raw_output = (
                             data.get("output", data) if isinstance(data, dict) else data
@@ -639,6 +651,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                             streaming_utils.extract_tool_output(tool_raw_output), 6000
                         )
                         tool_call_id = str(event.get("run_id") or "")
+
                         collector.on_tool_end(tool_name, output, tool_call_id=tool_call_id)
                         if AGENT_STREAM_EXPOSE_INTERNAL_EVENTS:
                             yield sse_formatter.tool_end_event(tool_name, output, tool_call_id)

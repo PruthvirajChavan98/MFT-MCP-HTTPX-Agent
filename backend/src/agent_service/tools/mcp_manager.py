@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, create_model
 from src.agent_service.core.config import SERVER_NAME, SERVER_URL
 from src.agent_service.core.session_utils import is_user_authenticated, valid_session_id
 from src.agent_service.core.utils import normalize_result
+from src.agent_service.tools.tool_execution_policy import get_tool_execution_policy
 
 log = logging.getLogger("mcp_manager")
 
@@ -141,12 +142,20 @@ class MCPManager:
                 async def tool_wrapper(_tool=raw_tool, _sid=sid, _tool_name=tool_name, **kwargs):
                     full_args = dict(kwargs)
                     full_args["session_id"] = _sid
+                    policy = get_tool_execution_policy(_tool_name)
                     try:
                         res = await _tool.ainvoke(full_args)
                         if isinstance(res, str):
                             return {"text": res}
                         return normalize_result(res)
                     except Exception as first_exc:
+                        if not policy.allow_transport_retry:
+                            log.warning(
+                                "MCP tool '%s' invoke failed without retry due to side-effect policy: %r",
+                                _tool_name,
+                                first_exc,
+                            )
+                            raise
                         log.warning(
                             "MCP tool '%s' invoke failed once, attempting reconnect: %r",
                             _tool_name,

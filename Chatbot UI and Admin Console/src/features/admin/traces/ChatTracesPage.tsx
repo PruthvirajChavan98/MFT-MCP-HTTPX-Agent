@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import {
   CheckCircle2,
@@ -18,18 +18,9 @@ import { useAdminContext } from '@features/admin/context/AdminContext'
 import { MetricsDashboard } from './MetricsDashboard'
 import { SemanticSearchUI } from './SemanticSearchUI'
 import { formatDateTime } from '@shared/lib/format'
-import { parseToLangsmithTree } from './trace-viewer/parse'
-import { TraceInspector } from './trace-viewer/TraceInspector'
-import { TraceTree } from './trace-viewer/TraceTree'
-import { clearTraceIdSearchParams, setTraceIdSearchParams } from '@features/admin/lib/admin-links'
-import {
-  adminTraceQueryOptions,
-  tracesPageInfiniteQueryOptions,
-} from '@features/admin/query/queryOptions'
-import {
-  mapTraceDetailToViewer,
-  mapTraceListRows,
-} from './viewmodel'
+import { setTraceIdSearchParams } from '@features/admin/lib/admin-links'
+import { tracesPageInfiniteQueryOptions } from '@features/admin/query/queryOptions'
+import { mapTraceListRows } from './viewmodel'
 
 const PAGE_SIZE = 80
 
@@ -74,25 +65,8 @@ export function ChatTracesPage() {
   const rows = useMemo(() => mapTraceListRows(traces), [traces])
   const selectedTraceId = searchParams.get('traceId')
 
-  const [selectedNodeId, setSelectedNodeId] = useState('root')
-  useEffect(() => {
-    setSelectedNodeId('root')
-  }, [selectedTraceId])
-
-  const traceDetailQuery = useQuery(adminTraceQueryOptions(auth.adminKey, selectedTraceId))
-  const traceDetail = mapTraceDetailToViewer(traceDetailQuery.data)
-  const traceNodes = useMemo(
-    () => (traceDetail ? parseToLangsmithTree(traceDetail) : []),
-    [traceDetail],
-  )
-  const selectedNode = traceNodes.find((node) => node.id === selectedNodeId) || traceNodes[0] || null
-
   const openTrace = (traceId: string) => {
     setSearchParams((prev) => setTraceIdSearchParams(prev, traceId), { replace: false })
-  }
-
-  const closeTrace = () => {
-    setSearchParams((prev) => clearTraceIdSearchParams(prev), { replace: true })
   }
 
   if (!hasAdminKey) {
@@ -246,37 +220,6 @@ export function ChatTracesPage() {
             </CardContent>
           </Card>
 
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-            {traceDetailQuery.isLoading ? (
-              <div className="space-y-3 p-6">
-                <Skeleton className="h-10 w-64 rounded" />
-                <Skeleton className="h-[420px] rounded" />
-              </div>
-            ) : traceDetailQuery.error ? (
-              <div className="p-6">
-                <Alert variant="destructive">
-                  <AlertDescription>{(traceDetailQuery.error as Error).message}</AlertDescription>
-                </Alert>
-              </div>
-            ) : traceNodes.length ? (
-              <div className="overflow-x-auto">
-                <div className="flex h-[calc(100vh-290px)] min-h-[520px] min-w-[900px]">
-                  <TraceTree
-                    nodes={traceNodes}
-                    selectedNodeId={selectedNodeId}
-                    onSelect={setSelectedNodeId}
-                    onClose={closeTrace}
-                    isLoading={false}
-                  />
-                  <TraceInspector node={selectedNode} />
-                </div>
-              </div>
-            ) : (
-              <div className="flex min-h-[220px] items-center justify-center text-sm text-muted-foreground">
-                Select a trace to inspect.
-              </div>
-            )}
-          </div>
         </TabsContent>
 
         <TabsContent value="metrics" className="pt-2">

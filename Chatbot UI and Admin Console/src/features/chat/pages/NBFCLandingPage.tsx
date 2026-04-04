@@ -1,4 +1,3 @@
-import { Sparkles } from 'lucide-react'
 import { motion, useInView } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -134,9 +133,6 @@ const CTA_PRIMARY =
 
 const CTA_SECONDARY =
   `${CTA_GEOMETRY} min-w-[10.5rem] border border-teal-400/35 bg-white/5 text-teal-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-teal-300/60 hover:bg-teal-400/10 hover:text-white`
-
-const CTA_TERTIARY =
-  `${CTA_GEOMETRY} min-w-[8.75rem] border border-white/10 bg-white/5 text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-cyan-300/35 hover:bg-white/10 hover:text-white`
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -373,6 +369,9 @@ function LandingSpotlightTour({
 
 export function NBFCLandingPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [registerNoticeOpen, setRegisterNoticeOpen] = useState(
+    () => !localStorage.getItem('mft_register_notice_shown_v1'),
+  )
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false)
   const [spotlightStepIndex, setSpotlightStepIndex] = useState(0)
 
@@ -403,11 +402,6 @@ export function NBFCLandingPage() {
     setSpotlightStepIndex((current) => current + 1)
   }
 
-  const reopenSpotlight = () => {
-    setSpotlightStepIndex(0)
-    setIsSpotlightOpen(true)
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* ── Nav ── */}
@@ -433,7 +427,7 @@ export function NBFCLandingPage() {
               <HoverCardTrigger asChild>
                 <Link
                   to="/admin"
-                  className={`hidden md:inline-flex ${CTA_TERTIARY}`}
+                  className={`hidden md:inline-flex ${CTA_GEOMETRY} min-w-[8.75rem] border border-orange-400/35 bg-orange-500/10 text-orange-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-orange-300/60 hover:bg-orange-400/20 hover:text-orange-100`}
                 >
                   Admin
                 </Link>
@@ -450,21 +444,42 @@ export function NBFCLandingPage() {
                 </p>
               </HoverCardContent>
             </HoverCard>
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setRegisterOpen(true)}
-              className={`hidden sm:inline-flex ${CTA_SECONDARY}`}
+            <HoverCard
+              open={registerNoticeOpen || undefined}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setRegisterNoticeOpen(false)
+                  localStorage.setItem('mft_register_notice_shown_v1', 'true')
+                }
+              }}
+              openDelay={0}
+              closeDelay={120}
             >
-              Register
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className={CTA_PRIMARY}
-            >
-              Apply Now
-            </motion.button>
+              <HoverCardTrigger asChild>
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setRegisterOpen(true)}
+                  className={`hidden sm:inline-flex ${CTA_SECONDARY}`}
+                >
+                  Register
+                </motion.button>
+              </HoverCardTrigger>
+              <HoverCardContent
+                align="center"
+                side="bottom"
+                className="z-[70] w-80 border-white/10 bg-slate-950/95 p-4 text-slate-100 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.95)] backdrop-blur-xl"
+              >
+                <p className="text-sm font-semibold text-white">Demo registration</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                  Register with any 10-digit mobile number to explore the full demo — loan
+                  dashboards, document downloads, and AI-assisted servicing. No real data is stored.
+                </p>
+              </HoverCardContent>
+            </HoverCard>
+            <Link to="/architecture" className={CTA_PRIMARY}>
+              View Architecture
+            </Link>
           </div>
         </div>
       </nav>
@@ -533,17 +548,6 @@ export function NBFCLandingPage() {
             </motion.button>
           </motion.div>
 
-          <motion.button
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.38, duration: 0.45 }}
-            className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-300/30 hover:bg-white/10 hover:text-white"
-            onClick={reopenSpotlight}
-            type="button"
-          >
-            <Sparkles size={14} className="text-teal-300" />
-            Explore site
-          </motion.button>
         </div>
       </section>
 

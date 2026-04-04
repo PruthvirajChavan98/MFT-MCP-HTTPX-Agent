@@ -213,7 +213,7 @@ class SSEEventFormatter:
         """Public-facing tool execution event."""
         return {
             "event": "tool_call",
-            "data": {"name": tool_name, "output": output, "tool_call_id": tool_call_id},
+            "data": json.dumps({"name": tool_name, "output": output, "tool_call_id": tool_call_id}),
         }
 
     @staticmethod

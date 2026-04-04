@@ -4,6 +4,8 @@ generate_otp: |
     - user_input: 10-digit Indian mobile number (without country code).
   Returns:
     - CSV string with columns: status,phone_number,message
+  Notes:
+    - This is a side-effect tool. If you already called it in the current turn for the same phone number, do not call it again. Use the existing result and continue.
 
 validate_otp: |
   Purpose: Validate OTP for the current session and finalize authentication.
@@ -13,6 +15,7 @@ validate_otp: |
     - CSV string with columns:
       status,message,user_details.*,loans,active_loan,hint
   Notes:
+    - This is a side-effect tool. If you already called it in the current turn with the same OTP, do not call it again. Use the existing result and continue.
     - If the user has exactly one loan, active_loan is set automatically.
     - If the user has multiple loans, call list_loans() then select_loan(loan_number).
 
@@ -79,6 +82,7 @@ download_welcome_letter: |
     - password_hint: hint for the PDF password (if the document is password-protected)
     - filename: the PDF filename
   Notes:
+    - This is a side-effect tool. If you already called it in the current turn, do not call it again. Use the existing document result and continue.
     - If the result contains a `download_url`, present it as a clickable link for the user
       to download the PDF. Also mention the password_hint if provided.
     - If the result contains a `content` field instead (no download_url), display the
@@ -100,6 +104,7 @@ download_soa: |
     - password_hint: hint for the PDF password (if the document is password-protected)
     - filename: the PDF filename
   Notes:
+    - This is a side-effect tool. If you already called it in the current turn with the same date range, do not call it again. Use the existing document result and continue.
     - Requires an active loan to be selected (call select_loan first if needed).
     - If the result contains a `download_url`, present it as a clickable link for the user
       to download the PDF.
@@ -119,5 +124,7 @@ select_loan: |
   Purpose: Set the active loan for the current session.
   Input variables:
     - loan_number: The loan_number value from list_loans() output.
+  Notes:
+    - This is a side-effect tool. If you already called it in the current turn with the same loan_number, do not call it again. Use the existing result and continue.
   Returns:
     - Confirmation string, or an error with the list of valid loan numbers.

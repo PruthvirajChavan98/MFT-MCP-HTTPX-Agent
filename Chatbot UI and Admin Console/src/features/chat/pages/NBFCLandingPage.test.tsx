@@ -104,7 +104,9 @@ describe('NBFCLandingPage', () => {
     expect(adminLink).toHaveClass('rounded-full', 'min-h-12')
     expect(adminLink).toHaveAttribute('href', '/admin')
     expect(scoped.getByRole('button', { name: 'Register' })).toHaveClass('rounded-full', 'min-h-12')
-    expect(scoped.getByRole('button', { name: 'Apply Now' })).toHaveClass('rounded-full', 'min-h-12')
+    const archLink = scoped.getByRole('link', { name: 'View Architecture' })
+    expect(archLink).toHaveClass('rounded-full', 'min-h-12')
+    expect(archLink).toHaveAttribute('href', '/architecture')
   })
 
   it('shows the admin demo notice on hover without changing navigation', async () => {
@@ -137,9 +139,5 @@ describe('NBFCLandingPage', () => {
       expect(screen.queryByRole('dialog', { name: /site tour/i })).not.toBeInTheDocument()
     })
     expect(window.localStorage.getItem('mft_landing_spotlight_dismissed_v1')).toBe('true')
-
-    fireEvent.click(screen.getByRole('button', { name: /explore site/i }))
-    expect(getTourDialog()).toBeInTheDocument()
-    expect(screen.getByText('Start with the main actions')).toBeInTheDocument()
   })
 })

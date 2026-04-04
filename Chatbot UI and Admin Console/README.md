@@ -1,10 +1,11 @@
 # NBFC Chatbot UI
 
-Production-grade React 18 + Tailwind CSS v4 + shadcn/ui frontend for the Mock FinTech NBFC chatbot.
+Production-grade React 19 + Tailwind CSS v4 + shadcn/ui frontend for the Mock FinTech NBFC chatbot.
 
 ## Running locally
 
 ```bash
+node --version # 22.12.0 or newer
 npm install
 npm run dev
 ```

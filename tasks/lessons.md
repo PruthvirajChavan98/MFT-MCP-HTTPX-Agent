@@ -43,3 +43,21 @@
 ### 10. Do not infer provider from an ambiguous model ID when setting product defaults
 **Trigger:** The product default needed to be Groq `openai/gpt-oss-120b`, but the existing model-name inference logic would classify that ID as OpenRouter.
 **Rule:** For product defaults and first-run session bootstrapping, store an explicit provider/model pair. Keep string-based provider inference only as a fallback for legacy or partially saved configs, not for default UX.
+
+## 2026-04-04
+
+### 11. Verify end-to-end event delivery, not just component toggles
+**Trigger:** I added a `Raw tool calls` UI toggle and component test, but the live chat still never showed it because the backend/front-end SSE contract was not canonical for `tool_call`.
+**Rule:** For streamed UI features, verify the full producer -> parser -> state -> render path. A component-only test is not enough when the real failure surface is the event contract.
+
+### 12. Avoid duplicate owners for the same detail UI
+**Trigger:** The traces experience stayed broken because `/admin/traces` rendered its own inline inspector while the admin shell also owned a global trace sheet keyed off the same `traceId`.
+**Rule:** When a route param drives a shared detail view, there must be exactly one component responsible for fetching and rendering that detail. Do not split ownership between page-local and global containers.
+
+### 13. Distinguish duplicate execution from duplicate external delivery
+**Trigger:** The raw tool-call panel showed `generate_otp` twice, but the user received only one OTP. I needed to separate agent-side duplicate execution from downstream delivery dedupe/rate limiting before choosing the fix.
+**Rule:** For side-effect bugs, verify whether the duplication is in agent execution, transport retry, or downstream delivery. Fix the execution layer first; do not assume a single external side effect means the upstream call only happened once.
+
+### 14. LangGraph astream_events fires nested tool events from adapter wrappers
+**Trigger:** MCP tools wrapped by `mcp_manager.py` create nested Runnables (outer StructuredTool wrapper → inner MCP adapter tool). `astream_events(v2)` fires `on_tool_end` for BOTH, each with a different `run_id` and potentially different `data` shapes. A `hash(output)` dedup failed because `extract_tool_output()` produced different strings from each level.
+**Rule:** When deduplicating LangGraph stream events for wrapped/nested Runnables, use `parent_ids` to identify inner runs — skip `on_tool_end` events whose `parent_ids` overlap with tracked `on_tool_start` run_ids. Do not rely on output string equality across hierarchy levels.

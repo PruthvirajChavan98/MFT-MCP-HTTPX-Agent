@@ -54,6 +54,39 @@ def test_lifecycle_payload_compacts_large_start_input():
     assert "[truncated:" in question
 
 
+def test_nested_tool_end_filtered_by_parent_ids():
+    """Inner/nested on_tool_end events whose parent_ids overlap with
+    tracked tool_start run_ids should be skipped."""
+    tool_start_run_ids: set[str] = set()
+
+    # Outer tool starts — run_id tracked
+    outer_run_id = "outer-run-001"
+    tool_start_run_ids.add(outer_run_id)
+
+    # Inner tool starts — run_id also tracked
+    inner_run_id = "inner-run-002"
+    tool_start_run_ids.add(inner_run_id)
+
+    # Inner on_tool_end: parent_ids includes outer_run_id (a tracked tool start)
+    inner_event_parent_ids = ["graph-run", outer_run_id]
+    assert any(pid in tool_start_run_ids for pid in inner_event_parent_ids)
+    # → this event should be SKIPPED
+
+    # Outer on_tool_end: parent_ids are graph/node-level, NOT other tool starts
+    outer_event_parent_ids = ["graph-run", "node-run"]
+    assert not any(pid in tool_start_run_ids for pid in outer_event_parent_ids)
+    # → this event should be EMITTED
+
+
+def test_non_nested_tool_end_emitted_when_no_parent_overlap():
+    """on_tool_end events without tool-run parents pass through."""
+    tool_start_run_ids = {"tool-run-A", "tool-run-B"}
+
+    # Event from a tool whose parents are graph/node runs only
+    parent_ids = ["graph-run-1", "chain-run-2"]
+    assert not any(pid in tool_start_run_ids for pid in parent_ids)
+
+
 def test_lifecycle_events_contains_langchain_v2_required_types():
     required = {
         "on_chat_model_start",

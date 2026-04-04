@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatWidget } from './ChatWidget'
@@ -230,6 +230,7 @@ describe('ChatWidget', () => {
     fireEvent.click(screen.getByRole('button', { name: /open chat/i }))
     fireEvent.click(screen.getAllByTitle('Configure session')[0])
 
+    await waitForElementToBeRemoved(() => screen.queryByText('Loading session config...'))
     expect(await screen.findByRole('button', { name: /save & apply/i })).toBeEnabled()
     expect(
       screen.getByText(

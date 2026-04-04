@@ -140,4 +140,138 @@ describe('useChatStream stream-only contract', () => {
     expect(assistant?.content).toBe('Here are some options.')
     expect('followUps' in (hook.result.current as unknown as Record<string, unknown>)).toBe(false)
   })
+
+  it('stores tool calls from canonical JSON tool_call events on the active assistant message', async () => {
+    streamSseMock.mockImplementation(async (url: string, _init: RequestInit, handlers: { onEvent: StreamOnEvent }) => {
+      if (url.endsWith('/agent/stream')) {
+        handlers.onEvent(
+          'tool_call',
+          JSON.stringify({
+            name: 'mock_fintech_knowledge_base',
+            tool_call_id: 'tool_123',
+            output: '{"answer":"Sure"}',
+          }),
+        )
+        handlers.onEvent('token', 'Here is the answer.')
+        handlers.onEvent('done', JSON.stringify({ status: 'complete' }), { status: 'complete' })
+      }
+    })
+
+    const hook = await initHook()
+
+    await act(async () => {
+      await hook.result.current.sendMessage('what tool did you use?')
+    })
+
+    const assistant = hook.result.current.messages.find((m) => m.role === 'assistant')
+    expect(assistant?.toolCalls).toEqual([
+      {
+        name: 'mock_fintech_knowledge_base',
+        tool_call_id: 'tool_123',
+        output: '{"answer":"Sure"}',
+      },
+    ])
+  })
+
+  it('deduplicates tool_call events with the same tool_call_id', async () => {
+    streamSseMock.mockImplementation(async (url: string, _init: RequestInit, handlers: { onEvent: StreamOnEvent }) => {
+      if (url.endsWith('/agent/stream')) {
+        handlers.onEvent(
+          'tool_call',
+          JSON.stringify({
+            name: 'generate_otp',
+            tool_call_id: 'tc_dup_1',
+            output: 'OTP sent',
+          }),
+        )
+        handlers.onEvent(
+          'tool_call',
+          JSON.stringify({
+            name: 'generate_otp',
+            tool_call_id: 'tc_dup_1',
+            output: 'OTP sent',
+          }),
+        )
+        handlers.onEvent('token', 'OTP has been sent.')
+        handlers.onEvent('done', JSON.stringify({ status: 'complete' }), { status: 'complete' })
+      }
+    })
+
+    const hook = await initHook()
+
+    await act(async () => {
+      await hook.result.current.sendMessage('send otp')
+    })
+
+    const assistant = hook.result.current.messages.find((m) => m.role === 'assistant')
+    expect(assistant?.toolCalls).toHaveLength(1)
+    expect(assistant?.toolCalls?.[0]?.tool_call_id).toBe('tc_dup_1')
+  })
+
+  it('keeps distinct tool_call events with different tool_call_ids', async () => {
+    streamSseMock.mockImplementation(async (url: string, _init: RequestInit, handlers: { onEvent: StreamOnEvent }) => {
+      if (url.endsWith('/agent/stream')) {
+        handlers.onEvent(
+          'tool_call',
+          JSON.stringify({
+            name: 'generate_otp',
+            tool_call_id: 'tc_a',
+            output: 'OTP sent',
+          }),
+        )
+        handlers.onEvent(
+          'tool_call',
+          JSON.stringify({
+            name: 'mock_fintech_knowledge_base',
+            tool_call_id: 'tc_b',
+            output: '{"answer":"Yes"}',
+          }),
+        )
+        handlers.onEvent('token', 'Done.')
+        handlers.onEvent('done', JSON.stringify({ status: 'complete' }), { status: 'complete' })
+      }
+    })
+
+    const hook = await initHook()
+
+    await act(async () => {
+      await hook.result.current.sendMessage('otp and kb')
+    })
+
+    const assistant = hook.result.current.messages.find((m) => m.role === 'assistant')
+    expect(assistant?.toolCalls).toHaveLength(2)
+  })
+
+  it('keeps compatibility with legacy parsed tool_call payloads', async () => {
+    streamSseMock.mockImplementation(async (url: string, _init: RequestInit, handlers: { onEvent: StreamOnEvent }) => {
+      if (url.endsWith('/agent/stream')) {
+        handlers.onEvent(
+          'tool_call',
+          "{'name':'mock_fintech_knowledge_base','tool_call_id':'tool_legacy','output':'ok'}",
+          {
+            name: 'mock_fintech_knowledge_base',
+            tool_call_id: 'tool_legacy',
+            output: 'ok',
+          },
+        )
+        handlers.onEvent('token', 'Legacy answer')
+        handlers.onEvent('done', JSON.stringify({ status: 'complete' }), { status: 'complete' })
+      }
+    })
+
+    const hook = await initHook()
+
+    await act(async () => {
+      await hook.result.current.sendMessage('legacy tool call')
+    })
+
+    const assistant = hook.result.current.messages.find((m) => m.role === 'assistant')
+    expect(assistant?.toolCalls).toEqual([
+      {
+        name: 'mock_fintech_knowledge_base',
+        tool_call_id: 'tool_legacy',
+        output: 'ok',
+      },
+    ])
+  })
 })
