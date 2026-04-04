@@ -31,7 +31,7 @@ def _json_load_maybe(value: Any) -> Any:
 
 
 def _encode_cursor(payload: dict[str, Any]) -> str:
-    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=True, default=str).encode("utf-8")
     return base64.urlsafe_b64encode(raw).decode("utf-8")
 
 

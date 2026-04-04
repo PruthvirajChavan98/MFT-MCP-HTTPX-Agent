@@ -382,3 +382,19 @@ async def test_checkpoint_trace_detail_strips_raw_follow_up_suffix():
     assert detail["trace"]["final_output"] == "Answer text"
     assert detail["events"][-1]["event_type"] == "token"
     assert detail["events"][-1]["text"] == "Answer text"
+
+
+def test_encode_cursor_handles_datetime():
+    """Cursor payloads from DB queries may contain datetime objects."""
+    from src.agent_service.api.admin_analytics.utils import _decode_cursor, _encode_cursor
+
+    payload = {
+        "started_at": datetime(2026, 4, 4, 14, 0, 0, tzinfo=timezone.utc),
+        "session_id": "sess-1",
+    }
+    cursor = _encode_cursor(payload)
+    assert isinstance(cursor, str)
+    decoded = _decode_cursor(cursor, operation="test")
+    assert decoded is not None
+    assert decoded["session_id"] == "sess-1"
+    assert "2026-04-04" in decoded["started_at"]

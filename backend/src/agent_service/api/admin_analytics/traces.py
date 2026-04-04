@@ -121,7 +121,7 @@ def _build_tool_call_lookup(
         output_str = (
             raw_output
             if isinstance(raw_output, str)
-            else json.dumps(raw_output, ensure_ascii=False)
+            else json.dumps(raw_output, ensure_ascii=False, default=str)
         )
         result.setdefault(ai_idx, []).append(
             {"name": tc_name, "output": output_str, "tool_call_id": tc_id}
