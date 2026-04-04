@@ -288,9 +288,9 @@ async def test_db_error_raises_http_exception():
         await trace_eval_status(request, trace_id="trace-error")
 
     assert exc_info.value.status_code == 503
-    assert exc_info.value.detail["code"] == "store_unavailable"
-    assert exc_info.value.detail["operation"] == "trace_eval_status"
-    assert "connection refused" in exc_info.value.detail["message"]
+    assert "Database unavailable" in exc_info.value.detail
+    assert "trace_eval_status" in exc_info.value.detail
+    assert "connection refused" in exc_info.value.detail
 
 
 def test_enable_llm_judge_accepts_numeric_truthy(monkeypatch: pytest.MonkeyPatch):

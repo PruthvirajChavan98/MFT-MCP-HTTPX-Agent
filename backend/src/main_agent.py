@@ -17,5 +17,5 @@ app = app_factory.create_app()
 
 
 if __name__ == "__main__":
-    log.info(f"🚀 Starting MFT Agent Service on port {PORT}")
+    log.info("🚀 Starting MFT Agent Service on port %d", PORT)
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

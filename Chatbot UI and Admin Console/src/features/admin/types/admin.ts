@@ -45,6 +45,13 @@ export interface EvalTraceDetail {
     passed: boolean
     reasoning?: string
   }>
+  shadow_judge?: {
+    helpfulness: number
+    faithfulness: number
+    policy_adherence: number
+    summary?: string
+    evaluated_at?: string
+  } | null
 }
 
 export type FaqVectorStatus = 'pending' | 'syncing' | 'synced' | 'failed'

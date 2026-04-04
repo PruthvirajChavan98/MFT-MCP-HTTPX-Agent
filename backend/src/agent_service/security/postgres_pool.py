@@ -48,5 +48,6 @@ class PostgresPoolManager:
             async with self._pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
             return True
-        except Exception:
+        except Exception as exc:
+            log.warning("PostgreSQL ping failed: %s", exc)
             return False

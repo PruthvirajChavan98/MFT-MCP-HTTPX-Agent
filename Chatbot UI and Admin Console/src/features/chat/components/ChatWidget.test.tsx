@@ -20,7 +20,7 @@ vi.mock('@shared/hooks/useModels', () => ({
   useAvailableModels: useAvailableModelsMock,
 }))
 
-vi.mock('@features/admin/api/admin', () => ({
+vi.mock('@shared/api/sessions', () => ({
   fetchSessionConfig: fetchSessionConfigMock,
   saveSessionConfig: saveSessionConfigMock,
 }))

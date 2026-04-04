@@ -153,7 +153,7 @@ def logout(session_id: str) -> str:
 
 
 def main():
-    log.info(f"Starting MCP Server on {MCP_SERVER_HOST}:{MCP_SERVER_PORT}")
+    log.info("Starting MCP Server on %s:%s", MCP_SERVER_HOST, MCP_SERVER_PORT)
     mcp.run(transport="sse", host=MCP_SERVER_HOST, port=MCP_SERVER_PORT)
 
 

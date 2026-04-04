@@ -19,7 +19,8 @@ STREAM_KEY = "eval:live"
 def _safe_json(obj: Any) -> str:
     try:
         return json.dumps(obj, ensure_ascii=False)
-    except Exception:
+    except Exception as exc:
+        log.debug("_safe_json serialization fallback: %s", exc)
         return json.dumps({"_str": str(obj)}, ensure_ascii=False)
 
 
@@ -46,8 +47,8 @@ async def eval_live(
             lei = request.headers.get("last-event-id")
             if lei:
                 last_id = lei.strip()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Failed to parse Last-Event-ID header: %s", exc)
 
         # Send a hello so client knows it’s connected
         yield {"event": "hello", "data": _safe_json({"stream": STREAM_KEY, "cursor": last_id})}
@@ -82,8 +83,8 @@ async def eval_live(
         finally:
             try:
                 await r.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Redis connection close failed: %s", exc)
 
     return EventSourceResponse(
         gen(),

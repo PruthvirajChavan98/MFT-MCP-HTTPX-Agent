@@ -19,7 +19,6 @@ from src.agent_service.core.config import (
     SHADOW_JUDGE_MODEL,
     SHADOW_JUDGE_MODEL_FALLBACK,
     SHADOW_JUDGE_POLL_SECONDS,
-    SHADOW_JUDGE_REASONING_EFFORT,
 )
 from src.agent_service.core.http_client import close_http_client, get_http_client
 from src.agent_service.eval_store.shadow_queue import RedisTraceQueue, trace_queue
@@ -37,8 +36,8 @@ ON CONFLICT (eval_id) DO NOTHING
 """
 
 
-def _utc_iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _extract_json_block(text: str) -> str:
@@ -65,7 +64,7 @@ def _default_eval_row(
 ) -> dict[str, Any]:
     return {
         "eval_id": uuid.uuid4().hex,
-        "evaluated_at": _utc_iso_now(),
+        "evaluated_at": _utc_now(),
         "trace_id": item.get("trace_id"),
         "session_id": item.get("session_id"),
         "helpfulness": 0.0,
@@ -111,7 +110,6 @@ class ShadowJudgeWorker:
             "model": model,
             "messages": messages,
             "temperature": 0,
-            "model_kwargs": {"reasoning_effort": SHADOW_JUDGE_REASONING_EFFORT},
         }
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEYS[0]}",
@@ -159,7 +157,7 @@ class ShadowJudgeWorker:
             rows.append(
                 {
                     "eval_id": uuid.uuid4().hex,
-                    "evaluated_at": _utc_iso_now(),
+                    "evaluated_at": _utc_now(),
                     "trace_id": trace_id or None,
                     "session_id": item.get("session_id"),
                     "helpfulness": _coerce_score(row.get("helpfulness")),
@@ -213,7 +211,7 @@ class ShadowJudgeWorker:
                 r.get("faithfulness", 0.0),
                 r.get("policy_adherence", 0.0),
                 r.get("summary", ""),
-                json.dumps(r, ensure_ascii=False),
+                json.dumps(r, ensure_ascii=False, default=str),
                 r.get("evaluated_at"),
             )
             for r in rows

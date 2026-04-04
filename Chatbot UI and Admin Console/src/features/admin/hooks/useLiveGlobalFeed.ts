@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { API_BASE_URL } from '@shared/api/http';
+import type { SessionCostSummary } from '@features/admin/costs/viewmodel';
 
 const SSE_URL = API_BASE_URL + '/live/global';
 
@@ -27,16 +28,14 @@ export function useLiveGlobalFeed(adminKey: string) {
                 }
             },
             onmessage(ev) {
-                if (ev.event === 'connected') {
-                    console.log('[SSE] Global feed established');
-                } else if (ev.event === 'cost_update') {
+                if (ev.event === 'cost_update') {
                     const data = JSON.parse(ev.data);
-                    queryClient.setQueryData(['session-cost-summary'], (oldData: any) => {
+                    queryClient.setQueryData<SessionCostSummary>(['session-cost-summary'], (oldData) => {
                         if (!oldData) return oldData;
                         return {
                             ...oldData,
                             total_cost: data.new_total,
-                            sessions: (oldData.sessions || []).map((s: any) =>
+                            sessions: (oldData.sessions || []).map((s) =>
                                 s.session_id === data.session_id ? { ...s, total_cost: data.new_total } : s
                             )
                         };
@@ -50,7 +49,7 @@ export function useLiveGlobalFeed(adminKey: string) {
                 }
             },
             onclose() {
-                console.log('[SSE] Global feed closed');
+                // connection closed — no action needed
             },
             onerror(err) {
                 console.error('[SSE] Connection Error:', err);

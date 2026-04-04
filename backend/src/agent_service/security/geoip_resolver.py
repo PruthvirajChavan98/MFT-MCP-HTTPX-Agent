@@ -43,7 +43,8 @@ class MaxMindGeoLiteResolver:
                 longitude=float(city.location.longitude),
                 country_code=city.country.iso_code,
             )
-        except Exception:
+        except Exception as exc:
+            log.debug("GeoIP resolution failed for ip=%s: %s", ip_str, exc)
             return None
 
     def close(self) -> None:

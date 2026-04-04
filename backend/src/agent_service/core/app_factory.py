@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -208,10 +209,18 @@ class AppFactory:
 
     @staticmethod
     def _configure_cors(app: FastAPI) -> None:
-        """Configure CORS middleware."""
+        """Configure CORS middleware from CORS_ALLOWED_ORIGINS env var."""
+        _cors_origins: list[str] = [
+            o.strip()
+            for o in os.getenv(
+                "CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4173"
+            ).split(",")
+            if o.strip()
+        ] or ["*"]
+
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],  # Configure for production
+            allow_origins=_cors_origins,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],

@@ -20,13 +20,21 @@ const STORAGE = {
 
 const AdminContext = createContext<AdminContextValue | null>(null)
 
+function safeGetItem(key: string): string {
+  try {
+    return localStorage.getItem(key) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 export function AdminProvider({ children }: { children: React.ReactNode }) {
-  const [adminKey, _setAdminKey] = useState(() => localStorage.getItem(STORAGE.adminKey) ?? '')
+  const [adminKey, _setAdminKey] = useState(() => safeGetItem(STORAGE.adminKey))
   const [openrouterKey, _setOpenrouterKey] = useState(
-    () => localStorage.getItem(STORAGE.openrouterKey) ?? '',
+    () => safeGetItem(STORAGE.openrouterKey),
   )
-  const [nvidiaKey, _setNvidiaKey] = useState(() => localStorage.getItem(STORAGE.nvidiaKey) ?? '')
-  const [groqKey, _setGroqKey] = useState(() => localStorage.getItem(STORAGE.groqKey) ?? '')
+  const [nvidiaKey, _setNvidiaKey] = useState(() => safeGetItem(STORAGE.nvidiaKey))
+  const [groqKey, _setGroqKey] = useState(() => safeGetItem(STORAGE.groqKey))
 
   const setAdminKey = useCallback((v: string) => {
     localStorage.setItem(STORAGE.adminKey, v)

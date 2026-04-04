@@ -141,9 +141,9 @@ async def reset_identifier_limit(identifier: str, http_request: Request) -> Dict
                 if success:
                     reset_count += 1
         except Exception as e:
-            log.error(f"Failed to reset limiter {limiter_name}: {e}")
+            log.error("Failed to reset limiter %s: %s", limiter_name, e)
 
-    log.warning(f"ADMIN: Reset rate limit for identifier: {identifier} ({reset_count} limiters)")
+    log.warning("ADMIN: Reset rate limit for identifier: %s (%d limiters)", identifier, reset_count)
 
     return {
         "success": True,
@@ -194,7 +194,7 @@ async def rate_limit_health_check() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        log.error(f"Rate limit health check failed: {e}")
+        log.error("Rate limit health check failed: %s", e)
         return {
             "status": "enabled",
             "healthy": False,

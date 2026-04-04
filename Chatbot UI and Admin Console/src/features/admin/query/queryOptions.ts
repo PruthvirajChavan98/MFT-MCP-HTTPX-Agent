@@ -14,6 +14,9 @@ import {
   fetchTracesPage,
 } from '@features/admin/api/admin'
 
+/** Standard polling interval for admin dashboard queries. */
+export const ADMIN_REFETCH_MS = 30_000
+
 type GuardrailEventsParams = {
   adminKey: string
   tenantId: string
@@ -38,7 +41,7 @@ export function sessionCostSummaryQueryOptions() {
   return queryOptions({
     queryKey: ['session-cost-summary'] as const,
     queryFn: fetchSessionCostSummary,
-    refetchInterval: 30_000,
+    refetchInterval: ADMIN_REFETCH_MS,
   })
 }
 
@@ -70,7 +73,7 @@ export function guardrailSummaryQueryOptions(adminKey: string, tenantId: string)
     queryKey: ['guardrail-summary', adminKey, tenantId] as const,
     queryFn: () => fetchGuardrailSummary(adminKey, tenantId),
     enabled: Boolean(adminKey.trim() && tenantId.trim()),
-    refetchInterval: 30_000,
+    refetchInterval: ADMIN_REFETCH_MS,
   })
 }
 
@@ -88,7 +91,7 @@ export function guardrailJudgeSummaryQueryOptions(adminKey: string) {
     queryKey: ['guardrail-judge', adminKey] as const,
     queryFn: () => fetchGuardrailJudgeSummary(adminKey),
     enabled: Boolean(adminKey.trim()),
-    refetchInterval: 30_000,
+    refetchInterval: ADMIN_REFETCH_MS,
   })
 }
 
@@ -97,7 +100,7 @@ export function guardrailTrendsQueryOptions(adminKey: string, tenantId: string, 
     queryKey: ['guardrail-trends', adminKey, tenantId, hours] as const,
     queryFn: () => fetchGuardrailTrends(adminKey, tenantId, hours),
     enabled: Boolean(adminKey.trim() && tenantId.trim()),
-    refetchInterval: 30_000,
+    refetchInterval: ADMIN_REFETCH_MS,
   })
 }
 
@@ -132,7 +135,7 @@ export function faqListQueryOptions(adminKey: string, limit = 500, skip = 0) {
       const hasActive = data?.some(
         (f) => f.vector_status === 'pending' || f.vector_status === 'syncing',
       )
-      return hasActive ? 5_000 : 30_000
+      return hasActive ? 5_000 : ADMIN_REFETCH_MS
     },
   })
 }

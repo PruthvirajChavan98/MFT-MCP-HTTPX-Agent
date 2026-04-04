@@ -7,7 +7,6 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from redis import Redis
 from redis.asyncio import ConnectionPool
 from redis.asyncio import Redis as AsyncRedis
 
@@ -80,11 +79,11 @@ class SessionUtils:
         return sid
 
     @staticmethod
-    def is_user_authenticated(session_id: str) -> bool:
-        """Check if user has an active access_token in Redis."""
+    async def is_user_authenticated(session_id: str) -> bool:
+        """Check if user has an active access_token in Redis (async)."""
         try:
-            client = Redis.from_url(REDIS_URL, decode_responses=True)
-            data_str = client.get(session_id)
+            redis = await get_redis()
+            data_str = await redis.get(session_id)
 
             if not data_str:
                 return False
@@ -125,48 +124,6 @@ class SessionUtils:
 
         return {}
 
-    @staticmethod
-    async def save_session_config(
-        session_id: str, config: Dict[str, Any], ttl: int = 30 * 24 * 60 * 60
-    ) -> bool:
-        """Save session configuration to Redis (BYOK storage)."""
-        try:
-            redis = await get_redis()
-            key = f"session:config:{session_id}"
-            await redis.set(key, json.dumps(config), ex=ttl)
-            log.info(f"Saved config for session {session_id}")
-            return True
-        except Exception as e:
-            log.error(f"Failed to save session config: {e}")
-            return False
-
-    @staticmethod
-    async def get_session_config(session_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve session configuration from Redis."""
-        try:
-            redis = await get_redis()
-            key = f"session:config:{session_id}"
-            config_str = await redis.get(key)
-            return json.loads(config_str) if config_str else None
-        except Exception as e:
-            log.error(f"Failed to get session config: {e}")
-            return None
-
-    @staticmethod
-    async def delete_session(session_id: str) -> bool:
-        """Delete session configuration from Redis."""
-        try:
-            redis = await get_redis()
-            key = f"session:config:{session_id}"
-            deleted = await redis.delete(key)
-            if deleted > 0:
-                log.info(f"Deleted session config for {session_id}")
-                return True
-            return False
-        except Exception as e:
-            log.error(f"Failed to delete session: {e}")
-            return False
-
 
 # Singleton instance
 session_utils = SessionUtils()
@@ -178,6 +135,6 @@ def valid_session_id(session_id: object) -> str:
     return session_utils.validate_session_id(session_id)
 
 
-def is_user_authenticated(session_id: str) -> bool:
+async def is_user_authenticated(session_id: str) -> bool:
     """DEPRECATED: Use session_utils.is_user_authenticated() instead."""
-    return session_utils.is_user_authenticated(session_id)
+    return await session_utils.is_user_authenticated(session_id)

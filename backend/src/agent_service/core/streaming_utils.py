@@ -265,9 +265,3 @@ class SSEEventFormatter:
 # Singleton instances
 streaming_utils = StreamingUtils()
 sse_formatter = SSEEventFormatter()
-
-
-# Backward compatibility alias
-def _extract_tool_output(output: Any) -> str:
-    """DEPRECATED: Use streaming_utils.extract_tool_output() instead."""
-    return streaming_utils.extract_tool_output(output)

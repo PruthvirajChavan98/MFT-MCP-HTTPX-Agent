@@ -43,10 +43,10 @@ def _auth_or_401(x_key: Optional[str]) -> None:
 def _schedule(coro):
     try:
         asyncio.create_task(coro)
-    except RuntimeError:
+    except RuntimeError as exc:
         # No running loop (should not happen under uvicorn),
         # but we also don't want ingest to fail.
-        pass
+        log.debug("_schedule: no running event loop: %s", exc)
 
 
 def _safe_str(v: Any) -> str:
@@ -56,7 +56,8 @@ def _safe_str(v: Any) -> str:
         return str(v)
     try:
         return json.dumps(v, ensure_ascii=False)
-    except Exception:
+    except Exception as exc:
+        log.debug("_safe_str JSON serialization fallback: %s", exc)
         return str(v)
 
 
@@ -150,7 +151,8 @@ async def ingest(
                     "meta": e.get("meta") if isinstance(e.get("meta"), dict) else {},
                 }
             )
-        except Exception:
+        except Exception as exc:
+            log.debug("Skipping malformed event during normalization: %s", exc)
             continue
 
     if norm_events:
@@ -180,7 +182,8 @@ async def ingest(
                     "meta": r.get("meta") if isinstance(r.get("meta"), dict) else {},
                 }
             )
-        except Exception:
+        except Exception as exc:
+            log.debug("Skipping malformed eval during normalization: %s", exc)
             continue
 
     if norm_evals:

@@ -58,6 +58,10 @@
 **Trigger:** The raw tool-call panel showed `generate_otp` twice, but the user received only one OTP. I needed to separate agent-side duplicate execution from downstream delivery dedupe/rate limiting before choosing the fix.
 **Rule:** For side-effect bugs, verify whether the duplication is in agent execution, transport retry, or downstream delivery. Fix the execution layer first; do not assume a single external side effect means the upstream call only happened once.
 
+### 16. Trace the full data path before changing a type
+**Trigger:** Changed `_utc_iso_now()` from returning `str` to `datetime` to fix asyncpg. Didn't check that the same value flows into `json.dumps(r)` two lines later — which crashes on `datetime`. Required a second fix.
+**Rule:** When changing a return type, grep for ALL consumers of that value. A type change in one place breaks every downstream consumer that assumed the old type. Trace the full path: creation → storage → serialization → API response.
+
 ### 15. Write tests for new code — passing old tests means nothing
 **Trigger:** Added eval status endpoint, useEvalStatus hook, and eval badge without writing a single test. Claimed "66/66 tests passed" as if that proved correctness — it only proves I didn't break existing code.
 **Rule:** New code gets new tests. Period. "Existing tests pass" is not a verification of new functionality.

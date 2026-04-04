@@ -1,5 +1,37 @@
 # Task Plan
 
+## 2026-04-04 - Code review P0/P1 cleanup
+
+- [x] P0: Create .env.example with dummy values, .env already gitignored
+- [x] P0: Fix CORS wildcard → configurable `CORS_ALLOWED_ORIGINS` env var
+- [x] P1: Delete dead backend files (graph_utils.py, cost.py→pricing.py, nbfc_taxonomy.py, faqs/)
+- [x] P1: Delete dead frontend files (flags.ts, use-mobile.ts)
+- [x] P1: Remove backward-compat shims (utils.py deleted, streaming_utils alias removed)
+- [x] P1: Add logging to 15+ silent exception handlers (12 files, 30+ handlers)
+- [x] P1: Remove console.log from production frontend hooks (3 instances)
+- [x] Full verification: 136 backend tests, 87 frontend tests, typecheck + build clean
+
+## 2026-04-04 - P4 External review fixes
+
+- [ ] 4a: Backend dead code + bugs (kb_first, event_bus, sync Redis, config_manager, dual KB tool)
+- [ ] 4b: Frontend dead exports (sidebar, toPrettyJson, formatNumber, useLiveSessionFeed, fetchConversations, extractTrace, ChartContainer)
+- [ ] 4c: Frontend quality (parseMaybeJson, useEvalStatus fetch, Dashboard filter, refetchInterval, motion mock, localStorage try/catch)
+- [ ] Full verification
+
+## 2026-04-04 - P3 Code quality cleanup
+
+- [x] Standardize error responses: `_raise_db_error` → standard `HTTPException(detail=str)` (1 file, 9 callers)
+- [x] Convert f-string logs to parameterized: 45 instances across 14 files → zero remaining
+- [x] Replace TypeScript `any`: 6 instances across 4 files → zero remaining
+- [x] Full verification: 136 backend tests, 87 frontend tests, typecheck + build clean
+
+## 2026-04-04 - P2 Monolith splits + cross-feature decoupling
+
+- [x] P2a: Split `admin_analytics.py` (1,291 LOC) → `admin_analytics/` package (utils, guardrails, traces, conversations, overview)
+- [x] P2b: Split `admin.ts` (790 LOC) → 6 domain files (faqs, guardrails, traces, sessions, health, feedback) + barrel re-export
+- [x] P2b: Move navigation helpers to `@shared/lib/navigation.ts`, session config to `@shared/api/sessions.ts`
+- [x] Full verification: 136 backend tests, 87 frontend tests, typecheck + build clean
+
 ## 2026-04-04 - Admin console enhancements (5 items)
 
 - [x] Item 3: Show eval/judge scores in trace viewer (types + viewmodel + TraceInspector + GlobalTraceSheet)

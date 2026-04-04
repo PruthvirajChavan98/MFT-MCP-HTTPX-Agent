@@ -16,7 +16,9 @@ def _load_tool_descriptions() -> dict[str, str]:
     """
     path = Path(__file__).with_name("tool_descriptions.yaml")
     if not path.exists():
-        log.warning(f"tool_descriptions.yaml not found at {path}; tool descriptions will be empty.")
+        log.warning(
+            "tool_descriptions.yaml not found at %s; tool descriptions will be empty.", path
+        )
         return {}
 
     try:
@@ -32,7 +34,7 @@ def _load_tool_descriptions() -> dict[str, str]:
                 out[k] = v
         return out
     except Exception as e:
-        log.warning(f"Failed to load tool_descriptions.yaml: {e}")
+        log.warning("Failed to load tool_descriptions.yaml: %s", e)
         return {}
 
 

@@ -81,9 +81,6 @@ export function mapTraceDetailToViewer(detail?: EvalTraceDetail | null): TraceDe
           : undefined,
     })),
     evals: detail.evals,
+    shadow_judge: detail.shadow_judge ?? null,
   }
-}
-
-export function extractTraceQuestionFromDetail(detail?: EvalTraceDetail | null): string {
-  return parseQuestionInput(detail?.trace?.inputs_json)
 }

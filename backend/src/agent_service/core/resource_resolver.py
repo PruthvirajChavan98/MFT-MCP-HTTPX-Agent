@@ -137,7 +137,7 @@ class ResourceResolver:
                 model = llm_result
                 actual_provider = provider
 
-            tools = mcp_manager.rebuild_tools_for_user(
+            tools = await mcp_manager.rebuild_tools_for_user(
                 session_id, openrouter_api_key=openrouter_key
             )
 

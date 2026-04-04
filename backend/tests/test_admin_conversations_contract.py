@@ -5,12 +5,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent_service.api import admin_analytics
+import src.agent_service.api.admin_analytics.conversations as conversations_mod
+import src.agent_service.api.admin_analytics.traces as traces_mod
 
 
 @pytest.mark.asyncio
 async def test_conversations_cursor_contract_returns_next_cursor(monkeypatch):
-    monkeypatch.setattr(admin_analytics, "ADMIN_CURSOR_APIS_V2", True)
+    monkeypatch.setattr(conversations_mod, "ADMIN_CURSOR_APIS_V2", True)
 
     rows = [
         {
@@ -45,11 +46,11 @@ async def test_conversations_cursor_contract_returns_next_cursor(monkeypatch):
         assert args[3] == 3  # limit_plus_one
         return rows
 
-    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(conversations_mod, "_pg_rows", _fake_pg_rows)
     fake_pool = object()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
-    response = await admin_analytics.conversations(
+    response = await conversations_mod.conversations(
         request=request,
         limit=2,
         cursor=None,
@@ -123,11 +124,11 @@ async def test_traces_cursor_contract_returns_next_cursor(monkeypatch):
         assert args[5] == 3  # limit_plus_one
         return rows
 
-    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(traces_mod, "_pg_rows", _fake_pg_rows)
     fake_pool = object()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
-    response = await admin_analytics.traces(
+    response = await traces_mod.traces(
         request=request, limit=2, cursor=None, search="q", status=None, model=None
     )
 
@@ -169,9 +170,7 @@ async def test_session_traces_returns_additive_assistant_metadata(monkeypatch):
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
     )
 
-    response = await admin_analytics.session_traces(
-        request=request, session_id="session-1", limit=50
-    )
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
     assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
 
     assert assistant_row["traceId"] == "trace-123"
@@ -205,9 +204,7 @@ async def test_session_traces_omits_synthetic_trace_id_when_checkpoint_message_h
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
     )
 
-    response = await admin_analytics.session_traces(
-        request=request, session_id="session-1", limit=50
-    )
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
     assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
 
     assert "traceId" not in assistant_row
@@ -262,14 +259,12 @@ async def test_session_traces_adds_static_eval_status_for_assistant_messages(mon
             return []
         raise AssertionError(f"Unexpected query: {query}")
 
-    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(traces_mod, "_pg_rows", _fake_pg_rows)
     request = SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer(), pool=object()))
     )
 
-    response = await admin_analytics.session_traces(
-        request=request, session_id="session-1", limit=50
-    )
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
     assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
 
     assert assistant_row["evalStatus"] == {
@@ -314,15 +309,13 @@ async def test_session_traces_reconstructs_from_eval_trace_when_checkpoint_missi
             return []
         raise AssertionError(f"Unexpected query: {query}")
 
-    monkeypatch.setattr(admin_analytics, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(traces_mod, "_pg_rows", _fake_pg_rows)
     fake_pool = object()
     request = SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer(), pool=fake_pool))
     )
 
-    response = await admin_analytics.session_traces(
-        request=request, session_id="session-1", limit=50
-    )
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
     assert len(response["items"]) == 2
     assert response["items"][0]["role"] == "user"
     assert response["items"][1]["role"] == "assistant"
@@ -351,9 +344,7 @@ async def test_session_traces_derives_follow_ups_from_checkpoint_content_when_mi
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
     )
 
-    response = await admin_analytics.session_traces(
-        request=request, session_id="session-1", limit=50
-    )
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
     assistant_row = next(item for item in response["items"] if item["role"] == "assistant")
 
     assert assistant_row["content"] == "Answer text"
@@ -386,7 +377,7 @@ async def test_checkpoint_trace_detail_strips_raw_follow_up_suffix():
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
     )
 
-    detail = await admin_analytics._checkpoint_trace_detail(request, "session-1~2")
+    detail = await traces_mod._checkpoint_trace_detail(request, "session-1~2")
 
     assert detail["trace"]["final_output"] == "Answer text"
     assert detail["events"][-1]["event_type"] == "token"

@@ -519,6 +519,7 @@ If any item fails, the task is not done.
 
 Every substantive response must end with this exact footer shape:
 
+is it patch work: yes / no
 Sequential-thinking: used / blocked / not required  
 Web search: used / blocked / not required  
 Validation run: yes / no  

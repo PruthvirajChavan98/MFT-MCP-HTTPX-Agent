@@ -113,7 +113,7 @@ def get_llm(
             if has_reasoning:
                 openrouter_kwargs["reasoning"] = {"effort": normalized_reasoning_effort}
 
-            log.info(f"Initializing openrouter with model: {model_name} (ChatOpenRouter)")
+            log.info("Initializing openrouter with model: %s (ChatOpenRouter)", model_name)
             return ChatOpenRouter(
                 model=model_name,
                 api_key=api_key,
@@ -134,14 +134,14 @@ def get_llm(
     if has_reasoning and actual_provider != "openai":
         kwargs["reasoning_effort"] = normalized_reasoning_effort
 
-    log.info(f"Initializing {actual_provider} with model: {model_name}")
+    log.info("Initializing %s with model: %s", actual_provider, model_name)
 
     try:
         return init_chat_model(
             model=model_name, model_provider=actual_provider, api_key=api_key, **kwargs
         )
     except Exception as e:
-        log.error(f"Failed to init model {model_name} with provider {actual_provider}: {e}")
+        log.error("Failed to init model %s with provider %s: %s", model_name, actual_provider, e)
         raise
 
 

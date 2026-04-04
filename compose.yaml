@@ -250,6 +250,7 @@ services:
       MEMGRAPH_USER: "${MEMGRAPH_USER}"
       MEMGRAPH_PASSWORD: "${MEMGRAPH_PASSWORD}"
       SHADOW_JUDGE_ENABLED: "1"
+      POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
     mem_limit: 768m
     cpus: 1.00
     networks:

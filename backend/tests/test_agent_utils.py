@@ -3,7 +3,27 @@ import json
 import pytest
 from langchain_core.messages import HumanMessage, RemoveMessage
 
-from src.agent_service.utils import keep_only_last_n_messages, normalize_result, valid_session_id
+from src.agent_service.core.config import KEEP_LAST
+from src.agent_service.core.session_utils import valid_session_id
+from src.agent_service.core.utils import normalize_result
+
+
+def keep_only_last_n_messages(state: dict, _config: dict) -> dict[str, list[RemoveMessage]]:
+    """
+    Inlined from deleted utils.py shim.
+    Reducer: remove old messages while keeping the latest KEEP_LAST.
+    """
+    messages = state.get("messages", [])
+    if not isinstance(messages, list):
+        return {"messages": []}
+
+    excess = max(0, len(messages) - KEEP_LAST)
+    to_remove: list[RemoveMessage] = []
+    for msg in messages[:excess]:
+        msg_id = getattr(msg, "id", None)
+        if msg_id is not None:
+            to_remove.append(RemoveMessage(id=str(msg_id)))
+    return {"messages": to_remove}
 
 
 def test_valid_session_id():

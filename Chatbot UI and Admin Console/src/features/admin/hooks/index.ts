@@ -1,2 +1,4 @@
 export { useLiveGlobalFeed } from './useLiveGlobalFeed'
-export { useLiveSessionFeed } from './useLiveSessionFeed'
+export { useConversationSelection } from './useConversationSelection'
+export { useConversationQueries, resolveSelectedSession } from './useConversationQueries'
+export type { ResolvedSession, PartialSessionInfo } from './useConversationQueries'

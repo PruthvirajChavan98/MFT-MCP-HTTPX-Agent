@@ -21,12 +21,8 @@ import { toast } from 'sonner'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { useChatStream } from '@features/chat/hooks/useChatStream'
-import {
-  fetchSessionConfig,
-  saveSessionConfig,
-  type AgentModel,
-  type SessionConfig,
-} from '@features/admin/api/admin'
+import { fetchSessionConfig, saveSessionConfig, type SessionConfig } from '@shared/api/sessions'
+import type { AgentModel } from '@features/admin/api/health'
 import { useAvailableModels } from '@shared/hooks/useModels'
 import { cn } from '@components/ui/utils'
 
@@ -152,18 +148,15 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const payload: any = {
+      const payload: Parameters<typeof saveSessionConfig>[0] = {
         session_id: sessionId,
         provider: formData.provider,
         model_name: formData.model_name,
         reasoning_effort: formData.reasoning_effort,
         system_prompt: formData.system_prompt,
-      }
-
-      if (formData.apiKey) {
-        if (formData.provider === 'openrouter') payload.openrouter_api_key = formData.apiKey
-        else if (formData.provider === 'nvidia') payload.nvidia_api_key = formData.apiKey
-        else if (formData.provider === 'groq') payload.groq_api_key = formData.apiKey
+        ...(formData.apiKey && formData.provider === 'openrouter' && { openrouter_api_key: formData.apiKey }),
+        ...(formData.apiKey && formData.provider === 'nvidia' && { nvidia_api_key: formData.apiKey }),
+        ...(formData.apiKey && formData.provider === 'groq' && { groq_api_key: formData.apiKey }),
       }
 
       return saveSessionConfig(payload)
@@ -210,7 +203,7 @@ function ChatSettingsView({ sessionId, onBack }: { sessionId: string; onBack: ()
           <option value="" disabled>
             Select a model...
           </option>
-          {availableModels.map((model: any) => (
+          {availableModels.map((model) => (
             <option key={model.id} value={model.id}>
               {model.display_name || model.name || model.id}
             </option>

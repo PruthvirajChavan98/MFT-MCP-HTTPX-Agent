@@ -231,6 +231,7 @@ class QueryAnswerabilityClassifier:
                 "", k=1  # empty query — Milvus will return closest to zero-vector
             )
         except Exception as exc:  # noqa: BLE001
+            log.debug("KB vector lookup failed: %s", exc)
             return None, None, str(exc)
 
         if not results:
@@ -239,7 +240,8 @@ class QueryAnswerabilityClassifier:
         doc, score = results[0]
         try:
             numeric_score = float(score)
-        except Exception:
+        except Exception as exc:
+            log.debug("KB vector score conversion failed: %s", exc)
             numeric_score = None
         question = doc.metadata.get("question")
         return numeric_score, (str(question) if question else None), None
@@ -274,6 +276,7 @@ class QueryAnswerabilityClassifier:
                 emb = get_owner_embeddings(model=self.embed_model)
                 query_vec = np.asarray(await emb.aembed_query(q), dtype=np.float32)
             except Exception as exc:  # noqa: BLE001
+                log.warning("Query embedding failed: %s", exc)
                 vector_error = str(exc)
                 query_vec = None
 
@@ -291,6 +294,7 @@ class QueryAnswerabilityClassifier:
                         best_mcp_sem = sem_score
                         best_mcp_name = mcp_candidates[idx].name
             except Exception as exc:  # noqa: BLE001
+                log.warning("MCP tool vector scoring failed: %s", exc)
                 vector_error = str(exc)
 
         if best_mcp_sem is not None:

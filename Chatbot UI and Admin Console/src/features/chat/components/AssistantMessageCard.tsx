@@ -9,7 +9,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { cn } from '@components/ui/utils'
-import { buildTraceHref } from '@features/admin/lib/admin-links'
+import { buildTraceHref } from '@shared/lib/navigation'
 import { ChatAssistantMarkdown } from './ChatAssistantMarkdown'
 import { formatCurrency } from '@shared/lib/format'
 import type { ChatMessage as ChatMessageType, EvalStatus } from '@shared/types/chat'

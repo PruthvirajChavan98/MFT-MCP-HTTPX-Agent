@@ -7,14 +7,6 @@ export function formatCurrency(value: number): string {
   }).format(value)
 }
 
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value)
-}
-
-export function formatPct(value: number): string {
-  return `${(value * 100).toFixed(1)}%`
-}
-
 export function formatDateTime(value?: string): string {
   if (!value) return 'NA'
   const dt = new Date(value)

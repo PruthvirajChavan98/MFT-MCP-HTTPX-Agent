@@ -231,7 +231,7 @@ export function ModelConfig() {
                     <SelectValue placeholder="Select model..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
-                    {availableModels.map((m: any) => (
+                    {availableModels.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         <div className="flex items-center justify-between w-full pr-4">
                           <span>{m.display_name || m.name || m.id}</span>

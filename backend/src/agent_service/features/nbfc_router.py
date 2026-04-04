@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -30,6 +31,8 @@ from src.agent_service.features.answerability import QueryAnswerabilityClassifie
 from src.agent_service.llm.client import get_llm, get_owner_embeddings
 
 from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
+
+log = logging.getLogger("nbfc.router")
 
 # =============================================================================
 # Labels & Constants
@@ -174,7 +177,8 @@ class _ProtoCache:
                         norm_vecs.append([float(x) for x in vec])
                 out[label] = norm_vecs
             return out
-        except Exception:
+        except Exception as exc:
+            log.debug("Proto cache load failed: %s", exc)
             return None
 
     async def save(self, model: str, fp: str, data: Dict[str, List[List[float]]]) -> None:
@@ -352,12 +356,14 @@ class LLMRouter:
         try:
             structured = llm.with_structured_output(LLMRoute)
             out = await structured.ainvoke([("system", self.system), ("human", text)])
-        except Exception:
+        except Exception as exc_structured:
+            log.warning("LLM structured output failed, trying JSON fallback: %s", exc_structured)
             try:
                 # Fallback
                 chain = llm | JsonOutputParser(pydantic_object=LLMRoute)
                 out = await chain.ainvoke([("system", self.system), ("human", text)])
             except Exception as exc:
+                log.warning("LLM JSON fallback also failed: %s", exc)
                 return {
                     "sentiment": {"label": "unknown", "score": 0.0},
                     "reason": {
@@ -400,6 +406,7 @@ class LLMRouter:
                     "meta": {"rationale": route.short_rationale},
                 }
         except Exception as exc:
+            log.warning("LLM route dict conversion failed: %s", exc)
             return {
                 "sentiment": {"label": "unknown", "score": 0.0},
                 "reason": {
@@ -448,6 +455,7 @@ class NBFCClassifierService:
                 query_vector=query_vector,
             )
         except Exception as exc:  # noqa: BLE001
+            log.warning("Answerability classification failed: %s", exc)
             return {
                 "label": "unknown",
                 "answerable": False,
@@ -543,6 +551,7 @@ class NBFCClassifierService:
         try:
             e, query_vector = await self.emb.classify_with_query_vector(t, openrouter_api_key)
         except Exception as exc:
+            log.warning("Embeddings classification failed during compare: %s", exc)
             errors["embeddings"] = str(exc)
             e = {
                 "sentiment": {"label": "unknown", "score": 0.0},
@@ -554,6 +563,7 @@ class NBFCClassifierService:
         try:
             llm_result = await self.llm.classify(t, openrouter_api_key)
         except Exception as exc:
+            log.warning("LLM classification failed during compare: %s", exc)
             errors["llm"] = str(exc)
             llm_result = {
                 "sentiment": {"label": "unknown", "score": 0.0},

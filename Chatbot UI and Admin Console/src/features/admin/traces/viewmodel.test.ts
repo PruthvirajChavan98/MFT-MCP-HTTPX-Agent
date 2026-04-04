@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  extractTraceQuestionFromDetail,
   getTraceInputPreview,
   mapTraceListRows,
   mapTraceDetailToViewer,
@@ -47,20 +46,6 @@ describe('traces viewmodel', () => {
       status: 'error',
       inputPreview: 'fallback output',
     })
-  })
-
-  it('extracts question from trace detail inputs', () => {
-    const question = extractTraceQuestionFromDetail({
-      trace: {
-        trace_id: 'trace-1',
-        session_id: 'session-1',
-        inputs_json: { question: 'Explain X' },
-      },
-      events: [],
-      evals: [],
-    })
-
-    expect(question).toBe('Explain X')
   })
 
   it('preserves trace event timestamps for the viewer parser', () => {

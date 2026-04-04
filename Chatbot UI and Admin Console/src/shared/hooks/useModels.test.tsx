@@ -8,7 +8,7 @@ const { fetchModelsMock } = vi.hoisted(() => ({
   fetchModelsMock: vi.fn(),
 }))
 
-vi.mock('@features/admin/api/admin', () => ({
+vi.mock('@features/admin/api/health', () => ({
   fetchModels: fetchModelsMock,
 }))
 

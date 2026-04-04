@@ -1,13 +1,10 @@
 from typing import Optional
 
-from redis.asyncio import Redis
-
-from src.agent_service.core.config import REDIS_URL
+from src.agent_service.core.session_utils import get_redis
 
 
 class ConfigManager:
-    def __init__(self):
-        self.redis = Redis.from_url(REDIS_URL, decode_responses=True)
+    """Agent configuration storage backed by the shared async Redis pool."""
 
     async def set_config(
         self,
@@ -39,19 +36,23 @@ class ConfigManager:
             data["provider"] = provider
 
         if data:
-            await self.redis.hset(key, mapping=data)  # type: ignore
+            redis = await get_redis()
+            await redis.hset(key, mapping=data)  # type: ignore
 
     async def get_config(self, session_id: str) -> dict:
         key = f"agent:config:{session_id}"
-        return await self.redis.hgetall(key)  # type: ignore
+        redis = await get_redis()
+        return await redis.hgetall(key)  # type: ignore
 
     async def session_exists(self, session_id: str) -> bool:
         key = f"agent:config:{session_id}"
-        return await self.redis.exists(key) > 0
+        redis = await get_redis()
+        return await redis.exists(key) > 0
 
     async def list_sessions(self) -> list[str]:
+        redis = await get_redis()
         sessions = []
-        async for key in self.redis.scan_iter(match="agent:config:*"):
+        async for key in redis.scan_iter(match="agent:config:*"):
             try:
                 parts = key.split(":")
                 if len(parts) >= 3:
@@ -61,7 +62,7 @@ class ConfigManager:
                 continue
         return sessions
 
-    async def delete_session(self, session_id: str):
+    async def delete_session(self, session_id: str) -> None:
         """
         Hard delete for a session:
         1. Removes Agent Configuration (agent:config:{sid})
@@ -70,10 +71,8 @@ class ConfigManager:
         config_key = f"agent:config:{session_id}"
         auth_key = session_id
 
-        await self.redis.delete(config_key, auth_key)
-
-    async def close(self):
-        await self.redis.close()
+        redis = await get_redis()
+        await redis.delete(config_key, auth_key)
 
 
 config_manager = ConfigManager()

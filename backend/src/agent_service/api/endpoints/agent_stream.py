@@ -16,8 +16,8 @@ from src.agent_service.core.config import (
     SHADOW_JUDGE_ENABLED,
     SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS,
 )
-from src.agent_service.core.cost import calculate_run_cost_detailed
 from src.agent_service.core.follow_ups import extract_follow_ups
+from src.agent_service.core.pricing import calculate_run_cost_detailed
 from src.agent_service.core.rate_limiter_manager import (
     enforce_rate_limit,
     get_rate_limiter_manager,
@@ -589,7 +589,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                         if AGENT_INLINE_ROUTER_EXPOSE:
                             return sse_formatter.router_event(router_out)
                 except Exception as e:
-                    log.warning(f"Router classification failed: {e}")
+                    log.warning("Router classification failed: %s", e)
                 router_handled = True
                 return None
 
@@ -727,7 +727,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     except asyncio.TimeoutError:
                         log.debug("Router classification still running after stream completion")
                     except Exception as e:
-                        log.warning(f"Router classification failed late: {e}")
+                        log.warning("Router classification failed late: %s", e)
                     finally:
                         router_handled = True
 
@@ -834,7 +834,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
             except Exception as e:
                 err = str(e)
-                log.error(f"Stream error: {err}")
+                log.error("Stream error: %s", err)
                 collector.on_done(final_output=final_output, error=err)
                 if SHADOW_JUDGE_ENABLED:
                     collector.mark_shadow_judge_queued()
@@ -874,5 +874,5 @@ async def stream_agent(request: AgentRequest, http_request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        log.error(f"Stream setup error: {e}")
+        log.error("Stream setup error: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e

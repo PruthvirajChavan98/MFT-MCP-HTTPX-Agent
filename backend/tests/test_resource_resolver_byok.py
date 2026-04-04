@@ -8,6 +8,10 @@ import src.agent_service.core.resource_resolver as resolver_module
 from src.agent_service.core.resource_resolver import ResourceResolver
 
 
+async def _fake_rebuild_tools(*_args, **_kwargs):
+    return []
+
+
 @pytest.fixture(autouse=True)
 def _stub_default_system_prompt(monkeypatch):
     monkeypatch.setattr(
@@ -58,9 +62,7 @@ async def test_openrouter_provider_uses_saved_session_key_instead_of_env_fallbac
     monkeypatch.setattr(resolver_module.config_manager, "get_config", fake_get_config)
     monkeypatch.setattr(resolver_module, "OPENROUTER_API_KEY", "sk-or-env")
     monkeypatch.setattr(resolver_module, "get_llm", fake_get_llm)
-    monkeypatch.setattr(
-        resolver_module.mcp_manager, "rebuild_tools_for_user", lambda *_args, **_kwargs: []
-    )
+    monkeypatch.setattr(resolver_module.mcp_manager, "rebuild_tools_for_user", _fake_rebuild_tools)
 
     resources = await ResourceResolver.resolve_agent_resources("sid-openrouter", SimpleNamespace())
 
@@ -84,9 +86,7 @@ async def test_groq_provider_keeps_server_fallback_when_session_key_missing(monk
     monkeypatch.setattr(resolver_module, "OPENROUTER_API_KEY", "sk-or-owner")
     monkeypatch.setattr(resolver_module, "GROQ_API_KEYS", ["gsk-owner"])
     monkeypatch.setattr(resolver_module, "get_llm", fake_get_llm)
-    monkeypatch.setattr(
-        resolver_module.mcp_manager, "rebuild_tools_for_user", lambda *_args, **_kwargs: []
-    )
+    monkeypatch.setattr(resolver_module.mcp_manager, "rebuild_tools_for_user", _fake_rebuild_tools)
 
     resources = await ResourceResolver.resolve_agent_resources("sid-groq", SimpleNamespace())
 
@@ -113,9 +113,7 @@ async def test_missing_saved_config_uses_explicit_default_groq_pair(monkeypatch)
     monkeypatch.setattr(resolver_module, "OPENROUTER_API_KEY", "sk-or-owner")
     monkeypatch.setattr(resolver_module, "GROQ_API_KEYS", ["gsk-owner"])
     monkeypatch.setattr(resolver_module, "get_llm", fake_get_llm)
-    monkeypatch.setattr(
-        resolver_module.mcp_manager, "rebuild_tools_for_user", lambda *_args, **_kwargs: []
-    )
+    monkeypatch.setattr(resolver_module.mcp_manager, "rebuild_tools_for_user", _fake_rebuild_tools)
 
     resources = await ResourceResolver.resolve_agent_resources("sid-default", SimpleNamespace())
 

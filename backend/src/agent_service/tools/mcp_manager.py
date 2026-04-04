@@ -41,7 +41,7 @@ class MCPManager:
             }
         }
         self.client = MultiServerMCPClient(connections)
-        log.info(f"Connecting to MCP at {SERVER_URL}...")
+        log.info("Connecting to MCP at %s...", SERVER_URL)
 
         try:
             self.session = await self.exit_stack.enter_async_context(
@@ -64,9 +64,9 @@ class MCPManager:
                         "raw_tool": t,
                     }
                 )
-            log.info(f"MCP Loaded {len(self.tool_blueprints)} tools.")
+            log.info("MCP Loaded %d tools.", len(self.tool_blueprints))
         except Exception as e:
-            log.error(f"MCP Init Failed: {e}")
+            log.error("MCP Init Failed: %s", e)
             await self.shutdown()
             raise e
 
@@ -110,7 +110,7 @@ class MCPManager:
                 fields[fname] = (getattr(finfo, "annotation", Any), finfo)
         return create_model(f"{tool_name}Input", **fields)
 
-    def rebuild_tools_for_user(
+    async def rebuild_tools_for_user(
         self, session_id: str, openrouter_api_key: Optional[str] = None
     ) -> List[StructuredTool]:
         """
@@ -119,8 +119,8 @@ class MCPManager:
         """
         sid = valid_session_id(session_id)
 
-        # 1. Fast Auth Check (Redis)
-        is_auth = is_user_authenticated(sid)
+        # 1. Async Auth Check (Redis)
+        is_auth = await is_user_authenticated(sid)
 
         tools: List[StructuredTool] = []
 
@@ -128,11 +128,6 @@ class MCPManager:
         if self.tool_blueprints:
             for bp in self.tool_blueprints:
                 tool_name = bp["name"]
-
-                # --- FILTERING LOGIC ---
-                # If unauthenticated, SKIP tools that are not in the public list.
-                if not is_auth and tool_name not in PUBLIC_TOOLS:
-                    continue
 
                 description = bp["description"] or f"Tool: {tool_name}"
                 safe_schema = bp["safe_schema"]
@@ -184,15 +179,16 @@ class MCPManager:
                     )
                     tools.append(tool_instance)
                 except Exception as e:
-                    log.error(f"Failed to create MCP tool '{tool_name}': {e}")
+                    log.error("Failed to create MCP tool '%s': %s", tool_name, e)
                     continue
 
-        # 3. Add local KB semantic search tool (Milvus)
-        if is_auth or "mock_fintech_knowledge_base" in PUBLIC_TOOLS:
+        # 3. Add local KB semantic search tool (Milvus) — skip if MCP already provides one
+        mcp_has_kb = any(bp["name"] == "mock_fintech_knowledge_base" for bp in self.tool_blueprints)
+        if not mcp_has_kb and (is_auth or "mock_fintech_knowledge_base" in PUBLIC_TOOLS):
             try:
                 tools.append(self._build_kb_tool())
             except Exception as e:
-                log.error(f"Failed to attach KB tool: {e}")
+                log.error("Failed to attach KB tool: %s", e)
 
         return tools
 

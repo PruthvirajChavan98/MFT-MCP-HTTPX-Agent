@@ -50,6 +50,13 @@ export interface TraceEval {
   reasoning?: string
 }
 
+export interface ShadowJudge {
+  helpfulness: number
+  faithfulness: number
+  policy_adherence: number
+  summary?: string
+}
+
 export interface TraceDetail {
   trace: {
     name?: string
@@ -64,4 +71,5 @@ export interface TraceDetail {
   events?: TraceEvent[]
   cost?: TraceCost
   evals?: TraceEval[]
+  shadow_judge?: ShadowJudge | null
 }

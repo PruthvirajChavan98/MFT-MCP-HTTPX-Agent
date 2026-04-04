@@ -18,7 +18,7 @@ def _redact_uri(uri: str) -> str:
                 user = creds.split(":", 1)[0]
                 return f"{scheme}://{user}:***@{hostpart}"
     except Exception:
-        pass
+        log.debug("URI redaction failed, returning raw URI")
     return uri
 
 
@@ -30,9 +30,9 @@ class RedisSessionStore:
             c = redis.from_url(self.redis_uri, decode_responses=True)
             c.ping()
             self.client = c
-            log.info(f"✅ Connected to Redis: {_redact_uri(self.redis_uri)}")
+            log.info("✅ Connected to Redis: %s", _redact_uri(self.redis_uri))
         except Exception as e:
-            log.error(f"❌ Redis connect failed: {e}")
+            log.error("❌ Redis connect failed: %s", e)
             raise RuntimeError(f"Could not connect to Redis: {e}") from e
 
     def _valid_session_id(self, session_id: object) -> Optional[str]:
@@ -48,7 +48,7 @@ class RedisSessionStore:
         if not sid:
             return
         self.client.set(sid, json.dumps(data, ensure_ascii=False))  # type: ignore
-        log.info(f"[Redis] SET {sid} | Keys: {list(data.keys())}")
+        log.info("[Redis] SET %s | Keys: %s", sid, list(data.keys()))
 
     def get(self, session_id: str) -> Optional[dict]:
         sid = self._valid_session_id(session_id)
@@ -56,9 +56,9 @@ class RedisSessionStore:
             return None
         data = cast(Optional[str], self.client.get(sid))  # type: ignore
         if not data:
-            log.warning(f"[Redis] MISS {sid}")
+            log.warning("[Redis] MISS %s", sid)
             return None
-        log.info(f"[Redis] HIT {sid}")
+        log.info("[Redis] HIT %s", sid)
         return json.loads(data)
 
     def update(self, session_id: str, updates: dict):
@@ -74,4 +74,4 @@ class RedisSessionStore:
         if not sid:
             return
         self.client.delete(sid)  # type: ignore
-        log.info(f"[Redis] DEL {sid}")
+        log.info("[Redis] DEL %s", sid)

@@ -341,7 +341,7 @@ class ModelService:
                     )
                 return _sort_models(results)
         except Exception as e:
-            log.error(f"Groq Fetch Error: {e}")
+            log.error("Groq Fetch Error: %s", e)
             return self._hydrate_fallback("groq")
 
     async def fetch_openrouter_data(
@@ -405,7 +405,7 @@ class ModelService:
 
                 return _sort_models(results), pricing_map
         except Exception as e:
-            log.error(f"OpenRouter Fetch Error: {e}")
+            log.error("OpenRouter Fetch Error: %s", e)
             return [], {}
 
     async def fetch_nvidia_data(self) -> List[Dict[str, Any]]:
@@ -424,7 +424,7 @@ class ModelService:
                 )
 
                 if resp.status_code != 200:
-                    log.warning(f"Nvidia API Status: {resp.status_code}")
+                    log.warning("Nvidia API Status: %d", resp.status_code)
                     return self._hydrate_fallback("nvidia")
 
                 data = resp.json().get("data", [])
@@ -460,7 +460,7 @@ class ModelService:
 
                 return _sort_models(results)
         except Exception as e:
-            log.error(f"Nvidia Fetch Error: {e}")
+            log.error("Nvidia Fetch Error: %s", e)
             return self._hydrate_fallback("nvidia")
 
     async def refresh_cache(self) -> None:
@@ -481,7 +481,7 @@ class ModelService:
                 pipe.set(self.PRICING_KEY, json.dumps(or_pricing))
             await pipe.execute()
 
-        log.info(f"Cache updated. Pricing Keys: {len(or_pricing)}")
+        log.info("Cache updated. Pricing Keys: %d", len(or_pricing))
 
     async def get_cached_data(self) -> List[Dict[str, Any]]:
         raw = await self.redis.get(self.CACHE_KEY)
@@ -506,7 +506,7 @@ class ModelService:
             try:
                 await self.refresh_cache()
             except Exception as e:
-                log.error(f"Refresh failed: {e}")
+                log.error("Refresh failed: %s", e)
             await asyncio.sleep(self.REFRESH_INTERVAL)
 
     async def close(self):

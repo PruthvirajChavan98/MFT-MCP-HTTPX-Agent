@@ -39,7 +39,7 @@ async def initialize_session():
             provider=default_provider,
         )
 
-        log.info(f"Initialized new session {sid} with default BYOK config.")
+        log.info("Initialized new session %s with default BYOK config.", sid)
 
         return SessionInitResponse(
             session_id=sid,
@@ -48,7 +48,7 @@ async def initialize_session():
             provider=default_provider,
         )
     except Exception as e:
-        log.error(f"Session initialization error: {e}")
+        log.error("Session initialization error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to initialize session") from e
 
 
@@ -59,7 +59,7 @@ async def list_active_sessions():
         sessions = await config_manager.list_sessions()
         return {"count": len(sessions), "sessions": sessions}
     except Exception as e:
-        log.error(f"List sessions error: {e}")
+        log.error("List sessions error: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -142,7 +142,7 @@ async def logout_session(session_id: str):
         sid = session_utils.validate_session_id(session_id)
         await config_manager.delete_session(sid)
 
-        log.info(f"Session {sid} logged out")
+        log.info("Session %s logged out", sid)
         return {"status": "logged_out", "session_id": sid, "message": "Session cleared."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -267,9 +267,9 @@ async def cleanup_corrupted_cost_keys():
                 if key_type != "string":
                     await redis.delete(key)
                     deleted_keys.append({"key": key, "type": key_type})
-                    log.info(f"Deleted corrupted key {key} (type: {key_type})")
+                    log.info("Deleted corrupted key %s (type: %s)", key, key_type)
             except Exception as e:
-                log.error(f"Failed to process key {key}: {e}")
+                log.error("Failed to process key %s: %s", key, e)
 
         return {
             "status": "cleanup_complete",
@@ -277,5 +277,5 @@ async def cleanup_corrupted_cost_keys():
             "keys": deleted_keys[:20],  # Show first 20
         }
     except Exception as e:
-        log.error(f"Cleanup failed: {e}")
+        log.error("Cleanup failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e

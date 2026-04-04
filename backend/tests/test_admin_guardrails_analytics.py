@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from src.agent_service.api import admin_analytics
+import src.agent_service.api.admin_analytics.guardrails as guardrails_mod
 
 
 @pytest.mark.asyncio
@@ -42,8 +42,8 @@ async def test_guardrails_events_support_filters_and_pagination():
     fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(admin_analytics, "_load_guardrail_trace_rows", _fake_rows)
-    response = await admin_analytics.guardrails(
+    monkeypatch.setattr(guardrails_mod, "_load_guardrail_trace_rows", _fake_rows)
+    response = await guardrails_mod.guardrails(
         request=request,
         tenant_id="tenant-a",
         decision="block",
@@ -97,9 +97,9 @@ async def test_guardrails_trends_accepts_integer_hours():
     fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(admin_analytics, "_load_guardrail_trace_rows", _fake_rows)
+    monkeypatch.setattr(guardrails_mod, "_load_guardrail_trace_rows", _fake_rows)
 
-    response = await admin_analytics.guardrails_trends(
+    response = await guardrails_mod.guardrails_trends(
         request=request,
         tenant_id="tenant-a",
         hours=24,
@@ -118,13 +118,13 @@ async def test_guardrails_trends_returns_503_when_db_query_fails():
         raise RuntimeError("db unavailable")
 
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(admin_analytics, "_load_guardrail_trace_rows", _raise)
+    monkeypatch.setattr(guardrails_mod, "_load_guardrail_trace_rows", _raise)
 
     fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
     with pytest.raises(HTTPException) as exc_info:
-        await admin_analytics.guardrails_trends(
+        await guardrails_mod.guardrails_trends(
             request=request,
             tenant_id="tenant-a",
             hours=24,
@@ -149,10 +149,10 @@ async def test_guardrails_queue_health_reports_depth_and_oldest_age(monkeypatch)
     async def _fake_get_redis():
         return _FakeRedis()
 
-    monkeypatch.setattr(admin_analytics, "get_redis", _fake_get_redis)
-    monkeypatch.setattr(admin_analytics, "SHADOW_TRACE_QUEUE_KEY", "agent:shadow:test")
+    monkeypatch.setattr(guardrails_mod, "get_redis", _fake_get_redis)
+    monkeypatch.setattr(guardrails_mod, "SHADOW_TRACE_QUEUE_KEY", "agent:shadow:test")
 
-    response = await admin_analytics.guardrails_queue_health()
+    response = await guardrails_mod.guardrails_queue_health()
     assert response["depth"] == 4
     assert response["queue_key"] == "agent:shadow:test"
     assert response["oldest_age_seconds"] is not None
@@ -189,7 +189,7 @@ async def test_guardrails_judge_summary_returns_aggregates():
 
     fake_pool = _FakePoolJudge()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
-    response = await admin_analytics.guardrails_judge_summary(
+    response = await guardrails_mod.guardrails_judge_summary(
         request=request,
         limit_failures=5,
     )

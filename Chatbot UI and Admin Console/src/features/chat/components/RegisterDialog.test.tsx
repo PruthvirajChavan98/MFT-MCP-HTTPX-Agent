@@ -1,7 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { forwardRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { motionReactMock } from '@/test/mocks/motion'
 import { RegisterDialog } from './RegisterDialog'
 
 const { requestOtpMock, verifyOtpMock, toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
@@ -11,57 +10,7 @@ const { requestOtpMock, verifyOtpMock, toastSuccessMock, toastErrorMock } = vi.h
   toastErrorMock: vi.fn(),
 }))
 
-vi.mock('motion/react', async () => {
-  const React = await import('react')
-  const cache = new Map<string, ReturnType<typeof forwardRef>>()
-
-  function createMotionElement(tag: string) {
-    if (cache.has(tag)) return cache.get(tag)!
-
-    const component = forwardRef<
-      HTMLElement,
-      ComponentPropsWithoutRef<'div'> & { children?: ReactNode }
-    >(({ children, ...props }, ref) => {
-      const {
-        animate,
-        exit,
-        initial,
-        layout,
-        transition,
-        viewport,
-        whileHover,
-        whileInView,
-        whileTap,
-        ...domProps
-      } = props as Record<string, unknown>
-
-      void animate
-      void exit
-      void initial
-      void layout
-      void transition
-      void viewport
-      void whileHover
-      void whileInView
-      void whileTap
-
-      return React.createElement(tag, { ...domProps, ref }, children)
-    })
-
-    cache.set(tag, component)
-    return component
-  }
-
-  return {
-    motion: new Proxy(
-      {},
-      {
-        get: (_, tag: string) => createMotionElement(tag),
-      },
-    ),
-    AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  }
-})
+vi.mock('motion/react', motionReactMock)
 
 vi.mock('@shared/api/crm', () => ({
   requestOtp: requestOtpMock,

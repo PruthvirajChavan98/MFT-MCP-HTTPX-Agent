@@ -58,7 +58,7 @@ class MockFinTechAuthAPIs:
                     self._url("/mockfin-service/otp/generate_new/"),
                     json={"phone_number": phone_number},
                 )
-                self.logger.info(f"POST otp/generate_new - {resp.status_code}")
+                self.logger.info("POST otp/generate_new - %d", resp.status_code)
 
                 try:
                     resp_json = resp.json() if resp.text else {}
@@ -75,7 +75,7 @@ class MockFinTechAuthAPIs:
                     )
                 return self._to_vsc({"status_code": resp.status_code, "error": resp.text[:5000]})
         except Exception as e:
-            self.logger.error(f"OTP Gen Error: {e}")
+            self.logger.error("OTP Gen Error: %s", e)
             return self._to_vsc({"error": str(e)})
 
     def validate_otp(self, otp: str) -> str:
@@ -94,7 +94,7 @@ class MockFinTechAuthAPIs:
                 auth=self.auth, headers=headers, follow_redirects=True, timeout=_AUTH_TIMEOUT
             ) as client:
                 resp = client.post(self._url("/mockfin-service/otp/validate_new/"), json=payload)
-                self.logger.info(f"POST otp/validate_new - {resp.status_code}")
+                self.logger.info("POST otp/validate_new - %d", resp.status_code)
 
                 if resp.status_code not in (200, 201):
                     return self._to_vsc(
@@ -121,7 +121,7 @@ class MockFinTechAuthAPIs:
                     updates["app_id"] = loans[0].get("loan_number")
 
                 self.session_store.update(self.session_id, updates)
-                self.logger.info(f"✅ Session {self.session_id} authenticated.")
+                self.logger.info("✅ Session %s authenticated.", self.session_id)
 
                 result: Dict[str, Any] = {
                     "status": "success",
@@ -138,7 +138,7 @@ class MockFinTechAuthAPIs:
 
                 return self._to_vsc(result)
         except Exception as e:
-            self.logger.error(f"OTP Validate Error: {e}")
+            self.logger.error("OTP Validate Error: %s", e)
             return self._to_vsc({"error": str(e)})
 
     def is_logged_in(self) -> bool:

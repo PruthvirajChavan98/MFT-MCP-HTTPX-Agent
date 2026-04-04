@@ -67,8 +67,8 @@ class KBMilvusStore:
                 try:
                     await self.sync_faq(pool, item)
                 except Exception:
-                    # Individual failures are already logged and status-tracked; continue bulk sync
-                    pass
+                    # Individual failures are already logged and status-tracked by sync_faq; continue bulk sync
+                    continue
 
     async def semantic_search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """Return top-k FAQ matches by cosine similarity (score 0–1, higher = better)."""

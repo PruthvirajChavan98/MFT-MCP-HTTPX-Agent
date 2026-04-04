@@ -76,7 +76,7 @@ async def query_agent(request: AgentRequest):
                     tools=resources.tools,
                 )
             except Exception as e:
-                log.warning(f"Router classification failed: {e}")
+                log.warning("Router classification failed: %s", e)
                 router_out = None
 
         if not resources.tools:
@@ -110,5 +110,5 @@ async def query_agent(request: AgentRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        log.error(f"Query error: {e}")
+        log.error("Query error: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e

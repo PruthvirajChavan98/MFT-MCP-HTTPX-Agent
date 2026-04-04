@@ -109,7 +109,7 @@ class MockFinTechAPIs:
                 with client.stream(
                     method, self._url(path), headers=headers, json=json_body
                 ) as resp:
-                    self.logger.info(f"{method} {path} - {resp.status_code}")
+                    self.logger.info("%s %s - %d", method, path, resp.status_code)
 
                     if resp.status_code not in (200, 201):
                         resp.read()
@@ -169,7 +169,7 @@ class MockFinTechAPIs:
                 resp = client.request(
                     method, self._url(path), headers=self._headers(), json=json_body
                 )
-                self.logger.info(f"{method} {path} - {resp.status_code}")
+                self.logger.info("%s %s - %d", method, path, resp.status_code)
                 try:
                     return resp.json()
                 except Exception:

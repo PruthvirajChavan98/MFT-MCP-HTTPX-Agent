@@ -94,8 +94,8 @@ def _load_rules() -> List[dict]:
         obj = json.loads(RULES_JSON)
         if isinstance(obj, list) and obj:
             return [x for x in obj if isinstance(x, dict)]
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Failed to parse SHADOW_EVAL_RULES_JSON, using defaults: %s", exc)
     return DEFAULT_RULES
 
 
@@ -450,7 +450,8 @@ def compute_non_llm_metrics(
             try:
                 if not re.search(when, question, flags=re.I):
                     continue
-            except Exception:
+            except Exception as exc:
+                log.debug("Rule regex match failed for rule=%s: %s", name, exc)
                 continue
 
         req_tool = str(r.get("require_tool") or "").strip()
@@ -594,10 +595,13 @@ async def maybe_shadow_eval_commit(
                 for ev in evals:
                     await embedder.embed_eval_if_needed(pool, trace["trace_id"], ev)
         except Exception as e:
-            log.warning(f"[shadow_eval] Embedding generation failed: {e}")
+            log.warning("[shadow_eval] Embedding generation failed: %s", e)
 
         log.info(
-            f"[shadow_eval] committed trace_id={collector.trace_id} events={len(events)} evals={len(evals)}"
+            "[shadow_eval] committed trace_id=%s events=%d evals=%d",
+            collector.trace_id,
+            len(events),
+            len(evals),
         )
     except Exception as e:
         collector.set_eval_lifecycle("inline", "failed", reason="failed")
@@ -609,4 +613,4 @@ async def maybe_shadow_eval_commit(
                 collector.trace_id,
                 persist_exc,
             )
-        log.exception(f"[shadow_eval] commit failed: {e}")
+        log.exception("[shadow_eval] commit failed: %s", e)

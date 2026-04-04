@@ -2,12 +2,15 @@
 
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
 from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.event_bus import event_bus
+
+log = logging.getLogger("live_dashboards")
 
 router = APIRouter(prefix="/live", tags=["live-updates"])
 
@@ -48,8 +51,8 @@ async def global_dashboard_feed(request: Request):
                             "event": parsed.get("event", "update"),
                             "data": json.dumps(parsed.get("data", {})),
                         }
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.debug("Global feed: failed to parse pubsub message: %s", exc)
 
                 await asyncio.sleep(0.05)
         finally:
@@ -92,8 +95,8 @@ async def session_specific_feed(session_id: str, request: Request):
                             "event": event.get("event", "update"),
                             "data": json.dumps(event.get("data", {})),
                         }
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.debug("Session feed: failed to parse pubsub message: %s", exc)
 
                 await asyncio.sleep(0.05)
         finally:

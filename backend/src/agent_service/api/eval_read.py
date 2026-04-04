@@ -40,7 +40,7 @@ def _raise_db_error(exc: Exception, operation: str) -> None:
     log.error("DB error in %s: %s", operation, msg)
     raise HTTPException(
         status_code=503,
-        detail={"code": "store_unavailable", "operation": operation, "message": msg},
+        detail=f"Database unavailable ({operation}): {msg}",
     ) from exc
 
 

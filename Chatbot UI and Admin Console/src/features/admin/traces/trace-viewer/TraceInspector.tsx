@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { getNodeIcon, getNodeChipClasses, getNodeTypeLabel } from './nodeUtils'
 import { JsonViewer } from './JsonViewer'
-import type { FlatNode, TraceCost, TraceEval } from './types'
+import type { FlatNode, ShadowJudge, TraceCost, TraceEval } from './types'
 
 interface SectionProps {
   title: string
@@ -112,7 +112,18 @@ function DataCard({ data }: { data: unknown }) {
   return <div className="rounded-xl border border-border bg-card min-h-[60px] overflow-hidden"><JsonViewer data={data} /></div>
 }
 
-export function TraceInspector({ node, cost, evals }: { node: FlatNode | null, cost?: TraceCost, evals?: TraceEval[] }) {
+function ScoreCell({ label, score }: { label: string; score: number }) {
+  const pct = (score * 100).toFixed(0)
+  const color = score >= 0.7 ? 'text-emerald-600' : score >= 0.5 ? 'text-amber-600' : 'text-rose-600'
+  return (
+    <div className="px-4 py-3 space-y-1">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`text-[18px] font-semibold tabular-nums ${color}`}>{pct}%</div>
+    </div>
+  )
+}
+
+export function TraceInspector({ node, cost, evals, shadowJudge }: { node: FlatNode | null, cost?: TraceCost, evals?: TraceEval[], shadowJudge?: ShadowJudge | null }) {
   if (!node) {
     return <div className="flex-1 flex items-center justify-center text-muted-foreground text-[14px]">Select a node to inspect</div>
   }
@@ -179,6 +190,23 @@ export function TraceInspector({ node, cost, evals }: { node: FlatNode | null, c
                   </div>
                 </div>
               ))}
+            </div>
+          </Section>
+        )}
+
+        {shadowJudge && (
+          <Section title="Shadow Judge" badge="3 dimensions">
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="grid grid-cols-3 divide-x divide-border">
+                <ScoreCell label="Helpfulness" score={shadowJudge.helpfulness} />
+                <ScoreCell label="Faithfulness" score={shadowJudge.faithfulness} />
+                <ScoreCell label="Policy Adherence" score={shadowJudge.policy_adherence} />
+              </div>
+              {shadowJudge.summary && (
+                <div className="px-4 py-3 border-t border-border">
+                  <p className="text-xs text-muted-foreground leading-relaxed">{shadowJudge.summary}</p>
+                </div>
+              )}
             </div>
           </Section>
         )}
