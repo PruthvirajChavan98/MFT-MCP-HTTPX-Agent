@@ -1,0 +1,16 @@
+- generic [active]:
+  - generic:
+    - generic: Loading...
+    - region "Notifications alt+T"
+  - alertdialog "Prototype Disclaimer" [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - img [ref=e6]
+        - heading "Prototype Disclaimer" [level=2] [ref=e8]
+      - generic [ref=e9]:
+        - paragraph [ref=e10]: You are viewing a demonstration prototype.
+        - paragraph [ref=e12]:
+          - strong [ref=e13]: Mock FinTech
+          - text: is a fictional entity. The services, products, and scenarios depicted in this application do not exist in real life.
+        - paragraph [ref=e14]: No real financial transactions or sensitive data processing will occur.
+    - button "I Understand, Proceed to Demo" [ref=e16]

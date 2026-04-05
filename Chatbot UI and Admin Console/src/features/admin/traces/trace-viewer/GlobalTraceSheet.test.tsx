@@ -1,6 +1,6 @@
+import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
-import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GlobalTraceSheet } from './GlobalTraceSheet'
 
@@ -27,6 +27,21 @@ vi.mock('@features/admin/context/AdminContext', () => ({
     groqKey: '',
     setGroqKey: vi.fn(),
   }),
+}))
+
+vi.mock('@components/ui/split-pane', () => ({
+  SplitPane: ({
+    sidebar,
+    main,
+  }: {
+    sidebar: ReactNode
+    main: ReactNode
+  }) => (
+    <div>
+      <div>{sidebar}</div>
+      <div>{main}</div>
+    </div>
+  ),
 }))
 
 vi.mock('@components/ui/sheet', () => ({

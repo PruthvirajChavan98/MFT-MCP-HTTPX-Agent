@@ -133,7 +133,7 @@ export function TraceInspector({ node, cost, evals, shadowJudge }: { node: FlatN
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="p-8 max-w-4xl mx-auto space-y-8">
+      <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-6 sm:space-y-8">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <div className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${getNodeChipClasses(node.type)}`}>

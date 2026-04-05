@@ -28,25 +28,25 @@ export function SemanticSearchUI() {
     };
 
     return (
-        <div className="flex flex-col h-[500px]">
+        <div className="flex flex-col h-full sm:h-[500px]">
             <div className="mb-6">
-                <form onSubmit={handleSearch} className="flex gap-3">
+                <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <Input
                             placeholder="Search traces semantically (e.g. 'user asking about loan foreclosure')"
-                            className="pl-9 bg-white border-slate-200"
+                            className="w-full pl-9 bg-white border-slate-200"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                         />
                     </div>
-                    <Button type="submit" disabled={!query.trim() || isLoading} className="bg-cyan-600 hover:bg-cyan-700 text-white">
+                    <Button type="submit" disabled={!query.trim() || isLoading} className="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-700 text-white">
                         <BrainCircuit className="w-4 h-4 mr-2" /> Search Vectors
                     </Button>
                 </form>
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-2 no-scrollbar">
+            <div className="flex-1 overflow-y-auto pr-2">
                 {error ? (
                     <div className="p-4 bg-rose-50 text-rose-700 rounded-xl border border-rose-100 text-sm">
                         {(error as Error).message}

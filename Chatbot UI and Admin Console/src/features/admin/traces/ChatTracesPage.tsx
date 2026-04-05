@@ -12,6 +12,7 @@ import {
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
 import { Input } from '@components/ui/input'
+import { ResponsiveTable, type Column } from '@components/ui/responsive-table'
 import { Skeleton } from '@components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs'
 import { useAdminContext } from '@features/admin/context/AdminContext'
@@ -20,9 +21,17 @@ import { SemanticSearchUI } from './SemanticSearchUI'
 import { formatDateTime } from '@shared/lib/format'
 import { setTraceIdSearchParams } from '@features/admin/lib/admin-links'
 import { tracesPageInfiniteQueryOptions } from '@features/admin/query/queryOptions'
-import { mapTraceListRows } from './viewmodel'
+import { mapTraceListRows, type TraceListRow } from './viewmodel'
 
 const PAGE_SIZE = 80
+
+const traceColumns: Column<TraceListRow>[] = [
+  { key: 'status', label: 'Status' },
+  { key: 'traceId', label: 'Trace ID' },
+  { key: 'inputPreview', label: 'Input Preview' },
+  { key: 'model', label: 'Model', visibleFrom: 'md' },
+  { key: 'action', label: 'Action', headerClassName: 'text-right' },
+]
 
 export function ChatTracesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -89,7 +98,7 @@ export function ChatTracesPage() {
           </div>
         </div>
 
-        <div className="relative w-full max-w-sm">
+        <div className="relative w-full sm:max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search traces/session/question…"
@@ -121,75 +130,55 @@ export function ChatTracesPage() {
                 </div>
               ) : (
                 <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="border-b bg-muted/40">
-                        <tr>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Status</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Trace ID</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Input Preview</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Model</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-muted-foreground">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row) => {
-                          const isSelected = row.traceId === selectedTraceId
+                  <ResponsiveTable<TraceListRow>
+                    columns={traceColumns}
+                    data={rows}
+                    renderCell={(row, column) => {
+                      switch (column.key) {
+                        case 'status':
+                          return row.status === 'error'
+                            ? <XCircle size={16} className="text-rose-500" />
+                            : <CheckCircle2 size={16} className="text-emerald-500" />
+                        case 'traceId':
+                          return <span className="font-mono text-xs text-muted-foreground">{row.traceId}</span>
+                        case 'inputPreview':
                           return (
-                            <tr
-                              key={row.traceId}
-                              className={`border-b transition-colors last:border-0 ${
-                                isSelected ? 'bg-sky-50/50 dark:bg-sky-500/10' : 'hover:bg-muted/40'
-                              }`}
-                            >
-                              <td className="px-4 py-3">
-                                {row.status === 'error' ? (
-                                  <XCircle size={16} className="text-rose-500" />
-                                ) : (
-                                  <CheckCircle2 size={16} className="text-emerald-500" />
-                                )}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.traceId}</td>
-                              <td className="max-w-[340px] truncate px-4 py-3 text-xs font-medium text-foreground">
-                                {row.inputPreview}
-                                <div className="mt-0.5 text-[10px] text-muted-foreground">{formatDateTime(row.startedAt)}</div>
-                              </td>
-                              <td className="px-4 py-3 text-xs text-muted-foreground">{row.model}</td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="inline-flex items-center gap-2">
-                                  {row.conversationHref ? (
-                                    <Link
-                                      to={row.conversationHref}
-                                      className="inline-flex items-center gap-1.5 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-300 dark:hover:bg-cyan-500/20"
-                                    >
-                                      <MessageSquare size={12} />
-                                      Conversation
-                                    </Link>
-                                  ) : (
-                                    <span className="px-2 text-[11px] text-muted-foreground">No conversation</span>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => openTrace(row.traceId)}
-                                    className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:bg-slate-800 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
-                                  >
-                                    Inspect <ExternalLink size={12} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
+                            <div className="max-w-25 md:max-w-50 lg:max-w-85 truncate">
+                              <span className="text-xs font-medium text-foreground">{row.inputPreview}</span>
+                              <div className="mt-0.5 text-[10px] text-muted-foreground">{formatDateTime(row.startedAt)}</div>
+                            </div>
                           )
-                        })}
-                        {!rows.length && (
-                          <tr>
-                            <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                              No traces found.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                        case 'model':
+                          return <span className="text-xs text-muted-foreground">{row.model}</span>
+                        case 'action':
+                          return (
+                            <div className="inline-flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2">
+                              {row.conversationHref ? (
+                                <Link
+                                  to={row.conversationHref}
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-300 dark:hover:bg-cyan-500/20"
+                                >
+                                  <MessageSquare size={12} />
+                                  Conversation
+                                </Link>
+                              ) : (
+                                <span className="px-2 text-[11px] text-muted-foreground">No conversation</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openTrace(row.traceId)}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:bg-slate-800 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
+                              >
+                                Inspect <ExternalLink size={12} />
+                              </button>
+                            </div>
+                          )
+                        default:
+                          return null
+                      }
+                    }}
+                    emptyMessage="No traces found."
+                  />
 
                   <div className="flex items-center justify-between border-t bg-card px-4 py-3">
                     <span className="text-xs text-muted-foreground">Loaded {rows.length} traces</span>
@@ -200,7 +189,7 @@ export function ChatTracesPage() {
                       className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
                     >
                       {tracesQuery.isFetchingNextPage
-                        ? 'Loading…'
+                        ? 'Loading...'
                         : tracesQuery.hasNextPage
                           ? 'Load more'
                           : 'No more'}

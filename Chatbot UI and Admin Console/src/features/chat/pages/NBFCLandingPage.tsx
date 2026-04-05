@@ -1,3 +1,4 @@
+import { Menu, X } from 'lucide-react'
 import { motion, useInView } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -367,6 +368,7 @@ export function NBFCLandingPage() {
   const [registerNoticeOpen, setRegisterNoticeOpen] = useState(
     () => !localStorage.getItem('mft_register_notice_shown_v1'),
   )
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false)
   const [spotlightStepIndex, setSpotlightStepIndex] = useState(0)
 
@@ -409,7 +411,7 @@ export function NBFCLandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* ── Nav ── */}
       <nav className="sticky top-0 z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -420,6 +422,15 @@ export function NBFCLandingPage() {
             <span className="text-lg font-bold tracking-tight">Mock FinTech</span>
           </div>
 
+          <button
+            className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:text-white"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-label="Toggle menu"
+            type="button"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+
           <div className="hidden items-center gap-8 md:flex">
             {['Home Loans', 'Business Loans', 'Personal Loans', 'Rates'].map((item) => (
               <a key={item} href="#" className="text-sm text-slate-400 transition-colors hover:text-white">
@@ -428,7 +439,7 @@ export function NBFCLandingPage() {
             ))}
           </div>
 
-          <div data-highlight-id="landing-nav-ctas" className="flex items-center gap-3">
+          <div data-highlight-id="landing-nav-ctas" className="hidden md:flex items-center gap-3">
             <HoverCard openDelay={0} closeDelay={120}>
               <HoverCardTrigger asChild>
                 <Link
@@ -466,7 +477,7 @@ export function NBFCLandingPage() {
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setRegisterOpen(true)}
-                  className={`hidden sm:inline-flex ${CTA_SECONDARY}`}
+                  className={`hidden md:inline-flex ${CTA_SECONDARY}`}
                 >
                   Register
                 </motion.button>
@@ -483,11 +494,38 @@ export function NBFCLandingPage() {
                 </p>
               </HoverCardContent>
             </HoverCard>
-            <Link to="/architecture" className={`hidden sm:inline-flex ${CTA_PRIMARY}`}>
+            <Link to="/architecture" className={`hidden md:inline-flex ${CTA_PRIMARY}`}>
               View Architecture
             </Link>
           </div>
         </div>
+
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-white/5 bg-slate-950/95 backdrop-blur-xl px-6 py-4 space-y-2">
+            <Link
+              to="/admin"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block w-full rounded-full border border-orange-400/35 bg-orange-500/10 px-4 py-2.5 text-center text-sm font-semibold text-orange-300 transition-colors hover:bg-orange-400/20"
+            >
+              Admin
+            </Link>
+            <button
+              onClick={() => { setRegisterOpen(true); setMobileMenuOpen(false) }}
+              className="block w-full rounded-full border border-teal-400/35 bg-white/5 px-4 py-2.5 text-center text-sm font-semibold text-teal-200 transition-colors hover:bg-teal-400/10"
+              type="button"
+            >
+              Register
+            </button>
+            <Link
+              to="/architecture"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block w-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg"
+            >
+              View Architecture
+            </Link>
+          </div>
+        )}
       </nav>
 
       {/* ── Hero ── */}

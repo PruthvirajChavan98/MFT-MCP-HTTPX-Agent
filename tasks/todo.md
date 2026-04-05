@@ -1,5 +1,13 @@
 # Task Plan
 
+## 2026-04-05 - Production mobile redesign
+
+- [ ] Phase 1: Foundation (AdminLayout sidebar overlay, landing nav, chat widget width)
+- [ ] Phase 2: High-impact pages (Conversations drawer, Dashboard/Guardrails/Traces table columns)
+- [ ] Phase 3: Medium-impact pages (UsersAnalytics, QuestionCategories, Costs, Feedback, KnowledgeBase)
+- [ ] Phase 4: Polish (ModelConfig, SystemHealth, MetricsDashboard)
+- [ ] Full verification at 375px, 390px, 768px, 1024px
+
 ## 2026-04-04 - Code review P0/P1 cleanup
 
 - [x] P0: Create .env.example with dummy values, .env already gitignored

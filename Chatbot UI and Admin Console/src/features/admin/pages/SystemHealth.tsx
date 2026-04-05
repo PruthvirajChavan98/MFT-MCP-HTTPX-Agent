@@ -4,6 +4,8 @@ import { fetchSystemHealth, fetchRateLimitMetrics, fetchRateLimitConfig } from '
 import { Skeleton } from '@components/ui/skeleton';
 import { Alert, AlertDescription } from '@components/ui/alert';
 import { cn } from '@components/ui/utils';
+import { MobileHeader } from '@components/ui/mobile-header';
+import { ResponsiveGrid } from '@components/ui/responsive-grid';
 
 const DEPENDENCY_ICONS: Record<string, any> = {
     redis: Database,
@@ -40,19 +42,19 @@ export function SystemHealth() {
 
     return (
         <div className="space-y-8 max-w-[1200px] mx-auto">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>System Health</h1>
-                    <p className="text-gray-500 text-sm mt-1">Platform telemetry and dependency readiness</p>
-                </div>
-                <button
-                    onClick={handleRefetch}
-                    disabled={isFetching}
-                    className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-semibold text-sm flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
-                >
-                    <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin text-cyan-600' : ''}`} /> Sync State
-                </button>
-            </div>
+            <MobileHeader
+                title="System Health"
+                description="Platform telemetry and dependency readiness"
+                actions={
+                    <button
+                        onClick={handleRefetch}
+                        disabled={isFetching}
+                        className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-semibold text-sm flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin text-cyan-600' : ''}`} /> Sync State
+                    </button>
+                }
+            />
 
             {isLoading || !health ? (
                 <Skeleton className="w-full h-48 rounded-2xl" />
@@ -79,7 +81,7 @@ export function SystemHealth() {
                                     <div className="text-4xl capitalize tracking-tight" style={{ fontWeight: 800 }}>{health.status}</div>
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-8 mt-8 p-4 bg-black/10 rounded-2xl border border-white/10 backdrop-blur-sm w-max">
+                            <div className="flex flex-wrap gap-8 mt-8 p-4 bg-black/10 rounded-2xl border border-white/10 backdrop-blur-sm w-full sm:w-max">
                                 <div>
                                     <div className="text-white/70 text-xs font-bold uppercase tracking-wider mb-1">Time</div>
                                     <div className="font-mono text-sm">{new Date(health.timestamp * 1000).toUTCString()}</div>
@@ -90,7 +92,7 @@ export function SystemHealth() {
 
                     <div>
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Infrastructure Dependencies</h3>
-                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        <ResponsiveGrid cols={{ base: 1, sm: 2, lg: 3 }} gap={5}>
                             {Object.entries(health.checks || {}).map(([name, dep]) => {
                                 const Icon = DEPENDENCY_ICONS[name] || Globe;
                                 const isHealthy = dep.ok;
@@ -125,7 +127,7 @@ export function SystemHealth() {
                                     </div>
                                 );
                             })}
-                        </div>
+                        </ResponsiveGrid>
                     </div>
 
                     {/* Rate Limiting Section */}
@@ -179,14 +181,14 @@ export function SystemHealth() {
                                     <Activity className="w-4 h-4 text-rose-500" /> Endpoint Quotas
                                 </h4>
                                 {rlmLoading || !rlMetrics ? <Skeleton className="w-full h-32" /> : (
-                                    <div className="w-full overflow-x-auto no-scrollbar">
+                                    <div className="w-full overflow-x-auto">
                                         <table className="w-full text-xs text-left">
                                             <thead>
                                                 <tr className="border-b border-gray-100 text-slate-500 uppercase tracking-wider font-bold">
                                                     <th className="pb-2">Endpoint</th>
                                                     <th className="pb-2 text-right">Allowed</th>
                                                     <th className="pb-2 text-right">Denied</th>
-                                                    <th className="pb-2 text-right">RPM</th>
+                                                    <th className="hidden md:table-cell pb-2 text-right">RPM</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50/50">
@@ -197,7 +199,7 @@ export function SystemHealth() {
                                                             <td className="py-2.5 font-medium text-slate-700">/{cleanName}</td>
                                                             <td className="py-2.5 text-right font-mono text-emerald-600">{stats.requests_allowed}</td>
                                                             <td className="py-2.5 text-right font-mono text-red-500">{stats.requests_denied}</td>
-                                                            <td className="py-2.5 text-right font-mono text-slate-500">{stats.rate}</td>
+                                                            <td className="hidden md:table-cell py-2.5 text-right font-mono text-slate-500">{stats.rate}</td>
                                                         </tr>
                                                     )
                                                 })}

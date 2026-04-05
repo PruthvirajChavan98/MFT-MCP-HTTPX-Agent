@@ -344,7 +344,7 @@ export function ChatWidget() {
                 'tf-chat-widget z-50 flex origin-bottom-right flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl transition-all',
                 isMaximized
                   ? 'fixed inset-4 rounded-2xl sm:inset-10'
-                  : 'fixed bottom-6 right-6 h-[590px] max-h-[calc(100vh-8rem)] w-[390px] max-w-[calc(100vw-1.5rem)] rounded-3xl',
+                  : 'fixed bottom-3 right-2 sm:bottom-6 sm:right-6 h-[590px] max-h-[calc(100dvh-3rem)] w-[calc(100vw-1rem)] sm:w-[390px] rounded-3xl',
               )}
               exit={{ opacity: 0, scale: 0.9, y: 18 }}
               initial={{ opacity: 0, scale: 0.9, y: 18 }}
@@ -535,7 +535,7 @@ export function ChatWidget() {
           whileHover={{ scale: 1.05, y: -2 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Open chat"
-          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-cyan-500 to-teal-600 text-white shadow-2xl transition-all"
+          className="fixed bottom-4 right-3 sm:bottom-6 sm:right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-cyan-500 to-teal-600 text-white shadow-2xl transition-all"
           data-highlight-id="landing-chat-launcher"
           onClick={() => setIsOpen(true)}
         >

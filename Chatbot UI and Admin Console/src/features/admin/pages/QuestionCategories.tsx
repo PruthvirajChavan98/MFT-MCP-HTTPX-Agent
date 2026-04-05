@@ -7,6 +7,8 @@ import { useAdminContext } from '@features/admin/context/AdminContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
 import { Skeleton } from '@components/ui/skeleton'
 import { Alert, AlertDescription } from '@components/ui/alert'
+import { MobileHeader } from '@components/ui/mobile-header'
+import { ResponsiveGrid } from '@components/ui/responsive-grid'
 
 function humanizeCategory(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
@@ -38,14 +40,12 @@ export function QuestionCategories() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Question Categories</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Distribution of routed business categories for recent traces.
-        </p>
-      </div>
+      <MobileHeader
+        title="Question Categories"
+        description="Distribution of routed business categories for recent traces."
+      />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <ResponsiveGrid cols={{ base: 2, xl: 4 }} gap={4}>
         {isLoading ? (
           Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-lg" />)
         ) : (
@@ -56,7 +56,7 @@ export function QuestionCategories() {
             <Card><CardContent className="p-5"><p className="text-xs uppercase tracking-wide text-muted-foreground">Total Classified</p><p className="text-2xl font-bold mt-1">{totalClassified}</p></CardContent></Card>
           </>
         )}
-      </div>
+      </ResponsiveGrid>
 
       <Card>
         <CardHeader><CardTitle className="text-sm font-semibold">Category Distribution</CardTitle></CardHeader>
@@ -65,10 +65,10 @@ export function QuestionCategories() {
             <Skeleton className="h-72 w-full" />
           ) : (
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={sorted.slice(0, 12)} layout="vertical" margin={{ left: 160, right: 20, top: 6, bottom: 6 }}>
+              <BarChart data={sorted.slice(0, 12)} layout="vertical" margin={{ left: 10, right: 20, top: 6, bottom: 6 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="reason" tickFormatter={humanizeCategory} tick={{ fontSize: 11 }} width={150} />
+                <YAxis type="category" dataKey="reason" tickFormatter={humanizeCategory} tick={{ fontSize: 11 }} width={120} />
                 <Tooltip formatter={(value: number, _name, payload) => [value, humanizeCategory(String(payload?.payload?.reason || ''))]} />
                 <Bar dataKey="count" fill="#06b6d4" radius={[0, 6, 6, 0]} />
               </BarChart>
@@ -84,7 +84,7 @@ export function QuestionCategories() {
               <thead className="bg-slate-50 border-b">
                 <tr>
                   {['Category', 'Count', 'Share %', 'Coverage Bar', 'Action'].map((heading) => (
-                    <th key={heading} className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{heading}</th>
+                    <th key={heading} className={`px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide${heading === 'Coverage Bar' ? ' hidden md:table-cell' : ''}`}>{heading}</th>
                   ))}
                 </tr>
               </thead>
@@ -98,7 +98,7 @@ export function QuestionCategories() {
                         <td className="px-4 py-2.5 font-medium">{humanizeCategory(category.reason)}</td>
                         <td className="px-4 py-2.5 text-muted-foreground">{category.count}</td>
                         <td className="px-4 py-2.5 text-muted-foreground">{(category.pct * 100).toFixed(1)}%</td>
-                        <td className="px-4 py-2.5 min-w-[220px]">
+                        <td className="hidden md:table-cell px-4 py-2.5 min-w-[220px]">
                           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                             <div className="h-full bg-cyan-500" style={{ width: `${Math.max(2, category.pct * 100)}%` }} />
                           </div>

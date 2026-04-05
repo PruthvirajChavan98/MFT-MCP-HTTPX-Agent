@@ -97,7 +97,14 @@ export function AssistantMessageCard({
 }: AssistantMessageCardProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [toolCallsOpen, setToolCallsOpen] = useState(false)
-  const cleanContent = message.content.replace(/\n?FOLLOW_UPS:[\s\S]*$/s, '').trimEnd()
+  const strippedFollowUps = message.content.replace(/\n?FOLLOW_UPS:[\s\S]*$/s, '').trimEnd()
+  // Repair orphaned ** markers — LLMs occasionally open bold without closing it
+  const boldMarkers = strippedFollowUps.match(/\*\*/g)
+  const cleanContent =
+    boldMarkers && boldMarkers.length % 2 !== 0
+      ? strippedFollowUps.slice(0, strippedFollowUps.lastIndexOf('**')) +
+        strippedFollowUps.slice(strippedFollowUps.lastIndexOf('**') + 2)
+      : strippedFollowUps
   const hasReasoning = !!message.reasoning
   const hasToolCalls = (message.toolCalls?.length ?? 0) > 0
   const traceHref = buildTraceHref(message.traceId)

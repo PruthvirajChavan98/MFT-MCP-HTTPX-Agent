@@ -5,8 +5,9 @@ import { Input } from '@components/ui/input'
 import { Skeleton } from '@components/ui/skeleton'
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs'
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@components/ui/resizable'
 import { ScrollArea } from '@components/ui/scroll-area'
+import { SplitPane } from '@components/ui/split-pane'
+import { ResponsiveGrid } from '@components/ui/responsive-grid'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
 import { TranscriptMessage } from '@features/admin/components/TranscriptMessage'
 import { useAdminContext } from '@features/admin/context/AdminContext'
@@ -79,7 +80,7 @@ function TranscriptHeader({
         <div>
           <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
             Transcript for{' '}
-            <span className="font-mono text-cyan-600 font-semibold">{session.session_id}</span>
+            <span className="font-mono text-cyan-600 font-semibold truncate">{session.session_id}</span>
           </h3>
           <div className="text-xs font-medium text-gray-500 mt-1 flex items-center gap-2">
             <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono">
@@ -98,7 +99,7 @@ function TranscriptHeader({
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-2 max-w-xl">
+      <ResponsiveGrid cols={{ base: 1, sm: 3 }} gap={2} className="max-w-xl">
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
           <div className="text-[10px] uppercase tracking-wide text-slate-500">Total Cost</div>
           <div className="text-sm font-semibold flex items-center gap-1">
@@ -117,7 +118,7 @@ function TranscriptHeader({
           <div className="text-[10px] uppercase tracking-wide text-slate-500">Tokens</div>
           <div className="text-sm font-semibold">{sessionCost?.total_tokens ?? 0}</div>
         </div>
-      </div>
+      </ResponsiveGrid>
     </div>
   )
 }
@@ -180,6 +181,8 @@ export function Conversations() {
     if (selection.sessionId) return
     if (queries.conversationsQuery.isLoading) return
     if (!queries.conversations.length) return
+    // On mobile, don't auto-select — user starts with the list view
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return
 
     const first = queries.conversations[0]
     if (first?.session_id) {
@@ -242,13 +245,16 @@ export function Conversations() {
 
         <TabsContent value="live" className="m-0 border-none outline-none">
           <Card
-            className="overflow-hidden border-gray-200 shadow-md"
+            className="overflow-hidden overflow-x-hidden border-gray-200 shadow-md"
             style={{ height: 'calc(100vh - 220px)', minHeight: 500 }}
           >
-            {/* @ts-expect-error react-resizable-panels direction prop exists at runtime but missing from type defs */}
-            <ResizablePanelGroup direction="horizontal" className="h-full bg-white">
-              <ResizablePanel defaultSize={34} minSize={25} className="bg-slate-50/50">
-                <ScrollArea className="h-full">
+            <SplitPane
+              sidebarWidth="w-1/3"
+              showMain={!!selection.sessionId}
+              onBack={selection.clearSession}
+              className="h-full bg-white"
+              sidebar={
+                <ScrollArea className="h-full bg-slate-50/50">
                   {queries.conversationsQuery.isLoading ? (
                     <div className="p-4 space-y-3">
                       {Array.from({ length: 8 }).map((_, i) => (
@@ -288,20 +294,17 @@ export function Conversations() {
                     </div>
                   )}
                 </ScrollArea>
-              </ResizablePanel>
-
-              <ResizableHandle
-                withHandle
-                className="w-1.5 bg-gray-100 hover:bg-cyan-200 transition-colors"
-              />
-
-              <ResizablePanel defaultSize={66} minSize={40} className="bg-[#f8fafc] relative">
-                <ScrollArea className="h-full">
+              }
+              main={
+                <ScrollArea className="h-full bg-[#f8fafc]">
                   {!resolved ? (
                     <EmptyTranscriptState />
                   ) : (
                     <div className="flex flex-col h-full">
-                      <TranscriptHeader resolved={resolved} sessionCost={queries.sessionCost} />
+                      <TranscriptHeader
+                        resolved={resolved}
+                        sessionCost={queries.sessionCost}
+                      />
 
                       <div className="flex-1 min-h-0 p-6 max-w-3xl">
                         <div className="flex flex-col rounded-2xl border border-border overflow-hidden h-full">
@@ -338,8 +341,8 @@ export function Conversations() {
                     </div>
                   )}
                 </ScrollArea>
-              </ResizablePanel>
-            </ResizablePanelGroup>
+              }
+            />
           </Card>
         </TabsContent>
 
@@ -354,6 +357,7 @@ export function Conversations() {
             </div>
             <ScrollArea className="h-[calc(100%-60px)]">
               <div className="p-6">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr className="border-b border-gray-100">
@@ -397,6 +401,7 @@ export function Conversations() {
                     )}
                   </tbody>
                 </table>
+                </div>
                 {!queries.evalLoading && queries.evalSessions.length === 0 && (
                   <div className="text-center py-12 text-slate-500">
                     <Microscope className="w-8 h-8 text-slate-300 mx-auto mb-2" />

@@ -48,7 +48,7 @@ export function MetricsDashboard() {
         <div className="space-y-6">
             <div className="grid xl:grid-cols-2 gap-6">
                 {/* Pass Rates Chart */}
-                <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm flex flex-col h-[400px]">
+                <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 shadow-sm flex flex-col h-[400px]">
                     <h3 className="text-gray-900 mb-6 text-base font-bold flex items-center gap-2">
                         <Activity className="w-5 h-5 text-cyan-600" />
                         Global Evaluation Pass Rates
@@ -56,7 +56,7 @@ export function MetricsDashboard() {
                     <div className="flex-1 min-h-0">
                         {loading ? <Skeleton className="w-full h-full" /> : (
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 30, left: 40, bottom: 0 }}>
+                                <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                                     <XAxis type="number" domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 12 }} />
                                     <YAxis type="category" dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} width={120} />
@@ -82,7 +82,7 @@ export function MetricsDashboard() {
                         <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                         Metric Details
                     </h3>
-                    <div className="flex-1 overflow-y-auto pr-2 no-scrollbar">
+                    <div className="flex-1 overflow-y-auto pr-2">
                         {loading ? <Skeleton className="w-full h-full" /> : (
                             <div className="space-y-3">
                                 {(summary || []).map((item, idx) => (
@@ -119,7 +119,7 @@ export function MetricsDashboard() {
                                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Trace ID</th>
                                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Metric</th>
                                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Score</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Reasoning</th>
+                                <th className="hidden md:table-cell px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Reasoning</th>
                                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Time</th>
                             </tr>
                         </thead>
@@ -148,7 +148,7 @@ export function MetricsDashboard() {
                                                 {f.score.toFixed(1)}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-xs text-slate-600 max-w-md truncate" title={f.reasoning}>
+                                        <td className="hidden md:table-cell px-6 py-4 text-xs text-slate-600 max-w-md truncate" title={f.reasoning}>
                                             {f.reasoning || 'No justification provided'}
                                         </td>
                                         <td className="px-6 py-4 text-xs text-slate-500">

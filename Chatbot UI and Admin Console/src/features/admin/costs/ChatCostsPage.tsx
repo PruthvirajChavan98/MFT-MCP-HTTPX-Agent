@@ -22,9 +22,11 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router'
 import { Alert, AlertDescription } from '@components/ui/alert'
+import { ResponsiveGrid } from '@components/ui/responsive-grid'
+import { ResponsiveTable, type Column } from '@components/ui/responsive-table'
 import { Skeleton } from '@components/ui/skeleton'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
-import { mapSessionCostSummary, type CostSeriesPoint } from './viewmodel'
+import { mapSessionCostSummary, type CostSessionRow, type CostSeriesPoint } from './viewmodel'
 import { sessionCostSummaryQueryOptions } from '@features/admin/query/queryOptions'
 
 type CostTooltipDatum = {
@@ -159,6 +161,56 @@ function ChartSection({ series }: { series: CostSeriesPoint[] }) {
   )
 }
 
+const costSessionColumns: Column<CostSessionRow>[] = [
+  { key: 'sessionId', label: 'Session ID' },
+  { key: 'requests', label: 'Requests' },
+  { key: 'cost', label: 'Cost' },
+  { key: 'lastActive', label: 'Last Active', visibleFrom: 'md' },
+  { key: 'action', label: 'Action' },
+]
+
+function renderCostSessionCell(session: CostSessionRow, column: Column<CostSessionRow>) {
+  switch (column.key) {
+    case 'sessionId':
+      return (
+        <span className="rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-1 font-mono text-xs text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+          {session.sessionId}
+        </span>
+      )
+    case 'requests':
+      return (
+        <span className="inline-flex size-7 items-center justify-center rounded-full bg-violet-100 text-[13px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+          {session.requests}
+        </span>
+      )
+    case 'cost':
+      return (
+        <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[13px] font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+          {formatCurrency(session.cost)}
+        </span>
+      )
+    case 'lastActive':
+      return <span className="text-xs text-muted-foreground">{formatDateTime(session.lastActive)}</span>
+    case 'action':
+      return (
+        <div className="flex flex-col sm:flex-row gap-1 text-xs">
+          {session.conversationHref ? (
+            <Link
+              to={session.conversationHref}
+              className="inline-flex items-center rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 font-semibold text-cyan-700 transition hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-300 dark:hover:bg-cyan-500/20"
+            >
+              View Conversation
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">Unavailable</span>
+          )}
+        </div>
+      )
+    default:
+      return null
+  }
+}
+
 export function ChatCostsPage() {
   const costsQuery = useQuery(sessionCostSummaryQueryOptions())
 
@@ -184,7 +236,7 @@ export function ChatCostsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <ResponsiveGrid cols={{ base: 1, md: 3 }}>
         {costsQuery.isLoading ? (
           Array.from({ length: 3 }).map((_, idx) => <Skeleton key={idx} className="h-40 rounded-2xl" />)
         ) : (
@@ -230,7 +282,7 @@ export function ChatCostsPage() {
             />
           </>
         )}
-      </div>
+      </ResponsiveGrid>
 
       {costsQuery.isLoading ? <Skeleton className="h-[360px] rounded-2xl" /> : <ChartSection series={model.series} />}
 
@@ -243,72 +295,18 @@ export function ChatCostsPage() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/40">
-                {['Session ID', 'Requests', 'Cost', 'Last Active', 'Action'].map((header) => (
-                  <th
-                    key={header}
-                    className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground"
-                  >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {costsQuery.isLoading ? (
-                Array.from({ length: 5 }).map((_, idx) => (
-                  <tr key={idx} className="border-t border-border/60">
-                    <td className="px-4 py-3" colSpan={5}>
-                      <Skeleton className="h-8" />
-                    </td>
-                  </tr>
-                ))
-              ) : model.sessions.length ? (
-                model.sessions.map((session) => (
-                  <tr key={session.sessionId} className="border-t border-border/50 hover:bg-sky-50/40 dark:hover:bg-sky-500/10">
-                    <td className="px-4 py-4">
-                      <span className="rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-1 font-mono text-xs text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
-                        {session.sessionId}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="inline-flex size-7 items-center justify-center rounded-full bg-violet-100 text-[13px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
-                        {session.requests}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[13px] font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-                        {formatCurrency(session.cost)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-xs text-muted-foreground">{formatDateTime(session.lastActive)}</td>
-                    <td className="px-4 py-4 text-xs">
-                      {session.conversationHref ? (
-                        <Link
-                          to={session.conversationHref}
-                          className="inline-flex items-center rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 font-semibold text-cyan-700 transition hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-300 dark:hover:bg-cyan-500/20"
-                        >
-                          View Conversation
-                        </Link>
-                      ) : (
-                        <span className="text-muted-foreground">Unavailable</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-muted-foreground">
-                    No session cost data available.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {costsQuery.isLoading ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 5 }).map((_, idx) => <Skeleton key={idx} className="h-8" />)}
+          </div>
+        ) : (
+          <ResponsiveTable<CostSessionRow>
+            columns={costSessionColumns}
+            data={model.sessions}
+            renderCell={renderCostSessionCell}
+            emptyMessage="No session cost data available."
+          />
+        )}
       </div>
     </div>
   )

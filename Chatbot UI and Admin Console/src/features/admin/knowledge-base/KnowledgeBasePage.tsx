@@ -25,6 +25,8 @@ import { clearAllFaqs, deleteFaq, ingestFaqBatch, ingestFaqPdf, updateFaq } from
 import { formatDateTime } from '@shared/lib/format'
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
+import { MobileHeader } from '@components/ui/mobile-header'
+import { CollapsiblePanel } from '@components/ui/collapsible-panel'
 import { useAdminContext } from '@features/admin/context/AdminContext'
 import {
   buildKnowledgeBaseViewModel,
@@ -177,7 +179,7 @@ function FAQRow({
             toggleExpanded()
           }
         }}
-        className="flex cursor-pointer items-start gap-4 px-5 py-4"
+        className="flex cursor-pointer items-start gap-4 px-3 sm:px-5 py-3 sm:py-4"
       >
         <button
           type="button"
@@ -197,7 +199,7 @@ function FAQRow({
         </div>
 
         <div
-          className="flex shrink-0 items-center gap-2"
+          className="flex flex-col sm:flex-row shrink-0 items-end sm:items-center gap-1.5 sm:gap-2"
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
         >
@@ -260,7 +262,7 @@ function FAQRow({
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-50 bg-gray-50/50 px-5 py-4">
+        <div className="border-t border-gray-50 bg-gray-50/50 px-3 sm:px-5 py-3 sm:py-4">
           <p className="mb-3 text-sm leading-relaxed text-gray-600">{faq.answer}</p>
           <div className="flex flex-wrap items-center gap-2">
             {faq.tags.map((tag) => (
@@ -714,38 +716,44 @@ export function KnowledgeBasePage() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex flex-col md:flex-row h-full min-h-0">
       {/* ── Left main panel ──────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-auto px-8 py-7">
+      <div className="flex-1 flex flex-col min-w-0 overflow-auto px-4 sm:px-8 py-5 sm:py-7">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-gray-900 text-2xl font-bold tracking-tight">Knowledge Base</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage FAQs, vector embeddings, and Neo4j graph relationships.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDeleteAll}
-              disabled={deleteAllMut.isPending || model.stats.total === 0}
-              className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {deleteAllMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-              Delete All
-            </button>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm transition-all shadow-sm shadow-teal-200 active:scale-95"
-            >
-              <Plus size={16} />
-              Add FAQ
-            </button>
-          </div>
-        </div>
+        <MobileHeader
+          title="Knowledge Base"
+          description="Manage FAQs, vector embeddings, and Neo4j graph relationships."
+          actions={
+            <>
+              <button
+                onClick={handleDeleteAll}
+                disabled={deleteAllMut.isPending || model.stats.total === 0}
+                className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleteAllMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Delete All
+              </button>
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm transition-all shadow-sm shadow-teal-200 active:scale-95"
+              >
+                <Plus size={16} />
+                Add FAQ
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-sm transition-all md:hidden"
+              >
+                <Upload size={16} />
+                Upload PDF
+              </button>
+            </>
+          }
+          className="mb-6"
+        />
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
             {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
               <p className="text-2xl font-semibold text-gray-800">{model.stats.total}</p>
@@ -992,7 +1000,11 @@ export function KnowledgeBasePage() {
       </div>
 
       {/* ── Right panel ──────────────────────────────────────────────────── */}
-      <div className="w-75 shrink-0 border-l border-gray-200 bg-white overflow-auto">
+      <CollapsiblePanel
+        title="PDF Upload"
+        collapseBelow="md"
+        className="md:w-75 shrink-0 md:border-l border-gray-200 bg-white md:overflow-auto"
+      >
         <div className="px-6 py-6 space-y-8">
 
           {/* PDF FAQ Upload */}
@@ -1101,7 +1113,7 @@ export function KnowledgeBasePage() {
             </div>
           </section>
         </div>
-      </div>
+      </CollapsiblePanel>
 
       {/* Modal */}
       {modalOpen && (

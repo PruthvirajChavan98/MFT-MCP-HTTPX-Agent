@@ -14,7 +14,7 @@ interface TraceTreeProps {
 
 export function TraceTree({ nodes, selectedNodeId, onSelect, onClose, isLoading }: TraceTreeProps) {
   return (
-    <div className="w-[380px] border-r border-border bg-card flex flex-col shrink-0 h-full">
+    <div className="w-full border-r border-border bg-card flex flex-col shrink-0 h-full">
       <div className="px-4 pt-4 pb-3 border-b border-border shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold text-muted-foreground tracking-[0.12em] uppercase">

@@ -45,10 +45,19 @@ vi.mock('@features/chat/hooks/useEvalStatus', () => ({
   useEvalStatus: (...args: unknown[]) => useEvalStatusMock(...args),
 }))
 
-vi.mock('@components/ui/resizable', () => ({
-  ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ResizablePanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ResizableHandle: () => <div data-testid="resize-handle" />,
+vi.mock('@components/ui/split-pane', () => ({
+  SplitPane: ({
+    sidebar,
+    main,
+  }: {
+    sidebar: React.ReactNode
+    main: React.ReactNode
+  }) => (
+    <div>
+      <div>{sidebar}</div>
+      <div>{main}</div>
+    </div>
+  ),
 }))
 
 vi.mock('sonner', () => ({

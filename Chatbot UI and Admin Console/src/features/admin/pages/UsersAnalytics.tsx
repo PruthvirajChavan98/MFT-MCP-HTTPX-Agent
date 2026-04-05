@@ -1,17 +1,30 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
-import { ArrowUpDown, ExternalLink } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { fetchUserAnalytics } from '@features/admin/api/admin'
 import { useAdminContext } from '@features/admin/context/AdminContext'
 import { Card, CardContent } from '@components/ui/card'
 import { Skeleton } from '@components/ui/skeleton'
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { Progress } from '@components/ui/progress'
+import { ResponsiveTable, type Column } from '@components/ui/responsive-table'
 import { formatDateTime } from '@shared/lib/format'
 import type { UserAnalyticsRow } from '@features/admin/api/admin'
 
 type SortKey = keyof UserAnalyticsRow
+
+const userColumns: Column<UserAnalyticsRow>[] = [
+  { key: 'session_id', label: 'Session' },
+  { key: 'trace_count', label: 'Traces' },
+  { key: 'success_count', label: 'Success' },
+  { key: 'error_count', label: 'Errors' },
+  { key: 'avg_latency_ms', label: 'Avg Latency', visibleFrom: 'md' },
+  { key: 'success_rate', label: 'Success Rate' },
+  { key: 'last_active', label: 'Last Active', visibleFrom: 'md' },
+  { key: 'action', label: '' },
+]
+
 export function UsersAnalytics() {
   const auth = useAdminContext()
   const navigate = useNavigate()
@@ -29,71 +42,64 @@ export function UsersAnalytics() {
     return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
   })
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('desc') }
-  }
+  const renderUserCell = (u: UserAnalyticsRow, column: Column<UserAnalyticsRow>) => {
+    const total = u.trace_count || 1
+    const rate = Math.round((u.success_count / total) * 100)
 
-  const Th = ({ label, k }: { label: string; k: SortKey }) => (
-    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground" onClick={() => toggleSort(k)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={10} className={sortKey === k ? 'text-cyan-500' : 'opacity-30'} /></div>
-    </th>
-  )
+    switch (column.key) {
+      case 'session_id':
+        return <span className="font-mono text-xs text-slate-500 max-w-40 truncate">{u.session_id}</span>
+      case 'trace_count':
+        return <span className="text-xs font-semibold">{u.trace_count}</span>
+      case 'success_count':
+        return <span className="text-xs text-emerald-600">{u.success_count}</span>
+      case 'error_count':
+        return <span className="text-xs text-red-500">{u.error_count}</span>
+      case 'avg_latency_ms':
+        return <span className="text-xs">{u.avg_latency_ms ? `${Math.round(u.avg_latency_ms)}ms` : '\u2014'}</span>
+      case 'success_rate':
+        return (
+          <div className="min-w-30">
+            <div className="hidden md:flex items-center gap-2">
+              <Progress value={rate} className="h-1.5 flex-1" />
+              <span className="text-[10px] text-muted-foreground w-8 text-right">{rate}%</span>
+            </div>
+            <span className="md:hidden text-xs text-muted-foreground">{rate}%</span>
+          </div>
+        )
+      case 'last_active':
+        return <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(u.last_active)}</span>
+      case 'action':
+        return (
+          <div className="whitespace-nowrap text-right">
+            <button
+              onClick={() => navigate(`/admin/conversations?sessionId=${encodeURIComponent(u.session_id)}`)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-700 bg-cyan-50/50 hover:bg-cyan-100 hover:text-cyan-800 rounded-md transition-colors border border-cyan-100/50"
+            >
+              <ExternalLink size={12} />
+              View
+            </button>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Users & Analytics</h1>
       <Card>
         <CardContent className="p-0">
-          {isLoading ? <div className="p-4 space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 rounded" />)}</div> : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Session</th>
-                    <Th label="Traces" k="trace_count" />
-                    <Th label="Success" k="success_count" />
-                    <Th label="Errors" k="error_count" />
-                    <Th label="Avg Latency" k="avg_latency_ms" />
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Success Rate</th>
-                    <Th label="Last Active" k="last_active" />
-                    <th className="px-4 py-2.5 w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((u) => {
-                    const total = u.trace_count || 1
-                    const rate = Math.round((u.success_count / total) * 100)
-                    return (
-                      <tr key={u.session_id} className="border-b last:border-0 hover:bg-slate-50/50">
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-500 max-w-[160px] truncate">{u.session_id}</td>
-                        <td className="px-4 py-2.5 text-xs font-semibold">{u.trace_count}</td>
-                        <td className="px-4 py-2.5 text-xs text-emerald-600">{u.success_count}</td>
-                        <td className="px-4 py-2.5 text-xs text-red-500">{u.error_count}</td>
-                        <td className="px-4 py-2.5 text-xs">{u.avg_latency_ms ? `${Math.round(u.avg_latency_ms)}ms` : '—'}</td>
-                        <td className="px-4 py-2.5 min-w-[120px]">
-                          <div className="flex items-center gap-2">
-                            <Progress value={rate} className="h-1.5 flex-1" />
-                            <span className="text-[10px] text-muted-foreground w-8 text-right">{rate}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(u.last_active)}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-right">
-                          <button
-                            onClick={() => navigate(`/admin/conversations?sessionId=${encodeURIComponent(u.session_id)}`)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-700 bg-cyan-50/50 hover:bg-cyan-100 hover:text-cyan-800 rounded-md transition-colors border border-cyan-100/50"
-                          >
-                            <ExternalLink size={12} />
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {!sorted.length && <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">No data</td></tr>}
-                </tbody>
-              </table>
-            </div>
+          {isLoading ? (
+            <div className="p-4 space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 rounded" />)}</div>
+          ) : (
+            <ResponsiveTable<UserAnalyticsRow>
+              columns={userColumns}
+              data={sorted}
+              renderCell={renderUserCell}
+              emptyMessage="No data"
+            />
           )}
         </CardContent>
       </Card>

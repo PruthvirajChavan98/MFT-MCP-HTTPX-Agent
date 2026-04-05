@@ -39,6 +39,8 @@ import { buildConversationHref } from '@features/admin/lib/admin-links'
 import { formatDateTime } from '@shared/lib/format'
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { Input } from '@components/ui/input'
+import { MobileHeader } from '@components/ui/mobile-header'
+import { ResponsiveGrid } from '@components/ui/responsive-grid'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@components/ui/sheet'
 import { Skeleton } from '@components/ui/skeleton'
@@ -362,64 +364,58 @@ export function GuardrailsPage() {
 
   return (
     <div className="space-y-6 p-1">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-1 items-center gap-3">
-          <div className="rounded-lg bg-rose-50 p-2 dark:bg-rose-500/10">
-            <ShieldAlert className="size-5 text-rose-500" />
-          </div>
-          <div>
-            <h1 className="text-[20px] font-bold leading-tight text-foreground">Guardrails Observatory</h1>
-            <p className="text-xs text-muted-foreground">Real-time policy enforcement monitoring</p>
-          </div>
-        </div>
+      <MobileHeader
+        title="Guardrails Observatory"
+        description="Real-time policy enforcement monitoring"
+        actions={
+          <>
+            <Input
+              value={tenantId}
+              onChange={(event) => {
+                setOffset(0)
+                setTenantId(event.target.value)
+              }}
+              placeholder="Tenant ID"
+              className="h-9 w-full sm:w-40 text-xs"
+            />
+            <Select value={hours} onValueChange={setHours}>
+              <SelectTrigger className="h-9 w-full sm:w-32 text-sm">
+                <Clock className="mr-1 size-3.5 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="6">Last 6h</SelectItem>
+                <SelectItem value="24">Last 24h</SelectItem>
+                <SelectItem value="72">Last 72h</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={decisionFilter}
+              onValueChange={(value) => {
+                setOffset(0)
+                setDecisionFilter(value)
+              }}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-44 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {decisionOptions.map((decision) => (
+                  <SelectItem key={decision} value={decision}>
+                    {decision === 'all' ? 'All decisions' : decision}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        }
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={tenantId}
-            onChange={(event) => {
-              setOffset(0)
-              setTenantId(event.target.value)
-            }}
-            placeholder="Tenant ID"
-            className="h-9 w-40 text-xs"
-          />
-          <Select value={hours} onValueChange={setHours}>
-            <SelectTrigger className="h-9 w-32 text-sm">
-              <Clock className="mr-1 size-3.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="6">Last 6h</SelectItem>
-              <SelectItem value="24">Last 24h</SelectItem>
-              <SelectItem value="72">Last 72h</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={decisionFilter}
-            onValueChange={(value) => {
-              setOffset(0)
-              setDecisionFilter(value)
-            }}
-          >
-            <SelectTrigger className="h-9 w-44 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {decisionOptions.map((decision) => (
-                <SelectItem key={decision} value={decision}>
-                  {decision === 'all' ? 'All decisions' : decision}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <ResponsiveGrid cols={{ base: 2, md: 3, xl: 6 }} gap={3}>
         {(summaryQuery.isLoading || queueQuery.isLoading || judgeQuery.isLoading)
           ? Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-2xl" />)
           : cards.map((card) => <KpiCard key={card.label} card={card} />)}
-      </div>
+      </ResponsiveGrid>
 
       {!!kpiErrors.length && (
         <Alert variant="destructive">
@@ -520,8 +516,15 @@ export function GuardrailsPage() {
                   <SortHeader label="Session" field="session" active={sortField === 'session'} dir={sortDir} onSort={handleSort} />
                   <SortHeader label="Risk" field="risk" active={sortField === 'risk'} dir={sortDir} onSort={handleSort} />
                   <SortHeader label="Decision" field="decision" active={sortField === 'decision'} dir={sortDir} onSort={handleSort} />
-                  <SortHeader label="Path" field="path" active={sortField === 'path'} dir={sortDir} onSort={handleSort} />
-                  <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Reasons</th>
+                  <th className="hidden md:table-cell px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort('path')}>
+                    <span className="inline-flex items-center gap-1">
+                      Path
+                      {sortField === 'path'
+                        ? (sortDir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                        : <ChevronsUpDown size={10} className="opacity-30" />}
+                    </span>
+                  </th>
+                  <th className="hidden lg:table-cell px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Reasons</th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Action</th>
                 </tr>
               </thead>
@@ -558,18 +561,18 @@ export function GuardrailsPage() {
                         <td className="px-4 py-3.5">
                           <DecisionBadge decision={event.risk_decision} />
                         </td>
-                        <td className="px-4 py-3.5">
+                        <td className="hidden md:table-cell px-4 py-3.5">
                           <span className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
                             {event.request_path || '—'}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5">
+                        <td className="hidden lg:table-cell px-4 py-3.5">
                           <span className="rounded-full border border-violet-100 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-600 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300">
                             {event.reasons.join(', ') || '—'}
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-xs">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5">
                             {buildConversationHref(event.session_id) ? (
                               <Link
                                 to={buildConversationHref(event.session_id)!}
@@ -641,7 +644,7 @@ export function GuardrailsPage() {
         )}
 
         {!eventsQuery.error && (
-          <div className="flex items-center justify-between border-t border-border/60 px-6 py-3.5 text-xs text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-border/60 px-6 py-3.5 text-xs text-muted-foreground">
             <p>
               Showing {total ? offset + 1 : 0}-{Math.min(offset + events.length, total)} of {total} events
             </p>

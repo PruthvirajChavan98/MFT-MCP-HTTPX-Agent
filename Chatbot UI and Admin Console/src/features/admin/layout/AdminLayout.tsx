@@ -29,9 +29,12 @@ const NAV_ITEMS = [
 // KeyInput extracted to @components/ui/key-input
 
 function AdminShell() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 768
+  );
   const [cmdOpen, setCmdOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = useAdminContext();
 
   useLiveGlobalFeed(auth.adminKey);
@@ -48,14 +51,35 @@ function AdminShell() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Auto-close sidebar on route change when on mobile
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname]);
+
   // Admin key is optional — backend accepts requests when ADMIN_API_KEY env var is unset.
   // The key input stays available in the popover for environments that enforce authentication.
   const missingAdminKey = false;
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? "w-64" : "w-16"} bg-white border-r border-gray-200 flex flex-col shrink-0 transition-all duration-300 ease-in-out`}>
+      <aside className={`
+        ${sidebarOpen
+          ? "w-64 fixed inset-y-0 left-0 z-40 shadow-xl md:relative md:shadow-none"
+          : "w-0 overflow-hidden md:w-16"
+        }
+        bg-white border-r border-gray-200 flex flex-col shrink-0 transition-all duration-300 ease-in-out
+      `}>
         <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100">
           {sidebarOpen && (
             <div className="flex items-center gap-2 overflow-hidden">
@@ -107,8 +131,17 @@ function AdminShell() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shrink-0">
           <div className="flex items-center gap-3">
+            {/* Hamburger — always visible when sidebar is closed, especially on mobile */}
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="w-8 h-8 shrink-0 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors md:hidden"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
             <h2 className="text-sm font-semibold text-slate-800">Production Console</h2>
           </div>
 
@@ -118,7 +151,7 @@ function AdminShell() {
               <PopoverTrigger asChild>
                 <button className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all text-xs font-semibold ${missingAdminKey ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
                   <Key size={14} />
-                  <span>API Keys</span>
+                  <span className="hidden sm:inline">API Keys</span>
                   {missingAdminKey && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
                 </button>
               </PopoverTrigger>
@@ -150,7 +183,7 @@ function AdminShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-50/50">
           <Outlet />
         </main>
       </div>

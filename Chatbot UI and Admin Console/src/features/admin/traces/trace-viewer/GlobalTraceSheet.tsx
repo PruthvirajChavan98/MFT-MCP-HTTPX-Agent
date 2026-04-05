@@ -7,6 +7,7 @@ import { useAdminContext } from '@features/admin/context/AdminContext'
 import { buildConversationHref, clearTraceIdSearchParams } from '@features/admin/lib/admin-links'
 import { mapTraceDetailToViewer } from '@features/admin/traces/viewmodel'
 import { Sheet, SheetContent, SheetTitle } from '@components/ui/sheet'
+import { SplitPane } from '@components/ui/split-pane'
 import { TraceTree } from './TraceTree'
 import { TraceInspector } from './TraceInspector'
 import { parseToLangsmithTree } from './parse'
@@ -33,7 +34,12 @@ export function GlobalTraceSheet() {
 
   const traceDetail = mapTraceDetailToViewer(detail)
   const nodes = traceDetail ? parseToLangsmithTree(traceDetail) : []
-  const selectedNode = nodes.find(n => n.id === selectedNodeId) || nodes[0] || null
+  // On desktop, fallback to first node for immediate display.
+  // On mobile, require explicit selection so SplitPane shows tree first.
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const selectedNode = selectedNodeId === 'root' && isMobile
+    ? null
+    : (nodes.find(n => n.id === selectedNodeId) || nodes[0] || null)
   const sessionId = typeof detail?.trace?.session_id === 'string' ? detail.trace.session_id : undefined
   const conversationHref = buildConversationHref(sessionId)
 
@@ -42,13 +48,13 @@ export function GlobalTraceSheet() {
       <SheetContent
         side="right"
         aria-describedby={undefined}
-        className="w-[100vw] sm:max-w-none p-0 flex flex-col bg-background shadow-2xl border-l border-border [&>button]:hidden"
+        className="w-full sm:max-w-none p-0 flex flex-col bg-background shadow-2xl border-l border-border [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Trace Viewer</SheetTitle>
 
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="border-b border-border px-4 py-2.5 flex items-center justify-between bg-card">
-            <span className="text-xs text-muted-foreground font-medium">
+            <span className="text-xs text-muted-foreground font-medium truncate max-w-[200px] sm:max-w-none">
               Trace {traceId}
             </span>
             {conversationHref && (
@@ -60,16 +66,24 @@ export function GlobalTraceSheet() {
               </Link>
             )}
           </div>
-          <div className="flex-1 flex overflow-hidden">
-          <TraceTree
-            nodes={nodes}
-            selectedNodeId={selectedNodeId}
-            onSelect={setSelectedNodeId}
-            onClose={handleClose}
-            isLoading={isLoading}
+          <SplitPane
+            sidebarWidth="w-[380px]"
+            showMain={selectedNodeId !== 'root'}
+            onBack={() => setSelectedNodeId('root')}
+            className="flex-1 overflow-hidden"
+            sidebar={
+              <TraceTree
+                nodes={nodes}
+                selectedNodeId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+                onClose={handleClose}
+                isLoading={isLoading}
+              />
+            }
+            main={
+              <TraceInspector node={selectedNode} evals={traceDetail?.evals} shadowJudge={traceDetail?.shadow_judge} />
+            }
           />
-          <TraceInspector node={selectedNode} evals={traceDetail?.evals} shadowJudge={traceDetail?.shadow_judge} />
-          </div>
         </div>
       </SheetContent>
     </Sheet>

@@ -19,6 +19,7 @@ import { Skeleton } from '@components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Cpu, Save, Search, Server, Sparkles } from 'lucide-react'
 import { KeyInput } from '@components/ui/key-input'
+import { MobileHeader } from '@components/ui/mobile-header'
 
 function providerRequiresSessionKey(provider: string) {
   return provider === 'openrouter' || provider === 'nvidia'
@@ -125,11 +126,11 @@ export function ModelConfig() {
   })
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-10">
-      <div>
-        <h1 className="text-2xl text-gray-900 tracking-tight" style={{ fontWeight: 700 }}>Model Configuration</h1>
-        <p className="text-gray-500 text-sm mt-1">Manage execution parameters, logic paths, and provider assignments.</p>
-      </div>
+    <div className="space-y-6 w-full max-w-4xl mx-auto pb-10">
+      <MobileHeader
+        title="Model Configuration"
+        description="Manage execution parameters, logic paths, and provider assignments."
+      />
 
       {/* Target Session */}
       <Card className="border-gray-200 shadow-sm">
@@ -151,7 +152,7 @@ export function ModelConfig() {
               />
             </div>
             <Button
-              className="h-10 px-6 font-semibold"
+              className="h-10 px-6 font-semibold w-full sm:w-auto"
               onClick={() => { setFetchedSession(sessionId); refetch() }}
               disabled={!sessionId.trim()}
             >
