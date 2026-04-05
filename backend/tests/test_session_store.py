@@ -1,64 +1,82 @@
 import fakeredis
 import pytest
+import pytest_asyncio
 
+from src.mcp_service import session_store as session_store_mod
 from src.mcp_service.session_store import RedisSessionStore
 
 
-@pytest.fixture
-def mock_redis(monkeypatch):
-    # Mock the Redis client creation inside the class
+@pytest_asyncio.fixture
+async def mock_redis(monkeypatch):
+    """Provide a RedisSessionStore backed by fakeredis async client."""
     server = fakeredis.FakeServer()
+    fake_client = fakeredis.FakeAsyncRedis(server=server, decode_responses=True)
 
-    def fake_from_url(url, decode_responses=True):
-        return fakeredis.FakeStrictRedis(server=server, decode_responses=decode_responses)
+    # Patch the module-level singleton so _redis() returns our fake
+    monkeypatch.setattr(session_store_mod, "_client", fake_client)
 
-    monkeypatch.setattr("redis.from_url", fake_from_url)
+    store = RedisSessionStore()
+    yield store
 
-    # Initialize store (it will use the fake redis)
-    store = RedisSessionStore("redis://localhost:6379/0")
-    return store
+    # Cleanup: reset module-level singleton
+    monkeypatch.setattr(session_store_mod, "_client", None)
+    monkeypatch.setattr(session_store_mod, "_pool", None)
 
 
-def test_set_and_get(mock_redis):
+@pytest.mark.asyncio
+async def test_set_and_get(mock_redis):
     data = {"user": "test", "token": "123"}
-    mock_redis.set("sess_001", data)
+    await mock_redis.set("sess_001", data)
 
-    result = mock_redis.get("sess_001")
+    result = await mock_redis.get("sess_001")
     assert result == data
     assert result["user"] == "test"
 
 
-def test_get_missing_key(mock_redis):
-    result = mock_redis.get("non_existent")
+@pytest.mark.asyncio
+async def test_get_missing_key(mock_redis):
+    result = await mock_redis.get("non_existent")
     assert result is None
 
 
-def test_update_existing_session(mock_redis):
-    mock_redis.set("sess_002", {"step": 1})
-    mock_redis.update("sess_002", {"step": 2, "new_field": "ok"})
+@pytest.mark.asyncio
+async def test_update_existing_session(mock_redis):
+    await mock_redis.set("sess_002", {"step": 1})
+    await mock_redis.update("sess_002", {"step": 2, "new_field": "ok"})
 
-    result = mock_redis.get("sess_002")
+    result = await mock_redis.get("sess_002")
     assert result["step"] == 2
     assert result["new_field"] == "ok"
 
 
-def test_update_creates_if_missing(mock_redis):
+@pytest.mark.asyncio
+async def test_update_creates_if_missing(mock_redis):
     # Update on a missing key acts like set (starts with empty dict)
-    mock_redis.update("sess_003", {"started": True})
-    result = mock_redis.get("sess_003")
+    await mock_redis.update("sess_003", {"started": True})
+    result = await mock_redis.get("sess_003")
     assert result["started"] is True
 
 
-def test_delete(mock_redis):
-    mock_redis.set("sess_004", {"foo": "bar"})
-    mock_redis.delete("sess_004")
-    assert mock_redis.get("sess_004") is None
+@pytest.mark.asyncio
+async def test_delete(mock_redis):
+    await mock_redis.set("sess_004", {"foo": "bar"})
+    await mock_redis.delete("sess_004")
+    assert await mock_redis.get("sess_004") is None
 
 
-def test_invalid_session_ids(mock_redis):
+@pytest.mark.asyncio
+async def test_invalid_session_ids(mock_redis):
     # Should safely do nothing or return None
-    mock_redis.set(None, {})
-    assert mock_redis.get(None) is None
+    await mock_redis.set(None, {})
+    assert await mock_redis.get(None) is None
 
-    mock_redis.set("   ", {})
-    assert mock_redis.get("   ") is None
+    await mock_redis.set("   ", {})
+    assert await mock_redis.get("   ") is None
+
+
+@pytest.mark.asyncio
+async def test_set_raw_with_ttl(mock_redis):
+    await mock_redis.set_raw("dl_token:abc123", '{"data":"test"}', ex=600)
+    r = await session_store_mod.get_redis()
+    val = await r.get("dl_token:abc123")
+    assert val == '{"data":"test"}'

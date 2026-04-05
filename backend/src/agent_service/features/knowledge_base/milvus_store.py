@@ -5,14 +5,15 @@ from typing import Any
 
 from langchain_core.documents import Document
 
-from src.agent_service.features.knowledge_base_repo import (
+from src.common.milvus_mgr import milvus_mgr
+
+from .repo import (
     VECTOR_STATUS_FAILED,
     VECTOR_STATUS_SYNCED,
     VECTOR_STATUS_SYNCING,
     KnowledgeBaseRepo,
     normalize_question,
 )
-from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("kb_milvus_store")
 
@@ -93,4 +94,16 @@ class KBMilvusStore:
             log.warning("Milvus clear (kb_faqs) failed: %s", exc)
 
 
-kb_milvus_store = KBMilvusStore()
+_kb_store_instance: KBMilvusStore | None = None
+
+
+def get_kb_milvus_store() -> KBMilvusStore:
+    """Lazy factory for KBMilvusStore singleton. Mockable in tests."""
+    global _kb_store_instance
+    if _kb_store_instance is None:
+        _kb_store_instance = KBMilvusStore()
+    return _kb_store_instance
+
+
+# Backward-compat: existing importers use this module-level name
+kb_milvus_store = get_kb_milvus_store()

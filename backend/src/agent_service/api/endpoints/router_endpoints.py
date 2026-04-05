@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from src.agent_service.core.schemas import RouterClassifyRequest
 from src.agent_service.core.session_utils import valid_session_id
-from src.agent_service.features.nbfc_router import nbfc_router_service
+from src.agent_service.features.routing.nbfc_router import nbfc_router_service
 from src.agent_service.tools.mcp_manager import mcp_manager
 
 log = logging.getLogger(__name__)

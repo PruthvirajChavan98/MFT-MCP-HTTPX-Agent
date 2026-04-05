@@ -8,7 +8,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.config import KB_FAQ_BATCH_MAX_ITEMS, KB_FAQ_PDF_MAX_BYTES
-from src.agent_service.features.knowledge_base_service import knowledge_base_service
+from src.agent_service.features.knowledge_base.service import knowledge_base_service
 
 log = logging.getLogger("admin_api")
 router = APIRouter(dependencies=[Depends(require_admin_key)])

@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterable
 
-from src.agent_service.features.faq_classifier import classify_faqs
-from src.agent_service.features.faq_pdf_parser import coerce_json_items, parse_pdf_faqs
-from src.agent_service.features.kb_milvus_store import kb_milvus_store
-from src.agent_service.features.knowledge_base_repo import KnowledgeBaseRepo
+from .faq_classifier import classify_faqs
+from .faq_pdf_parser import coerce_json_items, parse_pdf_faqs
+from .milvus_store import kb_milvus_store
+from .repo import KnowledgeBaseRepo
 
 log = logging.getLogger("knowledge_base_service")
 
@@ -167,4 +167,16 @@ class KnowledgeBaseService:
             log.warning("Milvus sync failed: %s", exc)
 
 
-knowledge_base_service = KnowledgeBaseService()
+_kb_service_instance: KnowledgeBaseService | None = None
+
+
+def get_knowledge_base_service() -> KnowledgeBaseService:
+    """Lazy factory for KnowledgeBaseService singleton. Mockable in tests."""
+    global _kb_service_instance
+    if _kb_service_instance is None:
+        _kb_service_instance = KnowledgeBaseService()
+    return _kb_service_instance
+
+
+# Backward-compat: existing importers use this module-level name
+knowledge_base_service = get_knowledge_base_service()

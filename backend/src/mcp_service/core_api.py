@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import asyncio
 import json as _json
 import logging
 import uuid
@@ -7,6 +10,7 @@ import httpx
 
 from .config import CRM_BASE_URL, DOWNLOAD_PROXY_BASE_URL, DOWNLOAD_TOKEN_TTL_SECONDS
 from .session_store import RedisSessionStore
+from .session_store import valid_session_id as _valid_session_id
 from .utils import JsonConverter, ToonOptions
 
 conv = JsonConverter(sep=".")
@@ -14,14 +18,47 @@ log = logging.getLogger(name="mft_api")
 
 _CRM_TIMEOUT = httpx.Timeout(connect=5.0, read=25.0, write=10.0, pool=5.0)
 
+# ---------------------------------------------------------------------------
+# Module-level async HTTP client singleton
+# ---------------------------------------------------------------------------
+_http_client: httpx.AsyncClient | None = None
+_http_lock = asyncio.Lock()
 
-def _valid_session_id(session_id: object) -> str:
-    sid = str(session_id).strip() if session_id is not None else ""
-    if not sid or sid.lower() in {"null", "none"}:
-        raise ValueError(f"Invalid session_id: {session_id!r}")
-    return sid
+
+async def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+
+    if _http_client is not None:
+        return _http_client
+
+    async with _http_lock:
+        if _http_client is None:
+            _http_client = httpx.AsyncClient(
+                timeout=_CRM_TIMEOUT,
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            )
+            log.info("Initialized async HTTP client for core API")
+    return _http_client
 
 
+async def _close_http_client() -> None:
+    global _http_client
+
+    async with _http_lock:
+        if _http_client is not None:
+            await _http_client.aclose()
+            _http_client = None
+            log.info("Closed async HTTP client for core API")
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Core CRM API wrapper — fully async
+# ---------------------------------------------------------------------------
 class MockFinTechAPIs:
     def __init__(self, session_id: str, session_store: Optional[RedisSessionStore] = None):
         self.session_id = _valid_session_id(session_id)
@@ -32,22 +69,26 @@ class MockFinTechAPIs:
         self.app_id: Optional[str] = None
         self.loan_id: Optional[str] = None
         self.phone_number: Optional[str] = None
-        self._hydrate()
+        self._hydrated: bool = False
 
-    def _hydrate(self) -> None:
-        s = self.session_store.get(self.session_id) or {}
+    async def _hydrate(self) -> None:
+        """Load session state from Redis once per instance lifetime."""
+        if self._hydrated:
+            return
+        s = await self.session_store.get(self.session_id) or {}
         self.bearer_token = s.get("access_token")
         self.app_id = s.get("app_id")
         self.loan_id = s.get("loan_id")
         self.phone_number = s.get("phone_number")
+        self._hydrated = True
 
     def _url(self, path: str) -> str:
         if not path.startswith("/"):
             path = "/" + path
         return f"{self.base_url}{path}"
 
-    def _headers(self) -> Dict[str, str]:
-        self._hydrate()
+    async def _headers(self) -> Dict[str, str]:
+        await self._hydrate()
         if not self.bearer_token:
             return {}
         return {
@@ -56,12 +97,12 @@ class MockFinTechAPIs:
             "Accept": "application/json",
         }
 
-    def _check_context(self) -> Optional[dict]:
-        self._hydrate()
+    async def _check_context(self) -> Optional[dict]:
+        await self._hydrate()
         if not self.bearer_token:
             return {"error": "Auth token missing."}
         if not self.app_id:
-            s = self.session_store.get(self.session_id) or {}
+            s = await self.session_store.get(self.session_id) or {}
             if s.get("loans"):
                 return {
                     "error": "No loan selected. Call list_loans() then select_loan(loan_number)."
@@ -77,11 +118,9 @@ class MockFinTechAPIs:
                 obj, options=ToonOptions(delimiter="|", indent=2, length_marker="")
             )
         except RuntimeError:
-            import json
+            return _json.dumps(obj, indent=2)
 
-            return json.dumps(obj, indent=2)
-
-    def _download(
+    async def _download(
         self,
         method: str,
         path: str,
@@ -89,11 +128,11 @@ class MockFinTechAPIs:
         json_body: Optional[dict] = None,
         require_app_id: bool = False,
     ) -> dict:
-        self._hydrate()
+        await self._hydrate()
         if not self.bearer_token:
             return {"error": "Auth token missing."}
         if require_app_id:
-            ctx_err = self._check_context()
+            ctx_err = await self._check_context()
             if ctx_err:
                 return ctx_err
 
@@ -105,25 +144,25 @@ class MockFinTechAPIs:
             headers["Content-Type"] = "application/json"
 
         try:
-            with httpx.Client(timeout=_CRM_TIMEOUT) as client:
-                with client.stream(
-                    method, self._url(path), headers=headers, json=json_body
-                ) as resp:
-                    self.logger.info("%s %s - %d", method, path, resp.status_code)
+            client = await _get_http_client()
+            async with client.stream(
+                method, self._url(path), headers=headers, json=json_body
+            ) as resp:
+                self.logger.info("%s %s - %d", method, path, resp.status_code)
 
-                    if resp.status_code not in (200, 201):
-                        resp.read()
-                        try:
-                            err = resp.json()
-                        except Exception:
-                            err = resp.text[:1000]
-                        return {"error": err, "status_code": resp.status_code}
+                if resp.status_code not in (200, 201):
+                    await resp.aread()
+                    try:
+                        err = resp.json()
+                    except Exception:
+                        err = resp.text[:1000]
+                    return {"error": err, "status_code": resp.status_code}
 
-                    hint = resp.headers.get("x-password-hint", "")
-                    disposition = resp.headers.get("content-disposition", "")
-                    filename = ""
-                    if 'filename="' in disposition:
-                        filename = disposition.split('filename="')[1].rstrip('"')
+                hint = resp.headers.get("x-password-hint", "")
+                disposition = resp.headers.get("content-disposition", "")
+                filename = ""
+                if 'filename="' in disposition:
+                    filename = disposition.split('filename="')[1].rstrip('"')
 
             # CRM confirmed the document is available — generate a one-time
             # download token so the user can fetch the PDF via a browser link.
@@ -140,10 +179,8 @@ class MockFinTechAPIs:
                     "password_hint": hint,
                 }
             )
-            self.session_store.client.set(  # type: ignore[union-attr]
-                redis_key,
-                token_payload,
-                ex=DOWNLOAD_TOKEN_TTL_SECONDS,
+            await self.session_store.set_raw(
+                redis_key, token_payload, ex=DOWNLOAD_TOKEN_TTL_SECONDS
             )
 
             download_url = f"{DOWNLOAD_PROXY_BASE_URL}/api/download/{token}"
@@ -158,72 +195,86 @@ class MockFinTechAPIs:
         except Exception as e:
             return {"error": str(e)}
 
-    def _request(self, method: str, path: str, json_body: Optional[dict] = None) -> Any:
-        self._hydrate()
-        ctx_err = self._check_context()
+    async def _request(self, method: str, path: str, json_body: Optional[dict] = None) -> Any:
+        await self._hydrate()
+        ctx_err = await self._check_context()
         if ctx_err and "home" not in path:
             return ctx_err
 
         try:
-            with httpx.Client(timeout=_CRM_TIMEOUT) as client:
-                resp = client.request(
-                    method, self._url(path), headers=self._headers(), json=json_body
-                )
-                self.logger.info("%s %s - %d", method, path, resp.status_code)
-                try:
-                    return resp.json()
-                except Exception:
-                    return {"status_code": resp.status_code, "raw": resp.text[:1000]}
+            client = await _get_http_client()
+            resp = await client.request(
+                method, self._url(path), headers=await self._headers(), json=json_body
+            )
+            self.logger.info("%s %s - %d", method, path, resp.status_code)
+            try:
+                return resp.json()
+            except Exception:
+                return {"status_code": resp.status_code, "raw": resp.text[:1000]}
         except Exception as e:
             return {"error": str(e)}
 
-    def get_dashboard_home(self) -> str:
-        return self._to_toon(self._request("GET", "/mockfin-service/home"))
+    async def get_dashboard_home(self) -> str:
+        return self._to_toon(await self._request("GET", "/mockfin-service/home"))
 
-    def get_loan_details(self) -> str:
+    async def get_loan_details(self) -> str:
         if not self.app_id:
-            return self._to_toon({"error": "No app_id"})
-        return self._to_toon(self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/"))
-
-    def get_foreclosure_details(self) -> str:
+            await self._hydrate()
         if not self.app_id:
             return self._to_toon({"error": "No app_id"})
         return self._to_toon(
-            self._request("GET", f"/mockfin-service/loan/foreclosuredetails/{self.app_id}/")
+            await self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/")
         )
 
-    def get_overdue_details(self) -> str:
+    async def get_foreclosure_details(self) -> str:
+        if not self.app_id:
+            await self._hydrate()
         if not self.app_id:
             return self._to_toon({"error": "No app_id"})
         return self._to_toon(
-            self._request("GET", f"/mockfin-service/loan/overdue-details/{self.app_id}/")
+            await self._request("GET", f"/mockfin-service/loan/foreclosuredetails/{self.app_id}/")
         )
 
-    def get_noc_details(self) -> str:
+    async def get_overdue_details(self) -> str:
+        if not self.app_id:
+            await self._hydrate()
         if not self.app_id:
             return self._to_toon({"error": "No app_id"})
         return self._to_toon(
-            self._request("GET", f"/mockfin-service/loan/noc-details/{self.app_id}/")
+            await self._request("GET", f"/mockfin-service/loan/overdue-details/{self.app_id}/")
         )
 
-    def get_repayment_schedule(self) -> str:
+    async def get_noc_details(self) -> str:
+        if not self.app_id:
+            await self._hydrate()
+        if not self.app_id:
+            return self._to_toon({"error": "No app_id"})
+        return self._to_toon(
+            await self._request("GET", f"/mockfin-service/loan/noc-details/{self.app_id}/")
+        )
+
+    async def get_repayment_schedule(self) -> str:
+        if not self.app_id:
+            await self._hydrate()
         ident = self.app_id or self.loan_id
         if not ident:
             return self._to_toon({"error": "No app_id/loan_id"})
         return self._to_toon(
-            self._request("GET", f"/mockfin-service/loan/repayment-schedule/{ident}/")
+            await self._request("GET", f"/mockfin-service/loan/repayment-schedule/{ident}/")
         )
 
-    def download_welcome_letter(self) -> str:
-        result = self._download(
+    async def download_welcome_letter(self) -> str:
+        result = await self._download(
             "GET", "/mockfin-service/download/welcome-letter/", doc_type="welcome-letter"
         )
         if "error" not in result:
             return self._to_toon(result)
         # CRM unavailable in demo — generate mock letter from loan details
         loan: dict = {}
+        if not self.app_id:
+            await self._hydrate()
         if self.app_id:
-            raw = self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/")
+            raw = await self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/")
             if isinstance(raw, dict) and "error" not in raw:
                 loan = raw
         return self._to_toon(self._build_mock_welcome_letter(loan))
@@ -279,12 +330,14 @@ Yours sincerely,
             "content": content,
         }
 
-    def download_soa(self, start_date: str, end_date: str) -> str:
+    async def download_soa(self, start_date: str, end_date: str) -> str:
+        if not self.app_id:
+            await self._hydrate()
         if not self.app_id:
             return self._to_toon(
                 {"error": "No loan selected. Call list_loans() then select_loan(loan_number)."}
             )
-        result = self._download(
+        result = await self._download(
             "POST",
             "/mockfin-service/download/soa/",
             doc_type="soa",
@@ -295,10 +348,12 @@ Yours sincerely,
         # CRM unavailable in demo — generate mock SOA from loan + repayment schedule
         loan: dict = {}
         schedule: dict = {}
-        raw_loan = self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/")
+        raw_loan = await self._request("GET", f"/mockfin-service/loan/details/{self.app_id}/")
         if isinstance(raw_loan, dict) and "error" not in raw_loan:
             loan = raw_loan
-        raw_sched = self._request("GET", f"/mockfin-service/loan/repayment-schedule/{self.app_id}/")
+        raw_sched = await self._request(
+            "GET", f"/mockfin-service/loan/repayment-schedule/{self.app_id}/"
+        )
         if isinstance(raw_sched, dict) and "error" not in raw_sched:
             schedule = raw_sched
         return self._to_toon(self._build_mock_soa(start_date, end_date, loan, schedule))
@@ -315,11 +370,13 @@ Yours sincerely,
         issued = datetime.date.today().strftime("%d %B %Y")
 
         # Parse date bounds
+        start_dt: datetime.date | None = None
+        end_dt: datetime.date | None = None
         try:
             start_dt = datetime.date.fromisoformat(start_date)
             end_dt = datetime.date.fromisoformat(end_date)
         except ValueError:
-            start_dt = end_dt = None
+            pass
 
         # Extract instalment rows from repayment schedule that fall in range
         rows: list[dict] = []
@@ -370,7 +427,7 @@ Yours sincerely,
 
 ### Transaction History
 
-| Date | Description | Debit (₹) | Credit (₹) | Status |
+| Date | Description | Debit | Credit | Status |
 |---|---|---|---|---|
 {tx_table}
 
@@ -385,7 +442,9 @@ Yours sincerely,
             "content": content,
         }
 
-    def initiate_transaction(self, amount: str, otp: str, payment_mode: str = "UPI") -> str:
+    async def initiate_transaction(self, amount: str, otp: str, payment_mode: str = "UPI") -> str:
+        if not self.app_id:
+            await self._hydrate()
         payload = {
             "phone_number": self.phone_number,
             "otp": otp,
@@ -394,21 +453,21 @@ Yours sincerely,
             "loan_app_id": self.app_id,
         }
         return self._to_toon(
-            self._request("POST", "/payments/initiate_transaction/", json_body=payload)
+            await self._request("POST", "/payments/initiate_transaction/", json_body=payload)
         )
 
-    def profile_phone_generate_otp(self, new_phone: str) -> str:
+    async def profile_phone_generate_otp(self, new_phone: str) -> str:
         return self._to_toon(
-            self._request(
+            await self._request(
                 "PUT",
                 "/mockfin-service/profiles/?update=phone_number",
                 json_body={"phone_number": new_phone},
             )
         )
 
-    def profile_phone_validate_otp(self, new_phone: str, otp: str) -> str:
+    async def profile_phone_validate_otp(self, new_phone: str, otp: str) -> str:
         return self._to_toon(
-            self._request(
+            await self._request(
                 "PUT",
                 "/mockfin-service/profiles/?update=phone_number",
                 json_body={"phone_number": new_phone, "otp": otp},

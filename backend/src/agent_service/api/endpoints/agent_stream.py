@@ -32,7 +32,7 @@ from src.agent_service.core.session_cost import get_session_cost_tracker
 from src.agent_service.core.session_utils import session_utils
 from src.agent_service.core.streaming_utils import StreamingState, sse_formatter, streaming_utils
 from src.agent_service.eval_store.shadow_queue import trace_queue
-from src.agent_service.features.nbfc_router import nbfc_router_service
+from src.agent_service.features.routing.nbfc_router import nbfc_router_service
 from src.agent_service.features.runtime_trace_store import persist_runtime_trace
 from src.agent_service.features.shadow_eval import ShadowEvalCollector, maybe_shadow_eval_commit
 from src.agent_service.security.inline_guard import evaluate_prompt_safety_decision

@@ -25,11 +25,11 @@ from src.agent_service.core.config import (
     NBFC_ROUTER_SENTIMENT_THRESHOLD,
 )
 from src.agent_service.core.session_utils import get_redis
-from src.agent_service.features.answerability import QueryAnswerabilityClassifier
 
 # Enterprise Imports (Use Factory, not raw classes)
 from src.agent_service.llm.client import get_llm, get_owner_embeddings
 
+from .answerability import QueryAnswerabilityClassifier
 from .prototypes_nbfc import REASON_PROTOTYPES, SENTIMENT_PROTOTYPES
 
 log = logging.getLogger("nbfc.router")
@@ -178,7 +178,7 @@ class _ProtoCache:
                 out[label] = norm_vecs
             return out
         except Exception as exc:
-            log.debug("Proto cache load failed: %s", exc)
+            log.warning("Proto cache load failed: %s", exc, exc_info=True)
             return None
 
     async def save(self, model: str, fp: str, data: Dict[str, List[List[float]]]) -> None:
@@ -587,4 +587,16 @@ class NBFCClassifierService:
         return result
 
 
-nbfc_router_service = NBFCClassifierService()
+_router_service_instance: NBFCClassifierService | None = None
+
+
+def get_nbfc_router_service() -> NBFCClassifierService:
+    """Lazy factory for NBFCClassifierService singleton. Mockable in tests."""
+    global _router_service_instance
+    if _router_service_instance is None:
+        _router_service_instance = NBFCClassifierService()
+    return _router_service_instance
+
+
+# Backward-compat: existing importers use this module-level name
+nbfc_router_service = get_nbfc_router_service()

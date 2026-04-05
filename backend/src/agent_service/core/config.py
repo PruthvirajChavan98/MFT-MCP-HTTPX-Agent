@@ -134,7 +134,9 @@ RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() in ("1", "t
 RATE_LIMIT_ALGORITHM = os.getenv("RATE_LIMIT_ALGORITHM", "sliding_window").strip().lower()
 
 # Failure mode: "fail_open" (allow on Redis failure) or "fail_closed" (deny on Redis failure)
-RATE_LIMIT_FAILURE_MODE = os.getenv("RATE_LIMIT_FAILURE_MODE", "fail_open").strip().lower()
+# Default: fail_closed — denies requests when Redis is unreachable to protect LLM API budgets.
+# Set RATE_LIMIT_FAILURE_MODE=fail_open explicitly if availability is preferred over safety.
+RATE_LIMIT_FAILURE_MODE = os.getenv("RATE_LIMIT_FAILURE_MODE", "fail_closed").strip().lower()
 
 # Redis timeout for rate limit operations (seconds)
 RATE_LIMIT_REDIS_TIMEOUT = float(os.getenv("RATE_LIMIT_REDIS_TIMEOUT", "1.0"))

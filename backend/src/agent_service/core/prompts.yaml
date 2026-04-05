@@ -103,6 +103,11 @@ router:
 knowledge:
   {}
 
+tools:
+  kb_search:
+    description: "Search the fintech FAQ. USE THIS FOR: loan products, eligibility, login/servicing, stolen vehicle claims, non-repossession letters, EMI continuation, disbursal issues, and address/email updates."
+    template: "Search the fintech FAQ knowledge base by semantic similarity."
+
 faq_classifier:
   system_prompt:
     description: "System prompt for FAQ auto-categorization via Groq LLM."

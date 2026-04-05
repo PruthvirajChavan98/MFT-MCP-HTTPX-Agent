@@ -36,6 +36,24 @@ export interface SystemHealthResponse {
   timestamp: number
 }
 
+export interface RateLimitMetricsResponse {
+  enabled: boolean
+  message?: string
+  metrics?: Record<string, Record<string, number>>
+  timestamp?: number
+}
+
+export interface RateLimitConfigResponse {
+  enabled: boolean
+  algorithm: string
+  failure_mode: string
+  max_burst: number
+  per_ip_enabled: boolean
+  endpoints: Record<string, number>
+  tiers: Record<string, number>
+  per_ip: { enabled: boolean; limit: number }
+}
+
 // ── API ──────────────────────────────────────────────────────────────────────
 
 export async function fetchModels(): Promise<AgentModelCategory[]> {
@@ -49,12 +67,10 @@ export async function fetchSystemHealth(): Promise<SystemHealthResponse> {
   return requestJson({ method: 'GET', path: '/health/ready' })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped backend response; type properly when API schema is available
-export async function fetchRateLimitMetrics(): Promise<any> {
+export async function fetchRateLimitMetrics(): Promise<RateLimitMetricsResponse> {
   return requestJson({ method: 'GET', path: '/rate-limit/metrics' })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped backend response; type properly when API schema is available
-export async function fetchRateLimitConfig(): Promise<any> {
+export async function fetchRateLimitConfig(): Promise<RateLimitConfigResponse> {
   return requestJson({ method: 'GET', path: '/rate-limit/config' })
 }

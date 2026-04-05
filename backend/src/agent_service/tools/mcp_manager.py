@@ -193,7 +193,10 @@ class MCPManager:
         return tools
 
     def _build_kb_tool(self) -> StructuredTool:
-        from src.agent_service.features.kb_milvus_store import kb_milvus_store
+        from src.agent_service.core.prompts import prompt_manager
+        from src.agent_service.features.knowledge_base.milvus_store import kb_milvus_store
+
+        kb_description = prompt_manager.get_template("tools", "kb_search")
 
         class KBQueryInput(BaseModel):
             query: str = Field(
@@ -208,7 +211,7 @@ class MCPManager:
             func=None,
             coroutine=mock_fintech_knowledge_base,
             name="mock_fintech_knowledge_base",
-            description="Search the fintech FAQ knowledge base by semantic similarity.",
+            description=kb_description,
             args_schema=KBQueryInput,
         )
 

@@ -14,20 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 def _json_load_maybe(value: Any) -> Any:
-    if not isinstance(value, str):
-        return value
-    stripped = value.strip()
-    if not stripped:
-        return value
-    if (stripped.startswith("{") and stripped.endswith("}")) or (
-        stripped.startswith("[") and stripped.endswith("]")
-    ):
-        try:
-            return json.loads(stripped)
-        except Exception as exc:
-            logger.debug("_json_load_maybe parse fallback: %s", exc)
-            return value
-    return value
+    """Attempt to parse a JSON string; return the original value on failure.
+
+    Delegates to the canonical implementation in eval_store.status to avoid
+    duplicated parsing logic (see architectural audit Phase 1 consolidation).
+    """
+    from src.agent_service.eval_store.status import json_load_maybe
+
+    return json_load_maybe(value)
 
 
 def _encode_cursor(payload: dict[str, Any]) -> str:

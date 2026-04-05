@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 
 import src.agent_service.api.admin_analytics.guardrails as guardrails_mod
+import src.agent_service.api.admin_analytics.repo as repo_mod
 
 
 @pytest.mark.asyncio
@@ -39,10 +40,10 @@ async def test_guardrails_events_support_filters_and_pagination():
     async def _fake_rows(pool, **kwargs):
         return rows
 
-    fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
+    fake_pool = SimpleNamespace()  # pool unused because fetch_guardrail_trace_rows is patched
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(guardrails_mod, "_load_guardrail_trace_rows", _fake_rows)
+    monkeypatch.setattr(repo_mod.analytics_repo, "fetch_guardrail_trace_rows", _fake_rows)
     response = await guardrails_mod.guardrails(
         request=request,
         tenant_id="tenant-a",
@@ -94,10 +95,10 @@ async def test_guardrails_trends_accepts_integer_hours():
         captured.update(kwargs)
         return rows
 
-    fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
+    fake_pool = SimpleNamespace()  # pool unused because fetch_guardrail_trace_rows is patched
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(guardrails_mod, "_load_guardrail_trace_rows", _fake_rows)
+    monkeypatch.setattr(repo_mod.analytics_repo, "fetch_guardrail_trace_rows", _fake_rows)
 
     response = await guardrails_mod.guardrails_trends(
         request=request,
@@ -118,9 +119,9 @@ async def test_guardrails_trends_returns_503_when_db_query_fails():
         raise RuntimeError("db unavailable")
 
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(guardrails_mod, "_load_guardrail_trace_rows", _raise)
+    monkeypatch.setattr(repo_mod.analytics_repo, "fetch_guardrail_trace_rows", _raise)
 
-    fake_pool = SimpleNamespace()  # pool unused because _load_guardrail_trace_rows is patched
+    fake_pool = SimpleNamespace()  # pool unused because fetch_guardrail_trace_rows is patched
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
     with pytest.raises(HTTPException) as exc_info:

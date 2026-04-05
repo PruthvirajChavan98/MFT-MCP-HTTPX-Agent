@@ -12,7 +12,7 @@ from src.agent_service.eval_store.pg_store import (
     EvalSchemaUnavailableError,
     get_shared_pool,
 )
-from src.agent_service.features.question_category import classify_question_category
+from src.agent_service.features.routing.question_category import classify_question_category
 
 log = logging.getLogger("runtime_trace_store")
 

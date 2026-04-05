@@ -1,4 +1,4 @@
-"""Manual LangGraph Recursive RAG workflow using message-based state."""
+"""LangGraph Recursive RAG workflow using message-based state."""
 
 from __future__ import annotations
 
@@ -41,6 +41,111 @@ def _safe_tool_output(value: Any) -> str:
     return str(value)
 
 
+class DedupToolNode:
+    """Graph node that executes tool calls with same-turn deduplication.
+
+    Encapsulates tool lookup, execution-policy-driven deduplication, and safe
+    output formatting into a single callable that plugs into a LangGraph
+    StateGraph as ``builder.add_node("run_tools", DedupToolNode(tools))``.
+    """
+
+    def __init__(self, tools: list[Any]) -> None:
+        self._tools_by_name = {getattr(tool, "name", ""): tool for tool in tools}
+
+    async def __call__(self, state: RecursiveRAGState) -> dict[str, Any]:
+        messages = state.get("messages", [])
+        cache = dict(state.get("tool_execution_cache", {}) or {})
+        iteration = state.get("iteration", 0)
+
+        if not messages or not isinstance(messages[-1], AIMessage):
+            return {"iteration": iteration, "tool_execution_cache": cache}
+
+        tool_calls = getattr(messages[-1], "tool_calls", []) or []
+        if not tool_calls:
+            return {"iteration": iteration, "tool_execution_cache": cache}
+
+        tool_messages: list[ToolMessage] = []
+        for tool_call in tool_calls:
+            tool_name = tool_call.get("name", "")
+            tool_args = tool_call.get("args", {}) or {}
+            if not isinstance(tool_args, dict):
+                tool_args = {"input": tool_args}
+            tool_call_id = tool_call.get("id") or tool_name or "tool-call"
+
+            tool = self._tools_by_name.get(tool_name)
+            if tool is None:
+                tool_messages.append(
+                    ToolMessage(
+                        content=f"Tool '{tool_name}' is not available.",
+                        tool_call_id=tool_call_id,
+                        name=tool_name,
+                    )
+                )
+                continue
+
+            content = self._execute_with_dedupe(tool_name, tool_args, tool_call_id, tool, cache)
+            if content is None:
+                # Not cached — must await actual execution
+                content = await self._invoke_tool(tool_name, tool_args, tool, cache)
+
+            tool_messages.append(
+                ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name)
+            )
+
+        return {
+            "messages": tool_messages,
+            "iteration": iteration + 1,
+            "tool_execution_cache": cache,
+        }
+
+    def _execute_with_dedupe(
+        self,
+        tool_name: str,
+        tool_args: dict,
+        tool_call_id: str,
+        tool: Any,
+        cache: dict[str, str],
+    ) -> str | None:
+        """Return cached result if this is a duplicate side-effect call, else None."""
+        policy = get_tool_execution_policy(tool_name)
+        if not policy.same_turn_dedupe:
+            return None
+
+        dedupe_key = build_same_turn_dedupe_key(tool_name, tool_args)
+        if dedupe_key and dedupe_key in cache:
+            log.info(
+                "Suppressing duplicate side-effect tool call within run tool=%s dedupe_key=%s",
+                tool_name,
+                dedupe_key,
+            )
+            return cache[dedupe_key]
+        return None
+
+    async def _invoke_tool(
+        self,
+        tool_name: str,
+        tool_args: dict,
+        tool: Any,
+        cache: dict[str, str],
+    ) -> str:
+        """Invoke tool, cache result if policy requires dedup, return formatted output."""
+        policy = get_tool_execution_policy(tool_name)
+        dedupe_key = (
+            build_same_turn_dedupe_key(tool_name, tool_args) if policy.same_turn_dedupe else None
+        )
+
+        try:
+            result = await tool.ainvoke(tool_args)
+            content = _safe_tool_output(result)
+        except Exception as exc:
+            log.warning("Tool invocation failed for %s: %r", tool_name, exc)
+            content = f"Tool '{tool_name}' failed: {exc}"
+
+        if dedupe_key:
+            cache[dedupe_key] = content
+        return content
+
+
 def build_recursive_rag_graph(
     *,
     model: Any,
@@ -48,13 +153,8 @@ def build_recursive_rag_graph(
     system_prompt: str,
     checkpointer: Any,
 ):
-    """
-    Build strict recursive RAG graph with manual StateGraph construction.
+    """Build recursive RAG graph with DedupToolNode for tool execution."""
 
-    State is message-based; retrieval context flows only through message objects.
-    """
-
-    tools_by_name = {getattr(tool, "name", ""): tool for tool in tools}
     llm = model.bind_tools(tools) if tools else model
 
     async def llm_step(state: RecursiveRAGState) -> dict[str, Any]:
@@ -66,81 +166,6 @@ def build_recursive_rag_graph(
             ai_message = AIMessage(content=str(ai_message))
 
         return {"messages": [ai_message]}
-
-    async def run_tools(state: RecursiveRAGState) -> dict[str, Any]:
-        messages = state.get("messages", [])
-        if not messages:
-            return {
-                "iteration": state.get("iteration", 0),
-                "tool_execution_cache": dict(state.get("tool_execution_cache", {}) or {}),
-            }
-
-        last_message = messages[-1]
-        if not isinstance(last_message, AIMessage):
-            return {
-                "iteration": state.get("iteration", 0),
-                "tool_execution_cache": dict(state.get("tool_execution_cache", {}) or {}),
-            }
-
-        tool_calls = getattr(last_message, "tool_calls", []) or []
-        if not tool_calls:
-            return {
-                "iteration": state.get("iteration", 0),
-                "tool_execution_cache": dict(state.get("tool_execution_cache", {}) or {}),
-            }
-
-        tool_messages: list[ToolMessage] = []
-        tool_execution_cache = dict(state.get("tool_execution_cache", {}) or {})
-        for tool_call in tool_calls:
-            tool_name = tool_call.get("name", "")
-            tool_args = tool_call.get("args", {}) or {}
-            if not isinstance(tool_args, dict):
-                tool_args = {"input": tool_args}
-            tool_call_id = tool_call.get("id") or tool_name or "tool-call"
-            policy = get_tool_execution_policy(tool_name)
-            dedupe_key = (
-                build_same_turn_dedupe_key(tool_name, tool_args)
-                if policy.same_turn_dedupe
-                else None
-            )
-
-            tool = tools_by_name.get(tool_name)
-            if tool is None:
-                tool_messages.append(
-                    ToolMessage(
-                        content=f"Tool '{tool_name}' is not available.",
-                        tool_call_id=tool_call_id,
-                        name=tool_name,
-                    )
-                )
-                continue
-
-            if dedupe_key and dedupe_key in tool_execution_cache:
-                content = tool_execution_cache[dedupe_key]
-                log.info(
-                    "Suppressing duplicate side-effect tool call within run tool=%s dedupe_key=%s",
-                    tool_name,
-                    dedupe_key,
-                )
-            else:
-                try:
-                    result = await tool.ainvoke(tool_args)
-                    content = _safe_tool_output(result)
-                except Exception as exc:
-                    log.warning("Tool invocation failed for %s: %r", tool_name, exc)
-                    content = f"Tool '{tool_name}' failed: {exc}"
-                if dedupe_key:
-                    tool_execution_cache[dedupe_key] = content
-
-            tool_messages.append(
-                ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name)
-            )
-
-        return {
-            "messages": tool_messages,
-            "iteration": state.get("iteration", 0) + 1,
-            "tool_execution_cache": tool_execution_cache,
-        }
 
     def route_after_llm(state: RecursiveRAGState) -> Literal["run_tools", "__end__"]:
         messages = state.get("messages", [])
@@ -164,7 +189,7 @@ def build_recursive_rag_graph(
 
     builder = StateGraph(RecursiveRAGState)
     builder.add_node("llm_step", llm_step)
-    builder.add_node("run_tools", run_tools)
+    builder.add_node("run_tools", DedupToolNode(tools))
 
     builder.add_edge(START, "llm_step")
     builder.add_conditional_edges("llm_step", route_after_llm)

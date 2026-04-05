@@ -228,18 +228,19 @@ class ModelService:
         return specs
 
     def _get_groq_specs(self, model_id: str) -> List[Dict[str, Any]]:
+        caps = infer_model_capabilities(model_id=model_id)
         specs = [
             {
                 "name": "temperature",
                 "type": "float",
                 "min": 0.0,
                 "max": 2.0,
-                "default": 0.6 if "gpt-oss" in (model_id or "").lower() else 0.7,
+                "default": 0.6 if caps.get("supports_reasoning_effort") else 0.7,
             },
             {"name": "max_tokens", "type": "int", "min": 1, "max": 32768},
         ]
         mid = (model_id or "").lower()
-        if "gpt-oss" in mid:
+        if caps.get("supports_reasoning_effort"):
             specs.append(
                 {
                     "name": "reasoning_effort",

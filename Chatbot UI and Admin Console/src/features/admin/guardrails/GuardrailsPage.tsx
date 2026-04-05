@@ -5,20 +5,15 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  BarChart2,
   Ban,
-  CheckCheck,
+  BarChart2,
   CheckCircle2,
   ChevronsUpDown,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Layers,
   MessageSquare,
   ShieldAlert,
-  TrendingDown,
-  type LucideIcon,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -28,13 +23,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  type TooltipContentProps,
 } from 'recharts'
-import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent'
-import {
-  type GuardrailEvent,
-  type GuardrailJudgeFailure,
-} from '@features/admin/api/admin'
+import type { GuardrailEvent } from '@features/admin/api/admin'
 import { buildConversationHref } from '@features/admin/lib/admin-links'
 import { formatDateTime } from '@shared/lib/format'
 import { Alert, AlertDescription } from '@components/ui/alert'
@@ -58,11 +48,14 @@ import {
   isBlockingDecision,
   mapGuardrailKpis,
   peakTrendValue,
-  riskLevelFromScore,
   uniqueDecisionOptions,
-  type GuardrailKpiCard,
-  type GuardrailRiskLevel,
 } from './viewmodel'
+import { TrendTooltip } from './components/TrendTooltip'
+import { RiskBadge } from './components/RiskBadge'
+import { DecisionBadge } from './components/DecisionBadge'
+import { KpiCard } from './components/KpiCard'
+import { FailureCard } from './components/FailureCard'
+import { SortHeader, SORT_FIELD_TO_KEY, type SortField, type SortDir } from './components/SortHeader'
 
 type TrendDatum = {
   bucket: string
@@ -70,198 +63,8 @@ type TrendDatum = {
   allowed: number
 }
 
-const KPI_ICON_BY_LABEL: Record<string, LucideIcon> = {
-  'Deny Rate': TrendingDown,
-  'Avg Risk': AlertTriangle,
-  'Queue Depth': Layers,
-  'Oldest Queue Age': Clock,
-  'Policy Adherence': CheckCircle2,
-  'Total Evaluations': BarChart2,
-}
-
-const KPI_TONE_CLASSES: Record<
-  GuardrailKpiCard['tone'],
-  { panel: string; border: string; iconBackground: string; iconShadow: string }
-> = {
-  rose: {
-    panel: 'from-rose-50 dark:from-rose-500/10',
-    border: 'border-rose-100 dark:border-rose-500/30',
-    iconBackground: 'bg-rose-500',
-    iconShadow: 'shadow-rose-200',
-  },
-  amber: {
-    panel: 'from-amber-50 dark:from-amber-500/10',
-    border: 'border-amber-100 dark:border-amber-500/30',
-    iconBackground: 'bg-amber-500',
-    iconShadow: 'shadow-amber-200',
-  },
-  violet: {
-    panel: 'from-violet-50 dark:from-violet-500/10',
-    border: 'border-violet-100 dark:border-violet-500/30',
-    iconBackground: 'bg-violet-500',
-    iconShadow: 'shadow-violet-200',
-  },
-  sky: {
-    panel: 'from-sky-50 dark:from-sky-500/10',
-    border: 'border-sky-100 dark:border-sky-500/30',
-    iconBackground: 'bg-sky-500',
-    iconShadow: 'shadow-sky-200',
-  },
-  emerald: {
-    panel: 'from-emerald-50 dark:from-emerald-500/10',
-    border: 'border-emerald-100 dark:border-emerald-500/30',
-    iconBackground: 'bg-emerald-500',
-    iconShadow: 'shadow-emerald-200',
-  },
-  indigo: {
-    panel: 'from-indigo-50 dark:from-indigo-500/10',
-    border: 'border-indigo-100 dark:border-indigo-500/30',
-    iconBackground: 'bg-indigo-500',
-    iconShadow: 'shadow-indigo-200',
-  },
-}
-
 function buildEventKey(event: GuardrailEvent, index: number): string {
   return `${event.trace_id || 'trace'}:${event.event_time}:${index}`
-}
-
-function TrendTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {
-  if (!active || !payload?.length) return null
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-lg">
-      <p className="mb-1 text-[11px] text-muted-foreground">{String(label || '')}</p>
-      {payload.map((entry, index) => (
-        <p key={`${String(entry.name)}-${index}`} style={{ color: entry.color || '#64748b' }} className="text-xs font-semibold">
-          {String(entry.name)}: {Number(entry.value ?? 0)}
-        </p>
-      ))}
-    </div>
-  )
-}
-
-function RiskBadge({ score }: { score: number }) {
-  const level = riskLevelFromScore(score)
-  const label = `${(score * 100).toFixed(0)}%`
-
-  if (level === 'critical') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-        <span className="inline-block size-1.5 rounded-full bg-red-500" /> Critical {label}
-      </span>
-    )
-  }
-
-  if (level === 'high') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-        <span className="inline-block size-1.5 rounded-full bg-amber-500" /> High {label}
-      </span>
-    )
-  }
-
-  if (level === 'medium') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-2.5 py-1 text-[11px] font-bold text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300">
-        <span className="inline-block size-1.5 rounded-full bg-violet-500" /> Medium {label}
-      </span>
-    )
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-      <span className="inline-block size-1.5 rounded-full bg-emerald-400" /> Low {label}
-    </span>
-  )
-}
-
-function DecisionBadge({ decision }: { decision: string }) {
-  if (isBlockingDecision(decision)) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white">
-        <Ban className="size-3" /> {decision}
-      </span>
-    )
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-500 px-2.5 py-1 text-[11px] font-bold text-white">
-      <CheckCheck className="size-3" /> {decision}
-    </span>
-  )
-}
-
-function KpiCard({ card }: { card: GuardrailKpiCard }) {
-  const Icon = KPI_ICON_BY_LABEL[card.label] || BarChart2
-  const tone = KPI_TONE_CLASSES[card.tone]
-
-  return (
-    <div className={`rounded-2xl border bg-gradient-to-br to-card p-4 shadow-sm ${tone.panel} ${tone.border}`}>
-      <div className={`mb-3 inline-flex rounded-lg p-2 shadow-md ${tone.iconBackground} ${tone.iconShadow}`}>
-        <Icon className="size-3.5 text-white" />
-      </div>
-      <p className="mb-1 text-[9px] font-bold uppercase leading-none tracking-[0.1em] text-muted-foreground">{card.label}</p>
-      <p className="text-[22px] font-extrabold leading-none text-foreground">{card.value}</p>
-    </div>
-  )
-}
-
-function FailureCard({ failure }: { failure: GuardrailJudgeFailure }) {
-  return (
-    <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4 dark:border-rose-500/30 dark:bg-rose-500/10">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <code className="break-all rounded border border-sky-100 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-600 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
-          {failure.trace_id}
-        </code>
-        <span className="shrink-0 whitespace-nowrap rounded-full bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white">
-          Policy {(failure.policy_adherence * 100).toFixed(0)}%
-        </span>
-      </div>
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
-        <p className="text-xs text-muted-foreground">{failure.summary || 'No summary provided.'}</p>
-      </div>
-    </div>
-  )
-}
-
-type SortField = 'time' | 'session' | 'risk' | 'decision' | 'path'
-type SortDir = 'asc' | 'desc'
-
-const SORT_FIELD_TO_KEY: Record<SortField, keyof GuardrailEvent> = {
-  time: 'event_time',
-  session: 'session_id',
-  risk: 'risk_score',
-  decision: 'risk_decision',
-  path: 'request_path',
-}
-
-function SortHeader({
-  label,
-  field,
-  active,
-  dir,
-  onSort,
-}: {
-  label: string
-  field: SortField
-  active: boolean
-  dir: SortDir
-  onSort: (field: SortField) => void
-}) {
-  return (
-    <th
-      className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors"
-      onClick={() => onSort(field)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        {active
-          ? (dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
-          : <ChevronsUpDown size={10} className="opacity-30" />}
-      </span>
-    </th>
-  )
 }
 
 export function GuardrailsPage() {

@@ -81,3 +81,17 @@
 ### 14. LangGraph astream_events fires nested tool events from adapter wrappers
 **Trigger:** MCP tools wrapped by `mcp_manager.py` create nested Runnables (outer StructuredTool wrapper → inner MCP adapter tool). `astream_events(v2)` fires `on_tool_end` for BOTH, each with a different `run_id` and potentially different `data` shapes. A `hash(output)` dedup failed because `extract_tool_output()` produced different strings from each level.
 **Rule:** When deduplicating LangGraph stream events for wrapped/nested Runnables, use `parent_ids` to identify inner runs — skip `on_tool_end` events whose `parent_ids` overlap with tracked `on_tool_start` run_ids. Do not rely on output string equality across hierarchy levels.
+
+## 2026-04-05
+
+### 19. Validate audit claims before acting on them
+**Trigger:** Received two comprehensive architectural audits. Every claim was confirmed, but the severity and fix approach differed from what the audit suggested (e.g., FastMCP wraps sync tools in thread pool, not directly on event loop).
+**Rule:** Always validate audit claims against the actual codebase before planning remediation. Audit severity often depends on runtime details (like FastMCP's `asyncio.to_thread()` for sync tools) that change the urgency and approach.
+
+### 20. Separate-process services cannot share in-process singletons
+**Trigger:** Plan initially assumed mcp_service could reuse agent_service's async Redis pool and HTTP client. Investigation showed mcp_service runs as a separate process via `main_mcp.py`.
+**Rule:** Before planning infrastructure unification, verify whether services share a process or run independently. Check entrypoints (`main_*.py`), Procfiles, and docker-compose.
+
+### 21. pytest-asyncio strict mode requires @pytest_asyncio.fixture for async fixtures
+**Trigger:** Rewrote test_session_store.py with `@pytest.fixture async def` — all 7 tests errored with `PytestRemovedIn9Warning` about async fixtures not being handled.
+**Rule:** When `asyncio_mode = "strict"` in pyproject.toml, async fixtures MUST use `@pytest_asyncio.fixture`, not `@pytest.fixture`.

@@ -28,22 +28,22 @@ import { cn } from '@components/ui/utils'
 
 const PUBLIC_PROMPTS = [
   {
-    label: 'Home loan rates',
-    text: 'What are your current home loan interest rates and processing fees?',
+    label: 'Loan products & eligibility',
+    text: 'What loan products do you offer and how can I check my eligibility?',
   },
   {
-    label: 'EMI planning',
-    text: 'Help me estimate EMI options for a 40 lakh loan over 15, 20, and 25 years.',
+    label: 'Insurance claims',
+    text: 'What is the process for insurance claim settlement and getting a Non-Repossession letter?',
   },
   {
-    label: 'Check eligibility',
-    text: 'What are the eligibility criteria for a personal loan?',
+    label: 'Address update',
+    text: 'How do I update my address on my loan account?',
   },
   {
-    label: 'Documents needed',
-    text: 'Which documents do you need for a home loan application?',
+    label: 'EMI & stolen vehicles',
+    text: 'Is there any way to stop EMI deductions after my vehicle is stolen or lost?',
   },
-] as const
+] as const;
 
 const AUTHENTICATED_PROMPTS = [
   {

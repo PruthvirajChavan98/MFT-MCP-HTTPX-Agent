@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
 
-from src.agent_service.features.answerability import (
+from src.agent_service.features.routing.answerability import (
     QueryAnswerabilityClassifier,
     _answerability_decision,
 )
-from src.agent_service.features.nbfc_router import NBFCClassifierService
+from src.agent_service.features.routing.nbfc_router import NBFCClassifierService
 
 
 class _Tool:

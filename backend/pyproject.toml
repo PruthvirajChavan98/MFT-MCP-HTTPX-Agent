@@ -28,7 +28,6 @@ dependencies = [
     "mcp>=1.0.0",
     "pdfplumber>=0.11.0",
     "redis>=5.0.0",
-    "strawberry-graphql>=0.240.0",
     "toon-format>=0.1.0",
     "uuid-utils",
     "uvicorn[standard]>=0.30.0",

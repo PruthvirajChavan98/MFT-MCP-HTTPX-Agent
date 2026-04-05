@@ -525,18 +525,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cross-web"
-version = "0.4.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/58/e688e99d1493c565d1587e64b499268d0a3129ae59f4efe440aac395f803/cross_web-0.4.1.tar.gz", hash = "sha256:0466295028dcae98c9ab3d18757f90b0e74fac2ff90efbe87e74657546d9993d", size = 157385, upload-time = "2026-01-09T18:17:41.534Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/67/49/92b46b6e65f09b717a66c4e5a9bc47a45ebc83dd0e0ed126f8258363479d/cross_web-0.4.1-py3-none-any.whl", hash = "sha256:41b07c3a38253c517ec0603c1a366353aff77538946092b0f9a2235033f192c2", size = 14320, upload-time = "2026-01-09T18:17:40.325Z" },
-]
-
-[[package]]
 name = "cryptography"
 version = "46.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1042,15 +1030,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a1/c0/4a54c386282c13449eca8bbe2ddb518181dc113e78d240458a68856b4d69/googleapis_common_protos-1.73.1.tar.gz", hash = "sha256:13114f0e9d2391756a0194c3a8131974ed7bffb06086569ba193364af59163b6", size = 147506, upload-time = "2026-03-26T22:17:38.451Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/82/fcb6520612bec0c39b973a6c0954b6a0d948aadfe8f7e9487f60ceb8bfa6/googleapis_common_protos-1.73.1-py3-none-any.whl", hash = "sha256:e51f09eb0a43a8602f5a915870972e6b4a394088415c79d79605a46d8e826ee8", size = 297556, upload-time = "2026-03-26T22:15:58.455Z" },
-]
-
-[[package]]
-name = "graphql-core"
-version = "3.2.7"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ac/9b/037a640a2983b09aed4a823f9cf1729e6d780b0671f854efa4727a7affbe/graphql_core-3.2.7.tar.gz", hash = "sha256:27b6904bdd3b43f2a0556dad5d579bdfdeab1f38e8e8788e555bdcb586a6f62c", size = 513484, upload-time = "2025-11-01T22:30:40.436Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/14/933037032608787fb92e365883ad6a741c235e0ff992865ec5d904a38f1e/graphql_core-3.2.7-py3-none-any.whl", hash = "sha256:17fc8f3ca4a42913d8e24d9ac9f08deddf0a0b2483076575757f6c412ead2ec0", size = 207262, upload-time = "2025-11-01T22:30:38.912Z" },
 ]
 
 [[package]]
@@ -2532,7 +2511,6 @@ dependencies = [
     { name = "prometheus-client" },
     { name = "ragas" },
     { name = "redis" },
-    { name = "strawberry-graphql" },
     { name = "toon-format" },
     { name = "uuid-utils" },
     { name = "uvicorn", extra = ["standard"] },
@@ -2572,7 +2550,6 @@ requires-dist = [
     { name = "prometheus-client", specifier = ">=0.20.0" },
     { name = "ragas", specifier = ">=0.4.0,<0.5.0" },
     { name = "redis", specifier = ">=5.0.0" },
-    { name = "strawberry-graphql", specifier = ">=0.240.0" },
     { name = "toon-format", git = "https://github.com/toon-format/toon-python.git" },
     { name = "uuid-utils" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
@@ -4713,22 +4690,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c4/68/79977123bb7be889ad680d79a40f339082c1978b5cfcf62c2d8d196873ac/starlette-0.52.1.tar.gz", hash = "sha256:834edd1b0a23167694292e94f597773bc3f89f362be6effee198165a35d62933", size = 2653702, upload-time = "2026-01-18T13:34:11.062Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/0d/13d1d239a25cbfb19e740db83143e95c772a1fe10202dda4b76792b114dd/starlette-0.52.1-py3-none-any.whl", hash = "sha256:0029d43eb3d273bc4f83a08720b4912ea4b071087a3b48db01b7c839f7954d74", size = 74272, upload-time = "2026-01-18T13:34:09.188Z" },
-]
-
-[[package]]
-name = "strawberry-graphql"
-version = "0.291.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cross-web" },
-    { name = "graphql-core" },
-    { name = "packaging" },
-    { name = "python-dateutil" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/08/30/e183b75fbde7ce13c22ff4348fc5c5f41d277d56bb079eda00cfe79ed958/strawberry_graphql-0.291.3.tar.gz", hash = "sha256:81414e99bf84b08df9dae1709798a3d31a6bfe40635b58fd4b2904cd71759491", size = 217725, upload-time = "2026-02-07T08:32:04.507Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/5c/7841327bd5ab23cd71c74dbb42e72eb7d83f898c7be9e0908cbfcb965b00/strawberry_graphql-0.291.3-py3-none-any.whl", hash = "sha256:ca0a2fdcaf631d05363d3a53390dc6829e7bd5948579ff185b6e4e1478687f95", size = 316383, upload-time = "2026-02-07T08:32:06.959Z" },
 ]
 
 [[package]]

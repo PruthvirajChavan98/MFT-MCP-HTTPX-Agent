@@ -14,7 +14,6 @@ from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-from strawberry.fastapi import GraphQLRouter
 
 from src.agent_service.api.admin import router as admin_router
 from src.agent_service.api.admin_analytics import router as admin_analytics_router
@@ -30,7 +29,6 @@ from src.agent_service.api.endpoints.sessions import router as sessions_router
 from src.agent_service.api.eval_ingest import router as eval_router
 from src.agent_service.api.eval_read import router as eval_read_router
 from src.agent_service.api.feedback import router as feedback_router
-from src.agent_service.api.graphql import schema
 from src.agent_service.core.config import (
     POSTGRES_DSN,
     POSTGRES_POOL_MAX,
@@ -222,9 +220,6 @@ class AppFactory:
     @staticmethod
     def _mount_routers(app: FastAPI) -> None:
         """Mount all API routers."""
-        graphql_app = GraphQLRouter(schema)
-        app.include_router(graphql_app, prefix="/graphql", tags=["graphql"])
-
         app.include_router(eval_router, prefix="/eval", tags=["evaluation"])
         app.include_router(eval_read_router, prefix="/eval", tags=["evaluation"])
 

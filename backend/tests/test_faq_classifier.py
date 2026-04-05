@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.agent_service.features import faq_classifier
+from src.agent_service.features.knowledge_base import faq_classifier
 
 CATEGORY_LABELS = ["billing", "account", "data", "technical", "sales"]
 

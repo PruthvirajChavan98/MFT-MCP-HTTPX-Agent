@@ -15,7 +15,8 @@ from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.config import SHADOW_TRACE_DLQ_KEY, SHADOW_TRACE_QUEUE_KEY
 from src.agent_service.core.session_utils import get_redis
 
-from .utils import _coerce_guardrail_float, _json_load_maybe, _parse_iso_timestamp, _pg_rows
+from .repo import analytics_repo
+from .utils import _coerce_guardrail_float, _json_load_maybe, _parse_iso_timestamp
 
 router = APIRouter(
     prefix="/agent/admin/analytics",
@@ -68,42 +69,6 @@ def _extract_inline_guard_fields(row: dict[str, Any]) -> tuple[str | None, str |
         reason_code = str(inline_guard.get("reason_code") or "").strip() or None
         risk_score = _coerce_guardrail_float(inline_guard.get("risk_score"), risk_score)
     return decision, reason_code, risk_score
-
-
-async def _load_guardrail_trace_rows(
-    pool: Any,
-    *,
-    limit: int,
-    tenant_id: str,
-    session_id: str | None = None,
-    start: datetime | None = None,
-    end: datetime | None = None,
-) -> list[dict[str, Any]]:
-    return await _pg_rows(
-        pool,
-        """
-        SELECT
-            trace_id, session_id, endpoint, started_at, meta_json,
-            inline_guard_decision, inline_guard_reason_code, inline_guard_risk_score
-        FROM eval_traces
-        WHERE started_at IS NOT NULL
-          AND ($1::text IS NULL OR session_id = $1)
-          AND ($2 = 'default' OR case_id = $2)
-          AND ($3::timestamptz IS NULL OR started_at >= $3)
-          AND ($4::timestamptz IS NULL OR started_at <= $4)
-          AND (
-            inline_guard_decision IS NOT NULL
-            OR meta_json::text LIKE '%"inline_guard"%'
-          )
-        ORDER BY started_at DESC
-        LIMIT $5
-        """,
-        session_id,
-        tenant_id,
-        start,
-        end,
-        limit,
-    )
 
 
 def _as_guardrail_event(row: dict[str, Any]) -> dict[str, Any] | None:
@@ -170,7 +135,7 @@ async def guardrails(
     try:
         pool = request.app.state.pool
         fetch_cap = min(max(offset + limit + 1000, 2000), 10000)
-        rows = await _load_guardrail_trace_rows(
+        rows = await analytics_repo.fetch_guardrail_trace_rows(
             pool,
             limit=fetch_cap,
             tenant_id=tenant_id,
@@ -225,7 +190,9 @@ async def guardrails_summary(
     started = time.perf_counter()
     try:
         pool = request.app.state.pool
-        rows = await _load_guardrail_trace_rows(pool, limit=20000, tenant_id=tenant_id)
+        rows = await analytics_repo.fetch_guardrail_trace_rows(
+            pool, limit=20000, tenant_id=tenant_id
+        )
         events = [evt for row in rows if (evt := _as_guardrail_event(row)) is not None]
 
         total_events = len(events)
@@ -273,7 +240,7 @@ async def guardrails_trends(
     try:
         pool = request.app.state.pool
         start = datetime.now(timezone.utc) - timedelta(hours=hours)
-        rows = await _load_guardrail_trace_rows(
+        rows = await analytics_repo.fetch_guardrail_trace_rows(
             pool,
             limit=20000,
             tenant_id=tenant_id,
@@ -371,29 +338,8 @@ async def guardrails_judge_summary(
     limit_failures: int = Query(default=20, ge=1, le=100),
 ):
     pool = request.app.state.pool
-    aggregate_rows = await _pg_rows(
-        pool,
-        """
-        SELECT
-            COUNT(*) AS total_evals,
-            AVG(COALESCE(helpfulness, 0))       AS avg_helpfulness,
-            AVG(COALESCE(faithfulness, 0))       AS avg_faithfulness,
-            AVG(COALESCE(policy_adherence, 0))   AS avg_policy_adherence
-        FROM shadow_judge_evals
-        """,
-    )
-    failure_rows = await _pg_rows(
-        pool,
-        """
-        SELECT trace_id, session_id, model, summary,
-               helpfulness, faithfulness, policy_adherence, evaluated_at
-        FROM shadow_judge_evals
-        WHERE policy_adherence < 0.5 OR faithfulness < 0.5 OR helpfulness < 0.5
-        ORDER BY evaluated_at DESC
-        LIMIT $1
-        """,
-        limit_failures,
-    )
+    aggregate_rows = await analytics_repo.fetch_shadow_judge_aggregates(pool)
+    failure_rows = await analytics_repo.fetch_shadow_judge_failures(pool, limit_failures)
 
     row = aggregate_rows[0] if aggregate_rows else {}
     return {

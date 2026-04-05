@@ -13,7 +13,7 @@ from src.agent_service.core.recursive_rag_graph import (
 from src.agent_service.core.resource_resolver import resource_resolver
 from src.agent_service.core.schemas import AgentRequest
 from src.agent_service.core.session_utils import session_utils
-from src.agent_service.features.nbfc_router import nbfc_router_service
+from src.agent_service.features.routing.nbfc_router import nbfc_router_service
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent-query"])

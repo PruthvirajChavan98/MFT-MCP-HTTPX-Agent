@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.config import ADMIN_CURSOR_APIS_V2
 
-from .utils import _decode_cursor, _encode_cursor, _extract_question_preview, _pg_rows
+from .repo import analytics_repo
+from .utils import _decode_cursor, _encode_cursor, _extract_question_preview
 
 router = APIRouter(
     prefix="/agent/admin/analytics",
@@ -48,38 +49,12 @@ async def conversations(
 
         pool = request.app.state.pool
         search_pat = f"%{normalized_search}%" if normalized_search else None
-        rows = await _pg_rows(
+        rows = await analytics_repo.fetch_conversations(
             pool,
-            """
-            SELECT
-                t.session_id,
-                MAX(t.started_at) AS started_at,
-                COUNT(*) AS message_count,
-                (array_agg(t.model    ORDER BY t.started_at DESC))[1] AS model,
-                (array_agg(t.provider ORDER BY t.started_at DESC))[1] AS provider,
-                (array_agg(t.inputs_json ORDER BY t.started_at DESC))[1] AS inputs_json
-            FROM eval_traces t
-            WHERE t.session_id IS NOT NULL
-              AND t.started_at IS NOT NULL
-              AND (
-                $1::text IS NULL
-                OR LOWER(t.session_id)  LIKE $1
-                OR LOWER(COALESCE(t.inputs_json::text, '')) LIKE $1
-                OR LOWER(COALESCE(t.final_output, '')) LIKE $1
-              )
-            GROUP BY t.session_id
-            HAVING (
-                $2::timestamptz IS NULL
-                OR MAX(t.started_at) < $2
-                OR (MAX(t.started_at) = $2 AND t.session_id < $3)
-            )
-            ORDER BY started_at DESC, t.session_id DESC
-            LIMIT $4
-            """,
-            search_pat,
-            cursor_started_at,
-            cursor_session_id or "",
-            limit + 1,
+            search_pat=search_pat,
+            cursor_started_at=cursor_started_at,
+            cursor_session_id=cursor_session_id or "",
+            limit=limit + 1,
         )
 
         has_more = len(rows) > limit

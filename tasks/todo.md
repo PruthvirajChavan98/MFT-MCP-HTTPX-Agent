@@ -1,5 +1,59 @@
 # Task Plan
 
+## 2026-04-05 - Phase 0: MCP Service Async Conversion + Safety Fixes
+
+- [x] Step 1: Change rate limiter default from fail_open to fail_closed (config.py)
+- [x] Step 2: Rewrite session_store.py to async Redis (redis.asyncio, lazy singleton pool)
+- [x] Step 3: Convert auth_api.py to async httpx.AsyncClient + remove hardcoded "crm"/"crm" creds
+- [x] Step 4: Convert core_api.py to async (15+ methods, fix direct Redis .set() call)
+- [x] Step 5: Convert server.py tools to async + add FastMCP lifespan + delete dead code
+- [x] Step 6: Update test_session_store.py to async (pytest_asyncio.fixture + FakeAsyncRedis)
+- [x] Verification: ruff clean, mypy clean, 146/146 tests pass
+
+## 2026-04-05 - Frontend Audit Remediation (FE Phases 1-5)
+
+- [x] FE Phase 1: Purged 23 unused shadcn/ui components (47% dead code), cleaned barrel export
+- [x] FE Phase 2: Extracted KnowledgeBasePage inline components → 5 files in components/ (StatusBadge, CategoryBadge, FaqRow, EntryForm, AddEditFaqModal)
+- [x] FE Phase 3: Extracted GuardrailsPage inline components → 6 files in components/ (TrendTooltip, RiskBadge, DecisionBadge, KpiCard, FailureCard, SortHeader)
+- [x] FE Phase 4: Extracted NBFCLandingPage static data → landing-data.ts
+- [x] FE Phase 5: Typed 2 Promise<any> endpoints in health.ts → RateLimitMetricsResponse, RateLimitConfigResponse
+- [x] Verification: typecheck clean, build clean, 23 test files / 92 tests pass
+
+## 2026-04-05 - Phase 5: Structural Refactor
+
+- [x] 5A: Create features/routing/ package — moved nbfc_router, answerability, question_category, prototypes_nbfc; updated 8 imports
+- [x] 5B: Create features/knowledge_base/ package — moved repo, service, milvus_store, faq_classifier, faq_pdf_parser; updated 9 imports
+- [x] 5C: Consolidated _valid_session_id — 3 copies → 1 canonical in session_store.py
+- [x] 5D: Upgraded swallowed exceptions — log.debug → log.warning + exc_info=True where needed
+- [x] 5E: DI migration — added lazy factory functions (get_*) for 4 service singletons with backward-compat aliases
+- [x] 5F: ToolNode migration — extracted DedupToolNode class from closure, encapsulates tool execution + dedup + policy
+- [x] Verification: ruff clean, 146/146 tests pass
+
+## 2026-04-05 - Phase 4: Dead Code & Cleanup
+
+- [x] Step 1: Delete dead common/logger.py (0 consumers, confirmed orphan)
+- [x] Step 2: Remove GraphQL layer — deleted graphql.py, removed strawberry mount from app_factory, removed strawberry-graphql dep from pyproject.toml
+- [x] Step 3: Refactor catalog.py gpt-oss string matching → uses infer_model_capabilities(model_id=...) from capabilities.py
+- [x] Step 4: Zero unused imports (ruff --select F401), 146/146 tests pass
+- Phase 3 (MCP Infrastructure Unification) was already completed during Phase 0's async conversion
+
+## 2026-04-05 - Phase 2: Shadow Eval Decomposition
+
+- [x] Step 1: Create features/eval/ package + collector.py (ShadowEvalCollector) + throttle.py
+- [x] Step 2: Create eval/metrics.py (compute_non_llm_metrics, compute_llm_metrics) + eval/persistence.py (_commit_bundle, STORE, EMBEDDER)
+- [x] Step 3: Rewrite shadow_eval.py as thin orchestrator (maybe_shadow_eval_commit + re-exports)
+- [x] Step 4: Fixed mypy error (meta dict type), verification: ruff clean, mypy clean, 146/146 tests pass
+- Original 617-line god object → 5 focused modules: collector (~250), throttle (~50), metrics (~130), persistence (~30), orchestrator (~80)
+
+## 2026-04-05 - Phase 1: Data Layer Extraction (Repository Pattern)
+
+- [x] Step 1: Create admin_analytics/repo.py with AdminAnalyticsRepo class (15 SQL methods)
+- [x] Step 2: Wire overview.py + conversations.py to repo, update test mock targets
+- [x] Step 3: Wire guardrails.py to repo, delete _load_guardrail_trace_rows, update test mocks
+- [x] Step 4: Wire traces.py to repo (9 queries across 4 functions), update test mocks
+- [x] Step 5: Consolidate _json_load_maybe to delegate to eval_store/status.py canonical source
+- [x] Verification: ruff clean, mypy clean, 146/146 tests pass
+
 ## 2026-04-05 - Production mobile redesign
 
 - [ ] Phase 1: Foundation (AdminLayout sidebar overlay, landing nav, chat widget width)

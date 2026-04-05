@@ -11,9 +11,9 @@ import pytest
 
 from src.agent_service.api import eval_read
 from src.agent_service.eval_store.pg_store import EvalPgStore
-from src.agent_service.features import knowledge_base_service as kb_service_module
 from src.agent_service.features import runtime_trace_store
-from src.agent_service.features.knowledge_base_service import KnowledgeBaseService
+from src.agent_service.features.knowledge_base import service as kb_service_module
+from src.agent_service.features.knowledge_base.service import KnowledgeBaseService
 from src.agent_service.features.shadow_eval import ShadowEvalCollector
 
 

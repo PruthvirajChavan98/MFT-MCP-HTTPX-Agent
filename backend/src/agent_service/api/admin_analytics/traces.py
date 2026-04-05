@@ -15,13 +15,13 @@ from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.follow_ups import normalize_follow_up_content
 from src.agent_service.eval_store.status import build_eval_status_payload
 
+from .repo import analytics_repo
 from .utils import (
     _decode_cursor,
     _encode_cursor,
     _extract_question_preview,
     _json_load_maybe,
     _parse_iso_timestamp,
-    _pg_rows,
 )
 
 router = APIRouter(
@@ -152,36 +152,9 @@ async def _load_session_eval_statuses(
     if not unique_trace_ids:
         return {}
 
-    trace_rows = await _pg_rows(
-        pool,
-        """
-        SELECT trace_id, meta_json, ended_at, updated_at
-        FROM eval_traces
-        WHERE trace_id = ANY($1::text[])
-        """,
-        unique_trace_ids,
-    )
-    inline_rows = await _pg_rows(
-        pool,
-        """
-        SELECT trace_id, metric_name, score, passed
-        FROM eval_results
-        WHERE trace_id = ANY($1::text[])
-        ORDER BY trace_id ASC, metric_name ASC
-        """,
-        unique_trace_ids,
-    )
-    shadow_rows = await _pg_rows(
-        pool,
-        """
-        SELECT DISTINCT ON (trace_id)
-               trace_id, helpfulness, faithfulness, policy_adherence, summary, evaluated_at
-        FROM shadow_judge_evals
-        WHERE trace_id = ANY($1::text[])
-        ORDER BY trace_id ASC, evaluated_at DESC
-        """,
-        unique_trace_ids,
-    )
+    trace_rows = await analytics_repo.fetch_session_eval_traces(pool, unique_trace_ids)
+    inline_rows = await analytics_repo.fetch_session_eval_results(pool, unique_trace_ids)
+    shadow_rows = await analytics_repo.fetch_session_shadow_judges(pool, unique_trace_ids)
 
     trace_by_id = {str(row["trace_id"]): row for row in trace_rows}
     shadow_by_id = {str(row["trace_id"]): row for row in shadow_rows}
@@ -282,11 +255,7 @@ async def _checkpoint_trace_detail(request: Request, trace_id: str) -> dict[str,
 
 
 async def _eval_trace_detail(pool: Any, trace_id: str) -> dict[str, Any] | None:
-    trace_rows = await _pg_rows(
-        pool,
-        "SELECT * FROM eval_traces WHERE trace_id = $1",
-        trace_id,
-    )
+    trace_rows = await analytics_repo.fetch_trace_by_id(pool, trace_id)
     if not trace_rows:
         return None
 
@@ -294,39 +263,17 @@ async def _eval_trace_detail(pool: Any, trace_id: str) -> dict[str, Any] | None:
     for key in ("inputs_json", "tags_json", "meta_json"):
         trace_obj[key] = _json_load_maybe(trace_obj.get(key))
 
-    event_rows = await _pg_rows(
-        pool,
-        "SELECT * FROM eval_events WHERE trace_id = $1 ORDER BY seq ASC",
-        trace_id,
-    )
+    event_rows = await analytics_repo.fetch_trace_events(pool, trace_id)
     for event in event_rows:
         event["payload_json"] = _json_load_maybe(event.get("payload_json"))
         event["meta_json"] = _json_load_maybe(event.get("meta_json"))
 
-    eval_rows = await _pg_rows(
-        pool,
-        """
-        SELECT r.*,
-               ARRAY_AGG(ere.event_key) FILTER (WHERE ere.event_key IS NOT NULL)
-                 AS evidence_event_keys
-        FROM eval_results r
-        LEFT JOIN eval_result_evidence ere ON ere.eval_id = r.eval_id
-        WHERE r.trace_id = $1
-        GROUP BY r.eval_id
-        """,
-        trace_id,
-    )
+    eval_rows = await analytics_repo.fetch_trace_eval_results(pool, trace_id)
     for eval_row in eval_rows:
         eval_row["meta_json"] = _json_load_maybe(eval_row.get("meta_json"))
         eval_row["evidence_json"] = _json_load_maybe(eval_row.get("evidence_json"))
 
-    shadow_rows = await _pg_rows(
-        pool,
-        """SELECT helpfulness, faithfulness, policy_adherence, summary, evaluated_at
-           FROM shadow_judge_evals WHERE trace_id = $1
-           ORDER BY evaluated_at DESC LIMIT 1""",
-        trace_id,
-    )
+    shadow_rows = await analytics_repo.fetch_trace_shadow_judge(pool, trace_id)
     shadow_judge = dict(shadow_rows[0]) if shadow_rows else None
     if shadow_judge and shadow_judge.get("evaluated_at"):
         evaluated_at = shadow_judge["evaluated_at"]
@@ -475,19 +422,7 @@ async def session_traces(
 
     if not items:
         # Fallback for sessions with missing checkpointer data: reconstruct from eval_traces.
-        rows = await _pg_rows(
-            pool,
-            """
-            SELECT trace_id, started_at, inputs_json, final_output,
-                   status, model, provider, meta_json
-            FROM eval_traces
-            WHERE session_id = $1
-            ORDER BY started_at ASC
-            LIMIT $2
-            """,
-            session_id,
-            limit,
-        )
+        rows = await analytics_repo.fetch_session_traces_fallback(pool, session_id, limit)
         for idx, row in enumerate(rows, start=1):
             started_at = _parse_iso_timestamp(row.get("started_at"))
             timestamp = int(started_at.timestamp() * 1000) if started_at else 0
@@ -570,38 +505,14 @@ async def traces(
 
         pool = request.app.state.pool
         search_pat = f"%{normalized_search}%" if normalized_search else None
-        rows = await _pg_rows(
+        rows = await analytics_repo.fetch_traces_page(
             pool,
-            """
-            SELECT
-                trace_id, case_id, session_id, provider, model, endpoint,
-                started_at, ended_at, latency_ms, status, error,
-                inputs_json, final_output, meta_json
-            FROM eval_traces
-            WHERE started_at IS NOT NULL
-              AND ($1::text IS NULL OR LOWER(COALESCE(status, '')) = $1)
-              AND ($2::text IS NULL OR COALESCE(model, '') = $2)
-              AND (
-                $3::text IS NULL
-                OR LOWER(trace_id) LIKE $3
-                OR LOWER(COALESCE(session_id, '')) LIKE $3
-                OR LOWER(COALESCE(inputs_json::text, '')) LIKE $3
-                OR LOWER(COALESCE(final_output, '')) LIKE $3
-              )
-              AND (
-                $4::timestamptz IS NULL
-                OR started_at < $4
-                OR (started_at = $4 AND trace_id < $5)
-              )
-            ORDER BY started_at DESC, trace_id DESC
-            LIMIT $6
-            """,
-            normalized_status,
-            normalized_model,
-            search_pat,
-            cursor_started_at,
-            cursor_trace_id or "",
-            limit + 1,
+            status=normalized_status,
+            model=normalized_model,
+            search_pat=search_pat,
+            cursor_started_at=cursor_started_at,
+            cursor_trace_id=cursor_trace_id or "",
+            limit=limit + 1,
         )
 
         has_more = len(rows) > limit

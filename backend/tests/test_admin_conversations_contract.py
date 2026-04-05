@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import src.agent_service.api.admin_analytics.conversations as conversations_mod
+import src.agent_service.api.admin_analytics.repo as repo_mod
 import src.agent_service.api.admin_analytics.traces as traces_mod
 
 
@@ -46,7 +47,7 @@ async def test_conversations_cursor_contract_returns_next_cursor(monkeypatch):
         assert args[3] == 3  # limit_plus_one
         return rows
 
-    monkeypatch.setattr(conversations_mod, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(repo_mod, "_pg_rows", _fake_pg_rows)
     fake_pool = object()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
@@ -124,7 +125,7 @@ async def test_traces_cursor_contract_returns_next_cursor(monkeypatch):
         assert args[5] == 3  # limit_plus_one
         return rows
 
-    monkeypatch.setattr(traces_mod, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(repo_mod, "_pg_rows", _fake_pg_rows)
     fake_pool = object()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
@@ -259,7 +260,7 @@ async def test_session_traces_adds_static_eval_status_for_assistant_messages(mon
             return []
         raise AssertionError(f"Unexpected query: {query}")
 
-    monkeypatch.setattr(traces_mod, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(repo_mod, "_pg_rows", _fake_pg_rows)
     request = SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer(), pool=object()))
     )
@@ -309,7 +310,7 @@ async def test_session_traces_reconstructs_from_eval_trace_when_checkpoint_missi
             return []
         raise AssertionError(f"Unexpected query: {query}")
 
-    monkeypatch.setattr(traces_mod, "_pg_rows", _fake_pg_rows)
+    monkeypatch.setattr(repo_mod, "_pg_rows", _fake_pg_rows)
     fake_pool = object()
     request = SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer(), pool=fake_pool))

@@ -1,4 +1,4 @@
-from src.agent_service.features.question_category import classify_question_category
+from src.agent_service.features.routing.question_category import classify_question_category
 
 
 def test_question_category_keyword_override_for_theft():
