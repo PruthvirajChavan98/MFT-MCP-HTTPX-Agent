@@ -37,12 +37,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: mft-app-config
-          env:
-            - name: NEO4J_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mft-secrets
-                  key: NEO4J_PASSWORD
           resources:
             requests:
               cpu: 500m

@@ -74,7 +74,7 @@ ROLE_HINTS: dict[str, str] = {
     "src/agent_service/router": "NBFC router taxonomy, schemas, service, and worker runtime.",
     "src/agent_service/security": "Security middleware, runtime checks, metrics, and TOR/GeoIP controls.",
     "src/agent_service/tools": "Graph/tool adapters for knowledge and MCP integration.",
-    "src/common": "Shared logging and Neo4j management primitives.",
+    "src/common": "Shared logging and connection management primitives.",
     "src/mcp_service": "MCP service APIs, session store, tool descriptions, and server runtime.",
     "tests": "Contract/unit coverage for API, streaming, router, MCP, and security behavior.",
 }

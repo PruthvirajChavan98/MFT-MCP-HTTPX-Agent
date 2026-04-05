@@ -63,7 +63,6 @@ def http_ready(host: str, port: int, path: str) -> tuple[bool, str]:
 checks: dict[str, tuple[str, int, str | None]] = {
     "redis:6379": ("redis", 6379, None),
     "postgres:5432": ("postgres", 5432, None),
-    "neo4j:7687": ("neo4j", 7687, None),
     "mcp:8050": ("mcp", 8050, None),
     "agent:/health/ready": ("agent", 8000, "/health/ready"),
 }

@@ -75,11 +75,6 @@ spec:
                 secretKeyRef:
                   name: mft-secrets
                   key: POSTGRES_PASSWORD
-            - name: NEO4J_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mft-secrets
-                  key: NEO4J_PASSWORD
             - name: OPENROUTER_API_KEY
               valueFrom:
                 secretKeyRef:

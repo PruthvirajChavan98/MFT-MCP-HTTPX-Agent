@@ -34,7 +34,6 @@ Every async test needs `@pytest.mark.asyncio`.
 |------------|---------------|
 | Redis      | `fakeredis.aioredis.FakeRedis(decode_responses=True)` |
 | PostgreSQL | `unittest.mock` stubs or `asyncpg` mock |
-| Neo4j      | `unittest.mock` stubs |
 | HTTP/APIs  | `httpx.MockTransport` or `unittest.mock.patch` |
 | LLM calls  | Mock the model client — never call real providers |
 | MCP server | Mock `MCPManager` tool list responses |

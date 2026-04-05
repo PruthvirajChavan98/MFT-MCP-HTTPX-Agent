@@ -48,7 +48,7 @@ OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "Enterprise Agent")
 
 # --- EMBEDDINGS ---
 # Default embedding model used across the platform.
-# Must match the Neo4j vector index dimensions (1536).
+# Must match the Milvus vector index dimensions (1536).
 OPENROUTER_EMBED_MODEL_DEFAULT = os.getenv(
     "OPENROUTER_EMBED_MODEL_DEFAULT", "openai/text-embedding-3-small"
 ).strip()

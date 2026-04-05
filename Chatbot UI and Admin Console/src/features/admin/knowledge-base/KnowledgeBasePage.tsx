@@ -722,7 +722,7 @@ export function KnowledgeBasePage() {
         {/* Header */}
         <MobileHeader
           title="Knowledge Base"
-          description="Manage FAQs, vector embeddings, and Neo4j graph relationships."
+          description="Manage FAQs and vector embeddings."
           actions={
             <>
               <button
@@ -1100,7 +1100,6 @@ export function KnowledgeBasePage() {
               {[
                 'Click "Add FAQ" then "Add another FAQ" to create multiple at once',
                 "Vectorization runs async after ingest — check Status column",
-                "Neo4j graph relationships update on the next scheduler run",
                 "Semantic search requires at least 1 vectorized FAQ",
               ].map((tip, i) => (
                 <div key={i} className="flex gap-2 text-xs text-gray-500">

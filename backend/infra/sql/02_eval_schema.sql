@@ -1,5 +1,5 @@
 -- =============================================================================
--- 02_eval_schema.sql — Eval observability tables (replaces Neo4j eval store)
+-- 02_eval_schema.sql — Eval observability tables
 --
 -- Loaded automatically by PostgreSQL container on first init via:
 --   ./backend/infra/sql/02_eval_schema.sql:/docker-entrypoint-initdb.d/02_eval_schema.sql:ro
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS eval_result_evidence (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- shadow_judge_evals  (replaces ShadowJudgeEval Neo4j nodes)
+-- shadow_judge_evals
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS shadow_judge_evals (
     eval_id          TEXT        PRIMARY KEY,

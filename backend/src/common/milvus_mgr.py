@@ -72,8 +72,8 @@ class MilvusManager:
 
     Collections:
     - ``kb_faqs``         — FAQ knowledge base (replaces Cognee)
-    - ``eval_traces_emb`` — eval trace embeddings (replaces Neo4j vector index)
-    - ``eval_results_emb``— eval result embeddings (replaces Neo4j vector index)
+    - ``eval_traces_emb`` — eval trace embeddings
+    - ``eval_results_emb``— eval result embeddings
 
     All collections use ``langchain-milvus`` async API:
     ``aadd_documents``, ``asimilarity_search_with_score``, ``adelete``.

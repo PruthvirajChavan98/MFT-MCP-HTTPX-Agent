@@ -9,7 +9,6 @@ resources:
   - ../configmaps/app-config.yaml
   - ../stateful/postgres-cluster.yaml
   - ../stateful/redis-sentinel.yaml
-  - ../stateful/neo4j-statefulset.yaml
   - ../workloads/agent-deployment.yaml
   - ../workloads/mcp-deployment.yaml
   - ../workloads/router-worker-deployment.yaml

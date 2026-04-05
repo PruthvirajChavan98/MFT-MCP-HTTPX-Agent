@@ -38,7 +38,7 @@ class EvalSchemaUnavailableError(RuntimeError):
 class EvalPgStore:
     """Relational eval store backed by PostgreSQL (asyncpg pool).
 
-    Replaces EvalNeo4jStore — all Cypher MERGE/SET → INSERT ... ON CONFLICT DO UPDATE.
+    All Cypher MERGE/SET → INSERT ... ON CONFLICT DO UPDATE.
     Schema is created by ``backend/infra/sql/02_eval_schema.sql`` which is mounted as
     a Docker init script. ``ensure_schema()`` now verifies the required tables exist
     before the agent starts serving traffic.

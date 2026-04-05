@@ -4,8 +4,6 @@ langchain
 langchain-openai
 langchain-deepseek
 langchain-groq
-langchain-neo4j
-neo4j>=5.0.0
 langgraph
 langgraph-checkpoint-redis
 fastapi

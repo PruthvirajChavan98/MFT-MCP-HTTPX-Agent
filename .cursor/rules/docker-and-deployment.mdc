@@ -11,7 +11,7 @@ The service is containerized and managed using Docker Compose for various enviro
 ## Docker Compose Configurations
 - **Environment Interpolation**: All `.yml` Compose files use a central `.env` file at the root of the repository for variable interpolation. Never hardcode secrets.
 - **Service Profiles**:
-  - *Core Services*: `redis`, `postgres`, `neo4j`, `mcp`, `agent`.
+  - *Core Services*: `redis`, `postgres`, `mcp`, `agent`.
   - *Monitoring Profile*: `prometheus`, `alertmanager`, `grafana`.
   - *Edge Profile*: `cloudflared`.
   - *Other*: `router_worker`, `geoip_updater`.

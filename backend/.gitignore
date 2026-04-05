@@ -8,9 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-neo4j_data
-neo4j_data/
-/neo4j_data
 
 # Code formatters & linters
 .ruff_cache/

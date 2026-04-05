@@ -19,7 +19,7 @@ The test suite must be reliable, fast, and mock all external dependencies.
 
 ## Mocking & Isolation
 - **Redis**: Use `fakeredis.aioredis.FakeRedis(decode_responses=True)`. Do NOT hit a live Redis instance in unit tests.
-- **PostgreSQL / Neo4j**: Mock external database connections using `unittest.mock` or custom stub classes.
+- **PostgreSQL**: Mock external database connections using `unittest.mock` or custom stub classes.
 - **Network Requests**: Mock HTTP requests (e.g., using `httpx.MockTransport` or standard library mocking) for external APIs like LLM providers.
 - Avoid writing tests that require an active internet connection.
 

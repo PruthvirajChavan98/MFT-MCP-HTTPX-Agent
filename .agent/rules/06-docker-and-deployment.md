@@ -20,7 +20,6 @@ Internet ──► Nginx (frontend) ──► agent (Gunicorn+Uvicorn)
                                       ├── mcp (FastMCP SSE)
                                       ├── redis (stack-server)
                                       ├── postgres (16-alpine)
-                                      ├── neo4j (5.26)
                                       └── router_worker
                          
 Observability:  prometheus → alertmanager → grafana
