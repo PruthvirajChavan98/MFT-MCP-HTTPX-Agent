@@ -65,7 +65,7 @@ async def global_dashboard_feed(request: Request):
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Crucial for Nginx SSE bypass
         },
-        ping=HEARTBEAT_INTERVAL_SECONDS,
+        ping=int(HEARTBEAT_INTERVAL_SECONDS),
         send_timeout=SSE_SEND_TIMEOUT_SECONDS,
     )
 
@@ -106,6 +106,6 @@ async def session_specific_feed(session_id: str, request: Request):
     return EventSourceResponse(
         event_generator(),
         headers={"X-Accel-Buffering": "no"},
-        ping=HEARTBEAT_INTERVAL_SECONDS,
+        ping=int(HEARTBEAT_INTERVAL_SECONDS),
         send_timeout=SSE_SEND_TIMEOUT_SECONDS,
     )

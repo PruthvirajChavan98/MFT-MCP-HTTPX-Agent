@@ -102,3 +102,13 @@ router:
 
 knowledge:
   {}
+
+faq_classifier:
+  system_prompt:
+    description: "System prompt for FAQ auto-categorization via Groq LLM."
+    template: |
+      You are an FAQ categorizer for a fintech NBFC company.
+      Classify each FAQ into exactly one of the provided categories based on its content.
+      Return a JSON object with a 'classifications' key containing an array.
+      Each entry must have: index (int matching the input index), category (string, must be one of the provided categories).
+      If unsure, use 'technical' as the default.

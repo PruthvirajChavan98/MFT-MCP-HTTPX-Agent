@@ -7,6 +7,7 @@ from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
+from pydantic import SecretStr
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from src.agent_service.llm.capabilities import model_supports_reasoning_effort
@@ -116,7 +117,7 @@ def get_llm(
             log.info("Initializing openrouter with model: %s (ChatOpenRouter)", model_name)
             return ChatOpenRouter(
                 model=model_name,
-                api_key=api_key,
+                api_key=SecretStr(api_key) if api_key else None,
                 **openrouter_kwargs,
             )
 
@@ -138,7 +139,10 @@ def get_llm(
 
     try:
         return init_chat_model(
-            model=model_name, model_provider=actual_provider, api_key=api_key, **kwargs
+            model=model_name,
+            model_provider=actual_provider,
+            api_key=SecretStr(api_key) if api_key else None,
+            **kwargs,
         )
     except Exception as e:
         log.error("Failed to init model %s with provider %s: %s", model_name, actual_provider, e)
@@ -162,7 +166,7 @@ def get_embeddings(
     return init_embeddings(
         model=model,
         provider=provider,
-        api_key=api_key,
+        api_key=SecretStr(api_key) if api_key else None,
         base_url=base_url,
         check_embedding_ctx_length=False,
     )

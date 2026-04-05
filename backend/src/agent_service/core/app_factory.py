@@ -45,7 +45,6 @@ from src.agent_service.core.config import (
 from src.agent_service.core.event_bus import event_bus
 from src.agent_service.core.http_client import close_http_client, initialize_http_client
 from src.agent_service.core.session_utils import close_redis, get_redis
-from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.catalog import model_service
 from src.agent_service.security.middleware import SessionRiskMiddleware
 from src.agent_service.security.postgres_pool import PostgresPoolManager
@@ -139,7 +138,6 @@ class AppFactory:
                     await postgres_pool.stop()
                 await mcp_manager.shutdown()
                 await close_http_client()
-                await config_manager.close()
                 await milvus_mgr.close()
 
                 # Graceful EventBus Shutdown

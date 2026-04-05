@@ -122,6 +122,8 @@ class Query:
                     )
                 )
 
+            if not cat_name:
+                continue
             categories.append(ProviderCategory(name=cat_name, models=typed_models))
 
         return categories

@@ -270,7 +270,7 @@ class RedisRateLimiter(BaseRateLimiter):
             current_key, previous_key = self._get_keys(identifier)
             window_start = (int(now) // self.window_size) * self.window_size
 
-            result = await self.redis.eval(
+            result = await self.redis.eval(  # type: ignore[misc]
                 self._script,
                 2,  # Number of keys
                 current_key,
@@ -282,7 +282,7 @@ class RedisRateLimiter(BaseRateLimiter):
             )
         else:
             key, _ = self._get_keys(identifier)
-            result = await self.redis.eval(
+            result = await self.redis.eval(  # type: ignore[misc]
                 self._script,
                 1,  # Number of keys
                 key,

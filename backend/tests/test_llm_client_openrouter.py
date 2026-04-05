@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from pydantic import SecretStr
+
 import src.agent_service.llm.client as llm_client
 
 
@@ -29,7 +31,8 @@ def test_get_llm_prefers_chatopenrouter_when_available(monkeypatch):
 
     assert isinstance(llm, FakeChatOpenRouter)
     assert captured["model"] == "openai/o3-mini"
-    assert captured["api_key"] == "sk-or-test"
+    assert isinstance(captured["api_key"], SecretStr)
+    assert captured["api_key"].get_secret_value() == "sk-or-test"
     assert captured["temperature"] == 0.15
     assert captured["max_tokens"] == 128
     assert captured["reasoning"] == {"effort": "high"}
@@ -58,7 +61,8 @@ def test_get_llm_openrouter_falls_back_to_openai_adapter(monkeypatch):
     assert llm is not None
     assert captured["model"] == "openai/o3-mini"
     assert captured["model_provider"] == "openai"
-    assert captured["api_key"] == "sk-or-test"
+    assert isinstance(captured["api_key"], SecretStr)
+    assert captured["api_key"].get_secret_value() == "sk-or-test"
     assert captured["kwargs"]["base_url"] == "https://openrouter.ai/api/v1"
     assert captured["kwargs"]["model_kwargs"]["reasoning"]["effort"] == "high"
 

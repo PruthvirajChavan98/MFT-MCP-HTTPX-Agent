@@ -4,6 +4,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from pydantic import SecretStr
+
 from src.agent_service.core.config import (
     MILVUS_TOKEN,
     MILVUS_URI,
@@ -24,7 +26,7 @@ def _make_embeddings(api_key: str):  # type: ignore[return]  # circular import a
 
     return OpenAIEmbeddings(
         model=_EMBED_MODEL,
-        api_key=api_key,
+        api_key=SecretStr(api_key),
         base_url=OPENROUTER_BASE_URL,
         # Disable context-length pre-check — not applicable to OpenRouter proxy
         check_embedding_ctx_length=False,

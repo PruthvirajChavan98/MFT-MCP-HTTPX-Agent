@@ -122,7 +122,7 @@ class SessionSecurityValidator:
         return "deny", "deny_request"
 
     async def _load_last_state(self, state_key: str) -> dict[str, str]:
-        state = await self.redis.hgetall(state_key)
+        state = await self.redis.hgetall(state_key)  # type: ignore[misc]
         return state or {}
 
     async def _resolve_geo(self, ip_str: str) -> GeoLocation | None:
@@ -236,7 +236,7 @@ class SessionSecurityValidator:
                 }
             )
 
-        await self.redis.hset(state_key, mapping=payload)
+        await self.redis.hset(state_key, mapping=payload)  # type: ignore[misc]
         await self.redis.expire(state_key, cfg.key_ttl_seconds)
         await self.redis.expire(zset_key, cfg.key_ttl_seconds)
 

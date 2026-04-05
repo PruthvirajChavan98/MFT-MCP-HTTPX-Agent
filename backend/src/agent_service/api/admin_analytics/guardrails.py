@@ -337,9 +337,9 @@ async def guardrails_trends(
 @router.get("/guardrails/queue-health")
 async def guardrails_queue_health():
     redis = await get_redis()
-    depth = int(await redis.llen(SHADOW_TRACE_QUEUE_KEY))
-    dead_letter_depth = int(await redis.llen(SHADOW_TRACE_DLQ_KEY))
-    oldest = await redis.lindex(SHADOW_TRACE_QUEUE_KEY, -1)
+    depth = int(await redis.llen(SHADOW_TRACE_QUEUE_KEY))  # type: ignore[misc]
+    dead_letter_depth = int(await redis.llen(SHADOW_TRACE_DLQ_KEY))  # type: ignore[misc]
+    oldest = await redis.lindex(SHADOW_TRACE_QUEUE_KEY, -1)  # type: ignore[misc]
 
     oldest_age_seconds: int | None = None
     if oldest:

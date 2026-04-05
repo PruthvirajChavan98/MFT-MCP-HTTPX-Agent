@@ -9,6 +9,7 @@ from typing import Any
 
 from src.agent_service.core.config import GROQ_API_KEYS, GROQ_BASE_URL
 from src.agent_service.core.http_client import get_http_client
+from src.agent_service.core.prompts import prompt_manager
 
 log = logging.getLogger(__name__)
 
@@ -69,18 +70,12 @@ async def _classify_batch(
             for i, item in enumerate(batch)
         ]
 
+        system_content = prompt_manager.get_template("faq_classifier", "system_prompt")
+
         messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are an FAQ categorizer for a fintech NBFC company. "
-                    "Classify each FAQ into exactly one of the provided categories "
-                    "based on its content. "
-                    "Return a JSON object with a 'classifications' key containing an array. "
-                    "Each entry must have: index (int matching the input index), "
-                    "category (string, must be one of the provided categories). "
-                    "If unsure, use 'technical' as the default."
-                ),
+                "content": system_content,
             },
             {
                 "role": "user",

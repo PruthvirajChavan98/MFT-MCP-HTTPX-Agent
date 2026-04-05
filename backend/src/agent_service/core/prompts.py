@@ -22,6 +22,7 @@ class PromptsSchema(BaseModel):
     eval: Dict[str, PromptDef]
     router: Dict[str, PromptDef]
     knowledge: Dict[str, PromptDef]
+    faq_classifier: Dict[str, PromptDef]
 
 
 # --- Prompt Manager Singleton ---

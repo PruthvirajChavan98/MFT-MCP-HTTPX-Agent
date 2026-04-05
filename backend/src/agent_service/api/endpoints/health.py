@@ -46,7 +46,7 @@ async def readiness_check(request: Request):
 
     postgres_pool = getattr(request.app.state, "postgres_pool", None)
     if postgres_pool:
-        postgres_ok = await postgres_pool.ping()
+        postgres_ok = await postgres_pool.ping()  # type: ignore[misc]
         checks["postgres"] = {
             "ok": postgres_ok,
             "pool_min": getattr(postgres_pool, "min_size", None),

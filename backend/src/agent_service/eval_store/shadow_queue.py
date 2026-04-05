@@ -49,8 +49,8 @@ class RedisTraceQueue:
         self.max_retries = max_retries
 
     async def _refresh_depth_metrics(self, redis: Any) -> None:
-        SHADOW_TRACE_QUEUE_DEPTH.set(float(await redis.llen(self.queue_key)))
-        SHADOW_TRACE_DLQ_DEPTH.set(float(await redis.llen(self.dlq_key)))
+        SHADOW_TRACE_QUEUE_DEPTH.set(float(await redis.llen(self.queue_key)))  # type: ignore[misc]
+        SHADOW_TRACE_DLQ_DEPTH.set(float(await redis.llen(self.dlq_key)))  # type: ignore[misc]
 
     async def enqueue_trace(
         self,
@@ -74,9 +74,9 @@ class RedisTraceQueue:
             "metadata": metadata or {},
         }
         serialized = json.dumps(payload, ensure_ascii=False)
-        await redis.lpush(self.queue_key, serialized)
+        await redis.lpush(self.queue_key, serialized)  # type: ignore[misc]
         if self.maxlen > 0:
-            await redis.ltrim(self.queue_key, 0, self.maxlen - 1)
+            await redis.ltrim(self.queue_key, 0, self.maxlen - 1)  # type: ignore[misc]
         await self._refresh_depth_metrics(redis)
 
     async def pop_batch(self, *, limit: int) -> list[dict[str, Any]]:
@@ -86,7 +86,7 @@ class RedisTraceQueue:
         redis = await get_redis()
         items: list[dict[str, Any]] = []
         for _ in range(limit):
-            raw = await redis.rpop(self.queue_key)
+            raw = await redis.rpop(self.queue_key)  # type: ignore[misc]
             if raw is None:
                 break
             try:
@@ -101,13 +101,13 @@ class RedisTraceQueue:
 
     async def depth(self) -> int:
         redis = await get_redis()
-        size = await redis.llen(self.queue_key)
+        size = await redis.llen(self.queue_key)  # type: ignore[misc]
         SHADOW_TRACE_QUEUE_DEPTH.set(float(size))
         return int(size)
 
     async def dead_letter_depth(self) -> int:
         redis = await get_redis()
-        size = await redis.llen(self.dlq_key)
+        size = await redis.llen(self.dlq_key)  # type: ignore[misc]
         SHADOW_TRACE_DLQ_DEPTH.set(float(size))
         return int(size)
 
@@ -132,16 +132,16 @@ class RedisTraceQueue:
             payload["last_failed_at"] = _utc_iso_now()
             serialized = json.dumps(payload, ensure_ascii=False)
             if retries > self.max_retries:
-                await redis.lpush(self.dlq_key, serialized)
+                await redis.lpush(self.dlq_key, serialized)  # type: ignore[misc]
                 dead_lettered += 1
             else:
-                await redis.lpush(self.queue_key, serialized)
+                await redis.lpush(self.queue_key, serialized)  # type: ignore[misc]
                 requeued += 1
 
         if self.maxlen > 0:
-            await redis.ltrim(self.queue_key, 0, self.maxlen - 1)
+            await redis.ltrim(self.queue_key, 0, self.maxlen - 1)  # type: ignore[misc]
         if self.dlq_maxlen > 0:
-            await redis.ltrim(self.dlq_key, 0, self.dlq_maxlen - 1)
+            await redis.ltrim(self.dlq_key, 0, self.dlq_maxlen - 1)  # type: ignore[misc]
         await self._refresh_depth_metrics(redis)
         return (requeued, dead_lettered)
 

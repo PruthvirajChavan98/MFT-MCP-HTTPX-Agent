@@ -784,9 +784,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                             add_kwargs = {}
                             msgs[-1].additional_kwargs = add_kwargs
 
-                        if getattr(collector, "reasoning", ""):
-                            add_kwargs["reasoning"] = collector.reasoning
-
                         msgs[-1].content = final_output
                         add_kwargs["trace_id"] = collector.trace_id
                         add_kwargs["provider"] = resources.provider

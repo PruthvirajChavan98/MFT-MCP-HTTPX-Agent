@@ -12,6 +12,11 @@ from src.agent_service.features import faq_classifier
 
 CATEGORY_LABELS = ["billing", "account", "data", "technical", "sales"]
 
+_SYSTEM_PROMPT_STUB = (
+    "You are an FAQ categorizer for a fintech NBFC company. "
+    "Classify each FAQ into exactly one of the provided categories."
+)
+
 
 def _make_items(*categories: str) -> list[dict[str, Any]]:
     """Build FAQ items, one per category string (empty = needs classification)."""
@@ -73,6 +78,9 @@ async def test_classify_faqs_populates_categories(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(faq_classifier, "GROQ_API_KEYS", ["fake-key"])
     monkeypatch.setattr(faq_classifier, "get_http_client", AsyncMock(return_value=mock_client))
+    monkeypatch.setattr(
+        faq_classifier.prompt_manager, "get_template", lambda *_a, **_kw: _SYSTEM_PROMPT_STUB
+    )
 
     result = await faq_classifier.classify_faqs(items, CATEGORY_LABELS)
 
@@ -119,6 +127,9 @@ async def test_classify_faqs_handles_partial_response(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(faq_classifier, "GROQ_API_KEYS", ["fake-key"])
     monkeypatch.setattr(faq_classifier, "get_http_client", AsyncMock(return_value=mock_client))
+    monkeypatch.setattr(
+        faq_classifier.prompt_manager, "get_template", lambda *_a, **_kw: _SYSTEM_PROMPT_STUB
+    )
 
     result = await faq_classifier.classify_faqs(items, CATEGORY_LABELS)
 
@@ -184,6 +195,9 @@ async def test_classify_faqs_rejects_invalid_category(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(faq_classifier, "GROQ_API_KEYS", ["fake-key"])
     monkeypatch.setattr(faq_classifier, "get_http_client", AsyncMock(return_value=mock_client))
+    monkeypatch.setattr(
+        faq_classifier.prompt_manager, "get_template", lambda *_a, **_kw: _SYSTEM_PROMPT_STUB
+    )
 
     result = await faq_classifier.classify_faqs(items, CATEGORY_LABELS)
 
@@ -211,6 +225,9 @@ async def test_classify_faqs_mixed_items(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(faq_classifier, "GROQ_API_KEYS", ["fake-key"])
     monkeypatch.setattr(faq_classifier, "get_http_client", AsyncMock(return_value=mock_client))
+    monkeypatch.setattr(
+        faq_classifier.prompt_manager, "get_template", lambda *_a, **_kw: _SYSTEM_PROMPT_STUB
+    )
 
     result = await faq_classifier.classify_faqs(items, CATEGORY_LABELS)
 

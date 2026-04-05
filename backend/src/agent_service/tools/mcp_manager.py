@@ -40,7 +40,7 @@ class MCPManager:
                 "headers": {},
             }
         }
-        self.client = MultiServerMCPClient(connections)
+        self.client = MultiServerMCPClient(connections)  # type: ignore[arg-type]
         log.info("Connecting to MCP at %s...", SERVER_URL)
 
         try:

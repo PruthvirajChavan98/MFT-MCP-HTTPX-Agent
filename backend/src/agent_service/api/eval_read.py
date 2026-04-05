@@ -547,6 +547,11 @@ async def eval_vector_search(
             kwargs["expr"] = expr
 
         if use_vector:
+            if req.vector is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Vector embedding is required for vector search",
+                )
             hits = await store.asimilarity_search_with_score_by_vector(req.vector, **kwargs)
         else:
             hits = await store.asimilarity_search_with_score(query_text, **kwargs)

@@ -107,9 +107,9 @@ class RagasJudge:
         evaluator_id = f"ragas:{short}"
 
         scores = await asyncio.gather(
-            self._faithfulness.single_turn_ascore(sample),
-            self._answer_rel.single_turn_ascore(sample),
-            self._context_rel.single_turn_ascore(sample),
+            self._faithfulness.ascore(sample),
+            self._answer_rel.ascore(sample),
+            self._context_rel.ascore(sample),
             return_exceptions=True,
         )
 
