@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterable
 
+from src.agent_service.features.faq_classifier import classify_faqs
 from src.agent_service.features.faq_pdf_parser import coerce_json_items, parse_pdf_faqs
 from src.agent_service.features.kb_milvus_store import kb_milvus_store
 from src.agent_service.features.knowledge_base_repo import KnowledgeBaseRepo
@@ -126,16 +127,37 @@ class KnowledgeBaseService:
 
     async def ingest_json_payload(self, pool: Any, payload: Any) -> int:
         items = coerce_json_items(payload)
+        items = await self._auto_classify(pool, items)
         return await self.upsert_items(pool, items, source="json_batch")
 
     async def ingest_pdf_bytes(self, pool: Any, pdf_bytes: bytes, filename: str) -> int:
         items = parse_pdf_faqs(pdf_bytes)
+        items = await self._auto_classify(pool, items)
         return await self.upsert_items(
             pool,
             items,
             source="pdf_upload",
             source_ref=filename,
         )
+
+    async def _auto_classify(self, pool: Any, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Best-effort LLM classification for items missing a category.
+
+        Never blocks or fails the ingest pipeline — returns items unchanged
+        if anything goes wrong.
+        """
+        try:
+            categories = await self.repo.list_categories(pool)
+            labels = [str(c.get("slug") or c.get("label", "")).strip() for c in categories]
+            labels = [lb for lb in labels if lb]
+            if not labels:
+                return items
+            return await classify_faqs(items, labels)
+        except Exception:  # noqa: BLE001
+            log.warning(
+                "Auto-classify failed; items ingested without classification", exc_info=True
+            )
+            return items
 
     async def _sync_to_milvus(self, pool: Any, items: list[dict[str, Any]]) -> None:
         """Full resync of all FAQ embeddings to Milvus kb_faqs collection."""
