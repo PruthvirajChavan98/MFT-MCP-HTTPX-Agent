@@ -54,7 +54,6 @@ export function tracesPageInfiniteQueryOptions(params: TracesQueryParams) {
         cursor: pageParam,
         search: params.search,
       }),
-    enabled: Boolean(params.adminKey.trim()),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
   })
@@ -64,7 +63,7 @@ export function adminTraceQueryOptions(adminKey: string, traceId: string | null)
   return queryOptions({
     queryKey: ['admin-trace', adminKey, traceId] as const,
     queryFn: () => fetchAdminTrace(adminKey, traceId || ''),
-    enabled: Boolean(adminKey.trim() && traceId),
+    enabled: Boolean(traceId),
   })
 }
 
@@ -72,7 +71,7 @@ export function guardrailSummaryQueryOptions(adminKey: string, tenantId: string)
   return queryOptions({
     queryKey: ['guardrail-summary', adminKey, tenantId] as const,
     queryFn: () => fetchGuardrailSummary(adminKey, tenantId),
-    enabled: Boolean(adminKey.trim() && tenantId.trim()),
+    enabled: Boolean(tenantId.trim()),
     refetchInterval: ADMIN_REFETCH_MS,
   })
 }
@@ -81,7 +80,6 @@ export function guardrailQueueHealthQueryOptions(adminKey: string) {
   return queryOptions({
     queryKey: ['guardrail-queue', adminKey] as const,
     queryFn: () => fetchGuardrailQueueHealth(adminKey),
-    enabled: Boolean(adminKey.trim()),
     refetchInterval: 10_000,
   })
 }
@@ -90,7 +88,6 @@ export function guardrailJudgeSummaryQueryOptions(adminKey: string) {
   return queryOptions({
     queryKey: ['guardrail-judge', adminKey] as const,
     queryFn: () => fetchGuardrailJudgeSummary(adminKey),
-    enabled: Boolean(adminKey.trim()),
     refetchInterval: ADMIN_REFETCH_MS,
   })
 }
@@ -99,7 +96,7 @@ export function guardrailTrendsQueryOptions(adminKey: string, tenantId: string, 
   return queryOptions({
     queryKey: ['guardrail-trends', adminKey, tenantId, hours] as const,
     queryFn: () => fetchGuardrailTrends(adminKey, tenantId, hours),
-    enabled: Boolean(adminKey.trim() && tenantId.trim()),
+    enabled: Boolean(tenantId.trim()),
     refetchInterval: ADMIN_REFETCH_MS,
   })
 }
@@ -121,7 +118,6 @@ export function guardrailEventsQueryOptions(params: GuardrailEventsParams) {
         offset: params.offset,
         limit: params.limit,
       }),
-    enabled: Boolean(params.adminKey.trim()),
   })
 }
 
@@ -129,7 +125,6 @@ export function faqListQueryOptions(adminKey: string, limit = 500, skip = 0) {
   return queryOptions({
     queryKey: ['faqs', adminKey, limit, skip] as const,
     queryFn: () => fetchFaqs(adminKey, limit, skip),
-    enabled: Boolean(adminKey.trim()),
     refetchInterval(query) {
       const data = query.state.data as FaqRecord[] | undefined
       const hasActive = data?.some(
@@ -144,7 +139,6 @@ export function faqCategoriesQueryOptions(adminKey: string) {
   return queryOptions({
     queryKey: ['faq-categories', adminKey] as const,
     queryFn: () => fetchFaqCategories(adminKey),
-    enabled: Boolean(adminKey.trim()),
     staleTime: 60_000,
   })
 }

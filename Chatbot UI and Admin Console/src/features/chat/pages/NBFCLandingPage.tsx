@@ -6,6 +6,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@components/ui/hover-card'
+import { DISCLAIMER_ACCEPTED_EVENT, DISCLAIMER_ACCEPTED_KEY } from '@components/PrototypeDisclaimer'
 import { ChatWidget } from '../components/ChatWidget'
 import { RegisterDialog } from '../components/RegisterDialog'
 
@@ -110,12 +111,6 @@ const LANDING_SPOTLIGHT_STEPS = [
     title: 'Start with the main actions',
     description:
       'This rail keeps the key flows close by: admin access, quick registration, and a direct route to apply.',
-  },
-  {
-    targetId: 'landing-hero-ctas',
-    title: 'Compare your first moves',
-    description:
-      'These hero actions are the fastest way to check eligibility or estimate your EMI before you commit.',
   },
   {
     targetId: 'landing-chat-launcher',
@@ -376,13 +371,24 @@ export function NBFCLandingPage() {
   const [spotlightStepIndex, setSpotlightStepIndex] = useState(0)
 
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem(LANDING_SPOTLIGHT_STORAGE_KEY) !== 'true') {
-        setIsSpotlightOpen(true)
+    const maybeOpenSpotlight = () => {
+      try {
+        const disclaimerAccepted = window.localStorage.getItem(DISCLAIMER_ACCEPTED_KEY) === 'true'
+        if (!disclaimerAccepted) return
+        if (window.localStorage.getItem(LANDING_SPOTLIGHT_STORAGE_KEY) !== 'true') {
+          setIsSpotlightOpen(true)
+        }
+      } catch {
+        // localStorage unavailable -- don't open the spotlight
       }
-    } catch {
-      setIsSpotlightOpen(true)
     }
+
+    // If the disclaimer was already accepted on a previous visit, open immediately.
+    maybeOpenSpotlight()
+
+    // If the disclaimer is dismissed during this session, open after it closes.
+    window.addEventListener(DISCLAIMER_ACCEPTED_EVENT, maybeOpenSpotlight)
+    return () => window.removeEventListener(DISCLAIMER_ACCEPTED_EVENT, maybeOpenSpotlight)
   }, [])
 
   const closeSpotlight = () => {
@@ -477,7 +483,7 @@ export function NBFCLandingPage() {
                 </p>
               </HoverCardContent>
             </HoverCard>
-            <Link to="/architecture" className={CTA_PRIMARY}>
+            <Link to="/architecture" className={`hidden sm:inline-flex ${CTA_PRIMARY}`}>
               View Architecture
             </Link>
           </div>

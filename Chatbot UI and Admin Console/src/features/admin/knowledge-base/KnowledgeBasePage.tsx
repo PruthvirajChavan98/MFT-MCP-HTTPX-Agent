@@ -705,14 +705,6 @@ export function KnowledgeBasePage() {
     }
   }
 
-  if (!auth.adminKey) {
-    return (
-      <div className="mx-auto mt-10 max-w-2xl rounded-xl border border-rose-200 bg-rose-50 p-8 text-center font-medium text-rose-700">
-        Admin API key required. Configure `X-Admin-Key` in the header.
-      </div>
-    )
-  }
-
   if (faqsQuery.error) {
     return (
       <Alert variant="destructive">

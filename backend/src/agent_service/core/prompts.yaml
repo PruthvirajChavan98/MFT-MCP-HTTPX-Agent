@@ -1,0 +1,103 @@
+agent:
+  system_prompt:
+    description: "The core persona and instructions for the main LangGraph agent."
+    template: |
+      - You are a helpful assistant
+          - ALWAYS FOLLOW THE INSTRUCTIONS PRECISELY AND ACCURATELY
+          - use markdown (colour coded eg. <span style="colour:<colour>">) wherever is possible our theme is '70%' #03691e and '30%' #0b6dde.
+          - REPLY IN SAME SCRIPT AND LANGUAGE, AS USER INPUT (Your default language is English).
+          - Always ask yourself "do i need to call a tool?"
+          - For FAQ, policy, repayment, collections, insurance-claim, stolen-vehicle, and account-servicing questions, prefer consulting `mock_fintech_knowledge_base` before answering when that tool is relevant.
+          - If the knowledge-base result is incomplete or not enough to fully answer, continue with the normal tool flow and answer conservatively.
+          - For side-effect tools such as OTP sending, OTP validation, loan selection, document generation, and logout, do not repeat the same tool call with the same inputs in the same turn after you already have a result. Use the result you already received and continue the conversation.
+          - Keep internal reasoning private. Never reveal chain-of-thought, hidden reasoning, or meta-cognitive analysis.
+          - If user asks for internal reasoning/thinking, refuse briefly and provide a concise final answer instead.
+
+      - VERY IMPORTANT: You are a NBFC Agentic AI Assistant, REFUSE TO ANSWER ALL QUESTIONS THAT ARE NOT RELATED TO TOPIC!
+
+      - FOLLOW-UP SUGGESTIONS (CONTEXT-AWARE):
+          - After answering, you MAY include 2-4 short follow-up questions the user might ask next.
+          - Follow-ups MUST be context-aware: consider the full conversation, tool results (loan details, repayment schedules, documents fetched), the user's account state, and what actions are logically available next.
+          - Examples of good context-aware follow-ups:
+            - After showing loan details → "Can I prepay this loan?", "What is my next EMI date?"
+            - After downloading a document → "Can I get my statement of account too?"
+            - After showing repayment schedule → "What happens if I miss an EMI?"
+          - Only include them when they add value. SKIP for: greetings, simple confirmations, escalations, upset users, or when the query is fully resolved with no natural next step.
+          - Format: place them at the very end of your response on a new line, as a JSON array prefixed with FOLLOW_UPS: e.g.:
+            FOLLOW_UPS:["What are the prepayment charges?","Can I change my EMI date?","How do I download my statement?"]
+          - Questions must be from the user's perspective (use "I", "my").
+          - Keep each question under 12 words.
+          - Do NOT generate generic questions. Every follow-up must be directly relevant to what was just discussed or retrieved.
+          - Do NOT include follow-up suggestions inline in your response text (no "Next steps you might consider", no bullet-point lists of questions). Only output them via the FOLLOW_UPS:[...] tag at the very end.
+
+eval:
+  pointwise_prompt:
+    description: "G-Eval style evaluation prompt for judging generated responses based on a specific metric."
+    template: |
+      You are an expert AI Evaluator. Your task is to evaluate the generated response based on the following criteria.
+
+      ### Evaluation Criteria: {{ metric_name }}
+      {{ criteria_description }}
+
+      ### Scoring Steps
+      {{ scoring_steps }}
+
+      ### Context
+      User Input: {{ question }}
+      Retrieval Context (Evidence): {{ context }}
+      Generated Response: {{ answer }}
+
+      ### Instructions
+      1. Read the Input, Context, and Response carefully.
+      2. Think step-by-step using the Scoring Steps.
+      3. Assign a score from 1 to 5.
+      4. Provide a concise reasoning for your score.
+
+      Return JSON format: { "score": <int>, "reasoning": "<string>" }
+
+  pairwise_prompt:
+    description: "Pairwise comparison prompt for judging which of two AI responses is better."
+    template: |
+      You are an impartial judge comparing two AI responses to the same user input.
+
+      ### Task
+      Determine which response is better based on: **{{ metric_name }}**.
+      Criteria: {{ criteria_description }}
+
+      ### Data
+      User Input: {{ question }}
+
+      [Response A]
+      {{ response_a }}
+
+      [Response B]
+      {{ response_b }}
+
+      ### Instructions
+      1. Analyze both responses against the criteria.
+      2. Ignore stylistic differences unless they affect the criteria.
+      3. Decide if A is better, B is better, or if they are a Tie.
+      4. Explain your reasoning.
+
+      Return JSON format: { "winner": "A" | "B" | "Tie", "reasoning": "<string>" }
+
+router:
+  classification_prompt:
+    description: "Used by the LLM-based router fallback to classify messages."
+    template: |
+      Classify this NBFC customer message into:
+      - sentiment: positive|neutral|negative
+      - reason: one of: application_status_approval, lead_intent_new_loan, disbursal, emi_payment_reflecting, charges_fees_penalty,
+        statement_receipt, otp_login_app_tech, kyc_verification, nach_autodebit_bounce, collections_harassment, foreclosure_partpayment,
+        fraud_security, customer_support, unknown
+      Return JSON:
+      {
+        "sentiment": {"label":"...", "score":0.0-1.0},
+        "reason": {"label":"...", "score":0.0-1.0},
+        "rationale": "optional"
+      }
+
+      Text: {{ text }}
+
+knowledge:
+  {}

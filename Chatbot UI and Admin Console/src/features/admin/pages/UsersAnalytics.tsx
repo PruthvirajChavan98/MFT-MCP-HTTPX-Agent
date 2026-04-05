@@ -21,10 +21,7 @@ export function UsersAnalytics() {
   const { data = [], isLoading, error } = useQuery({
     queryKey: ['user-analytics', auth.adminKey],
     queryFn: () => fetchUserAnalytics(auth.adminKey),
-    enabled: !!auth.adminKey,
   })
-
-  if (!auth.adminKey) return <Alert><AlertDescription>Set X-Admin-Key to view user analytics.</AlertDescription></Alert>
   if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>
 
   const sorted = [...data].sort((a, b) => {

@@ -16,12 +16,11 @@ export function GlobalTraceSheet() {
   const traceId = searchParams.get('traceId')
   const [selectedNodeId, setSelectedNodeId] = useState<string>('root')
   const auth = useAdminContext()
-  const hasAdminKey = !!auth.adminKey.trim()
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['admin-trace', traceId, auth.adminKey],
     queryFn: () => fetchAdminTrace(auth.adminKey, traceId!),
-    enabled: !!traceId && hasAdminKey,
+    enabled: !!traceId,
   })
 
   useEffect(() => {
@@ -47,37 +46,31 @@ export function GlobalTraceSheet() {
       >
         <SheetTitle className="sr-only">Trace Viewer</SheetTitle>
 
-        {!hasAdminKey ? (
-          <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-            Admin API key is required to inspect traces.
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="border-b border-border px-4 py-2.5 flex items-center justify-between bg-card">
+            <span className="text-xs text-muted-foreground font-medium">
+              Trace {traceId}
+            </span>
+            {conversationHref && (
+              <Link
+                to={conversationHref}
+                className="inline-flex items-center rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-100"
+              >
+                View Conversation
+              </Link>
+            )}
           </div>
-        ) : (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="border-b border-border px-4 py-2.5 flex items-center justify-between bg-card">
-              <span className="text-xs text-muted-foreground font-medium">
-                Trace {traceId}
-              </span>
-              {conversationHref && (
-                <Link
-                  to={conversationHref}
-                  className="inline-flex items-center rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-100"
-                >
-                  View Conversation
-                </Link>
-              )}
-            </div>
-            <div className="flex-1 flex overflow-hidden">
-            <TraceTree
-              nodes={nodes}
-              selectedNodeId={selectedNodeId}
-              onSelect={setSelectedNodeId}
-              onClose={handleClose}
-              isLoading={isLoading}
-            />
-            <TraceInspector node={selectedNode} evals={traceDetail?.evals} shadowJudge={traceDetail?.shadow_judge} />
-            </div>
+          <div className="flex-1 flex overflow-hidden">
+          <TraceTree
+            nodes={nodes}
+            selectedNodeId={selectedNodeId}
+            onSelect={setSelectedNodeId}
+            onClose={handleClose}
+            isLoading={isLoading}
+          />
+          <TraceInspector node={selectedNode} evals={traceDetail?.evals} shadowJudge={traceDetail?.shadow_judge} />
           </div>
-        )}
+        </div>
       </SheetContent>
     </Sheet>
   )

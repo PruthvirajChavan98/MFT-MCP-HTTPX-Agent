@@ -39,13 +39,11 @@ export function Feedback() {
   const { data: items = [], isLoading: fLoading, error: fError } = useQuery({
     queryKey: ['feedback', auth.adminKey],
     queryFn: () => listFeedback(auth.adminKey),
-    enabled: !!auth.adminKey,
   })
 
   const { data: summary, isLoading: sLoading } = useQuery({
     queryKey: ['feedback-summary', auth.adminKey],
     queryFn: () => feedbackSummary(auth.adminKey),
-    enabled: !!auth.adminKey,
   })
 
   const createMut = useMutation({
@@ -54,7 +52,6 @@ export function Feedback() {
     onError: (e) => toast.error((e as Error).message),
   })
 
-  if (!auth.adminKey) return <Alert><AlertDescription>Set X-Admin-Key to view feedback.</AlertDescription></Alert>
   if (fError) return <Alert variant="destructive"><AlertDescription>{(fError as Error).message}</AlertDescription></Alert>
 
   const filtered = ratingFilter === 'all' ? items : items.filter((f) => f.rating === ratingFilter)

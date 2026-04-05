@@ -14,13 +14,11 @@ const PIE_COLORS = ["#5eead4", "#67e8f9", "#38bdf8", "#818cf8", "#c084fc", "#f47
 
 export function Dashboard() {
   const auth = useAdminContext();
-  const hasAdminKey = !!auth.adminKey.trim()
 
   const { data: traces = [], isLoading: tLoading, error: tError } = useQuery({
     queryKey: ['eval-traces', auth.adminKey],
     queryFn: () => fetchEvalTraces(auth.adminKey, 200),
     refetchInterval: 30_000,
-    enabled: hasAdminKey,
   });
 
   const { data: costs, isLoading: cLoading, error: cError } = useQuery({
@@ -32,13 +30,11 @@ export function Dashboard() {
   const { data: categories = [], isLoading: catLoading } = useQuery({
     queryKey: ['question-types', auth.adminKey],
     queryFn: () => fetchQuestionTypes(auth.adminKey, 50),
-    enabled: hasAdminKey,
   });
 
   const { data: guardrails = [] } = useQuery({
     queryKey: ['guardrail-events', auth.adminKey],
     queryFn: async () => (await fetchGuardrailEvents(auth.adminKey, { limit: 100 })).items,
-    enabled: hasAdminKey,
   });
 
   const loading = tLoading || cLoading || catLoading;
@@ -59,14 +55,6 @@ export function Dashboard() {
   const successCount = traces.filter((t) => t.status === 'success' || !t.error).length;
   const successRate = traces.length ? ((successCount / traces.length) * 100).toFixed(1) : 0;
   const avgLatency = traces.length ? Math.round(traces.reduce((s, t) => s + (t.latency_ms ?? 0), 0) / traces.length) : 0;
-
-  if (!hasAdminKey) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>Admin API key is required to load dashboard analytics.</AlertDescription>
-      </Alert>
-    )
-  }
 
   if (error) return <Alert variant="destructive"><AlertDescription className="font-mono text-xs">{(error as Error).message}</AlertDescription></Alert>;
 

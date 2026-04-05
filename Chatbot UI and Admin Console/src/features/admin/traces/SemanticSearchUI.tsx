@@ -11,14 +11,13 @@ import { buildTraceHref } from '@features/admin/lib/admin-links';
 
 export function SemanticSearchUI() {
     const auth = useAdminContext();
-    const hasAdminKey = !!auth.adminKey.trim();
     const [query, setQuery] = useState('');
     const [activeQuery, setActiveQuery] = useState('');
 
     const { data, isLoading, error } = useQuery({
         queryKey: ['vector-search', auth.adminKey, activeQuery],
         queryFn: () => fetchVectorSearch({ adminKey: auth.adminKey, kind: 'trace', text: activeQuery, k: 5 }),
-        enabled: hasAdminKey && activeQuery.length > 2,
+        enabled: activeQuery.length > 2,
     });
 
     const handleSearch = (e: React.FormEvent) => {
@@ -41,18 +40,14 @@ export function SemanticSearchUI() {
                             onChange={(e) => setQuery(e.target.value)}
                         />
                     </div>
-                    <Button type="submit" disabled={!hasAdminKey || !query.trim() || isLoading} className="bg-cyan-600 hover:bg-cyan-700 text-white">
+                    <Button type="submit" disabled={!query.trim() || isLoading} className="bg-cyan-600 hover:bg-cyan-700 text-white">
                         <BrainCircuit className="w-4 h-4 mr-2" /> Search Vectors
                     </Button>
                 </form>
             </div>
 
             <div className="flex-1 overflow-y-auto pr-2 no-scrollbar">
-                {!hasAdminKey ? (
-                    <div className="p-4 bg-rose-50 text-rose-700 rounded-xl border border-rose-100 text-sm">
-                        Admin API key is required to run semantic trace search.
-                    </div>
-                ) : error ? (
+                {error ? (
                     <div className="p-4 bg-rose-50 text-rose-700 rounded-xl border border-rose-100 text-sm">
                         {(error as Error).message}
                     </div>

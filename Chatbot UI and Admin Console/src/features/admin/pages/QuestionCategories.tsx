@@ -14,12 +14,10 @@ function humanizeCategory(value: string): string {
 
 export function QuestionCategories() {
   const auth = useAdminContext()
-  const hasAdminKey = !!auth.adminKey.trim()
 
   const { data = [], isLoading, error } = useQuery({
     queryKey: ['question-types', auth.adminKey],
     queryFn: () => fetchQuestionTypes(auth.adminKey, 200),
-    enabled: hasAdminKey,
     refetchInterval: 30_000,
   })
 
@@ -29,14 +27,6 @@ export function QuestionCategories() {
   const topCategory = sorted[0]
   const unknownShare = sorted.find((item) => item.reason.toLowerCase() === 'unknown')?.pct ?? 0
   const coverage = 1 - unknownShare
-
-  if (!hasAdminKey) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>Admin API key is required to load question categories.</AlertDescription>
-      </Alert>
-    )
-  }
 
   if (error) {
     return (

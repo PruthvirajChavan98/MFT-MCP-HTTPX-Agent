@@ -36,8 +36,6 @@ export function useConversationQueries({
   deferredSearch,
   sessionId,
 }: ConversationQueriesParams) {
-  const hasAdminKey = Boolean(adminKey.trim())
-
   // ── Paginated conversation list ───────────────────────────────────────────
   const conversationsQuery = useInfiniteQuery({
     queryKey: ['conversations-page', adminKey, deferredSearch] as const,
@@ -47,7 +45,6 @@ export function useConversationQueries({
         cursor: (pageParam as string | undefined) ?? undefined,
         search: deferredSearch,
       }),
-    enabled: hasAdminKey,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
     /**
@@ -66,14 +63,13 @@ export function useConversationQueries({
   const evalSessionsQuery = useQuery({
     queryKey: ['eval-sessions', adminKey] as const,
     queryFn: () => fetchEvalSessions(adminKey, 100),
-    enabled: hasAdminKey,
   })
 
   // ── Session transcript ────────────────────────────────────────────────────
   const sessionTracesQuery = useQuery({
     queryKey: ['session-traces', adminKey, sessionId] as const,
     queryFn: () => fetchSessionTraces(adminKey, sessionId!),
-    enabled: hasAdminKey && sessionId !== null,
+    enabled: sessionId !== null,
     staleTime: SESSION_TRACES_STALE_MS,
   })
 
@@ -81,7 +77,7 @@ export function useConversationQueries({
   const sessionCostQuery = useQuery({
     queryKey: ['session-cost-detail', sessionId] as const,
     queryFn: () => fetchSessionCost(sessionId!),
-    enabled: hasAdminKey && sessionId !== null,
+    enabled: sessionId !== null,
     staleTime: SESSION_COST_STALE_MS,
     refetchInterval: SESSION_COST_REFETCH_MS,
   })

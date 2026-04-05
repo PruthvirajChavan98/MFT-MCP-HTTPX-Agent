@@ -12,32 +12,21 @@ const COLORS = ['#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fb923c', '#fbbf24'
 
 export function MetricsDashboard() {
     const auth = useAdminContext();
-    const hasAdminKey = !!auth.adminKey.trim();
 
     const { data: summary, isLoading: sLoading, error: sError } = useQuery({
         queryKey: ['eval-metrics-summary', auth.adminKey],
         queryFn: () => fetchMetricsSummary(auth.adminKey),
         refetchInterval: 30000,
-        enabled: hasAdminKey,
     });
 
     const { data: failures, isLoading: fLoading, error: fError } = useQuery({
         queryKey: ['eval-metrics-failures', auth.adminKey],
         queryFn: () => fetchMetricFailures(auth.adminKey, 100),
         refetchInterval: 30000,
-        enabled: hasAdminKey,
     });
 
     const loading = sLoading || fLoading;
     const error = sError || fError;
-
-    if (!hasAdminKey) {
-        return (
-            <Alert variant="destructive">
-                <AlertDescription>Admin API key is required to load evaluation metrics.</AlertDescription>
-            </Alert>
-        );
-    }
 
     if (error) {
         return (

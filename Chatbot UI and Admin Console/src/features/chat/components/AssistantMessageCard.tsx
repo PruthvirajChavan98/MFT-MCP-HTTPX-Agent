@@ -97,6 +97,7 @@ export function AssistantMessageCard({
 }: AssistantMessageCardProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [toolCallsOpen, setToolCallsOpen] = useState(false)
+  const cleanContent = message.content.replace(/\n?FOLLOW_UPS:[\s\S]*$/s, '').trimEnd()
   const hasReasoning = !!message.reasoning
   const hasToolCalls = (message.toolCalls?.length ?? 0) > 0
   const traceHref = buildTraceHref(message.traceId)
@@ -162,7 +163,7 @@ export function AssistantMessageCard({
           className={cn('px-4 pb-3', hasReasoning || hasToolCalls ? 'pt-3' : 'py-3')}
           data-testid="assistant-bubble-content"
         >
-          <ChatAssistantMarkdown content={message.content} status={message.status} />
+          <ChatAssistantMarkdown content={cleanContent} status={message.status} />
         </div>
       </div>
 

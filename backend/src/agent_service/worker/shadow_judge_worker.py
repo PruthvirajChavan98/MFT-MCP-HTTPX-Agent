@@ -99,9 +99,9 @@ class ShadowJudgeWorker:
             {
                 "role": "system",
                 "content": (
-                    "Evaluate each conversation item. Return JSON array with entries containing "
-                    "trace_id, helpfulness, faithfulness, policy_adherence, summary. "
-                    "Scores must be between 0 and 1."
+                    "You are a conversation quality evaluator. Evaluate each item and return a JSON object "
+                    "with an 'evaluations' key containing an array. Each entry must have: "
+                    "trace_id (string), helpfulness (0-1), faithfulness (0-1), policy_adherence (0-1), summary (string)."
                 ),
             },
             {"role": "user", "content": json.dumps(prompt_payload, ensure_ascii=False)},
@@ -110,6 +110,7 @@ class ShadowJudgeWorker:
             "model": model,
             "messages": messages,
             "temperature": 0,
+            "response_format": {"type": "json_object"},
         }
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEYS[0]}",

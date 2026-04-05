@@ -1,6 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { motionReactMock } from '@/test/mocks/motion'
 import { RegisterDialog } from './RegisterDialog'
 
 const { requestOtpMock, verifyOtpMock, toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
@@ -10,7 +9,10 @@ const { requestOtpMock, verifyOtpMock, toastSuccessMock, toastErrorMock } = vi.h
   toastErrorMock: vi.fn(),
 }))
 
-vi.mock('motion/react', motionReactMock)
+vi.mock('motion/react', async () => {
+  const { motionReactMock } = await import('@/test/mocks/motion')
+  return motionReactMock()
+})
 
 vi.mock('@shared/api/crm', () => ({
   requestOtp: requestOtpMock,

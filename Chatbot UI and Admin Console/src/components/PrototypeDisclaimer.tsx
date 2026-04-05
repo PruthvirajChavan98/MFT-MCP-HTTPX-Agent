@@ -8,7 +8,12 @@ import {
     AlertDialogFooter,
     AlertDialogAction,
 } from './ui/alert-dialog'
-import { AlertTriangle, ShieldAlert } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
+
+const DISCLAIMER_ACCEPTED_KEY = 'mft_prototype_disclaimer_accepted_v1'
+const DISCLAIMER_ACCEPTED_EVENT = 'mft:disclaimer-accepted'
+
+export { DISCLAIMER_ACCEPTED_KEY, DISCLAIMER_ACCEPTED_EVENT }
 
 export function PrototypeDisclaimer() {
     const [open, setOpen] = useState(false)
@@ -17,6 +22,16 @@ export function PrototypeDisclaimer() {
         // Open immediately on mount to ensure it shows every time (even on refresh)
         setOpen(true)
     }, [])
+
+    const handleAccept = () => {
+        setOpen(false)
+        try {
+            window.localStorage.setItem(DISCLAIMER_ACCEPTED_KEY, 'true')
+        } catch {
+            // localStorage can be unavailable in restricted environments.
+        }
+        window.dispatchEvent(new CustomEvent(DISCLAIMER_ACCEPTED_EVENT))
+    }
 
     return (
         <AlertDialog open={open} onOpenChange={setOpen}>
@@ -50,7 +65,7 @@ export function PrototypeDisclaimer() {
 
                 <AlertDialogFooter className="mt-2">
                     <AlertDialogAction
-                        onClick={() => setOpen(false)}
+                        onClick={handleAccept}
                         className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-900/10 border-none transition-all hover:scale-[1.02] active:scale-[0.98] font-semibold"
                     >
                         I Understand, Proceed to Demo

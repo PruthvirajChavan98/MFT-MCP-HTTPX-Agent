@@ -56,7 +56,6 @@ async def test_lifespan_fails_when_eval_schema_is_unavailable(monkeypatch):
     monkeypatch.setattr(app_factory_module.mcp_manager, "initialize", _noop_async)
     monkeypatch.setattr(app_factory_module.mcp_manager, "shutdown", _noop_async)
     monkeypatch.setattr(app_factory_module.model_service, "start_background_loop", _noop_async)
-    monkeypatch.setattr(app_factory_module.config_manager, "close", _noop_async)
     monkeypatch.setattr(app_factory_module.event_bus, "close", _noop_async)
     monkeypatch.setattr(prompt_manager, "load", lambda: None)
     monkeypatch.setattr(memgraph_mgr, "connect", _noop_async)

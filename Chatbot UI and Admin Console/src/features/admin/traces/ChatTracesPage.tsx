@@ -27,7 +27,6 @@ const PAGE_SIZE = 80
 export function ChatTracesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const auth = useAdminContext()
-  const hasAdminKey = Boolean(auth.adminKey.trim())
 
   const initialSearch = searchParams.get('search') || ''
   const [search, setSearch] = useState(initialSearch)
@@ -67,14 +66,6 @@ export function ChatTracesPage() {
 
   const openTrace = (traceId: string) => {
     setSearchParams((prev) => setTraceIdSearchParams(prev, traceId), { replace: false })
-  }
-
-  if (!hasAdminKey) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>Admin API key is required to view traces.</AlertDescription>
-      </Alert>
-    )
   }
 
   if (tracesQuery.error) {

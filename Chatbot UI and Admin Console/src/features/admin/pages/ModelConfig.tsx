@@ -15,7 +15,6 @@ import { Input } from '@components/ui/input'
 import { Textarea } from '@components/ui/textarea'
 import { Label } from '@components/ui/label'
 import { Slider } from '@components/ui/slider'
-import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Cpu, Save, Search, Server, Sparkles } from 'lucide-react'
@@ -124,16 +123,6 @@ export function ModelConfig() {
     onSuccess: () => toast.success('Configuration successfully deployed'),
     onError: (e) => toast.error((e as Error).message),
   })
-
-  if (!auth.adminKey) {
-    return (
-      <Alert className="max-w-2xl mt-6 border-amber-200 bg-amber-50 text-amber-800">
-        <AlertDescription className="font-medium">
-          Admin API Key is missing. Please configure it in the top header to manage models.
-        </AlertDescription>
-      </Alert>
-    )
-  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-10">

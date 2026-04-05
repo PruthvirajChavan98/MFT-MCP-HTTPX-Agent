@@ -48,7 +48,9 @@ function AdminShell() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const missingAdminKey = !auth.adminKey.trim();
+  // Admin key is optional — backend accepts requests when ADMIN_API_KEY env var is unset.
+  // The key input stays available in the popover for environments that enforce authentication.
+  const missingAdminKey = false;
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">

@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { motionReactMock } from '@/test/mocks/motion'
 import { NBFCLandingPage } from './NBFCLandingPage'
 
-vi.mock('motion/react', motionReactMock)
+vi.mock('motion/react', async () => {
+  const { motionReactMock } = await import('@/test/mocks/motion')
+  return motionReactMock()
+})
 
 vi.mock('../components/ChatWidget', () => ({
   ChatWidget: () => (
@@ -39,7 +41,8 @@ afterEach(() => {
 })
 
 describe('NBFCLandingPage', () => {
-  it('renders the CTA rail with matching pill geometry and opens the spotlight on first visit', () => {
+  it('renders the CTA rail with matching pill geometry and opens the spotlight after disclaimer accepted', () => {
+    window.localStorage.setItem('mft_prototype_disclaimer_accepted_v1', 'true')
     renderLandingPage()
 
     expect(getTourDialog()).toBeInTheDocument()
@@ -75,10 +78,8 @@ describe('NBFCLandingPage', () => {
   })
 
   it('advances the spotlight, persists dismissal, and supports manual reopen', async () => {
+    window.localStorage.setItem('mft_prototype_disclaimer_accepted_v1', 'true')
     renderLandingPage()
-
-    fireEvent.click(within(getTourDialog()).getByRole('button', { name: 'Next' }))
-    expect(screen.getByText('Compare your first moves')).toBeInTheDocument()
 
     fireEvent.click(within(getTourDialog()).getByRole('button', { name: 'Next' }))
     expect(screen.getByText('Need help instantly?')).toBeInTheDocument()

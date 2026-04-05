@@ -146,7 +146,6 @@ function EmptyListState() {
 
 export function Conversations() {
   const auth = useAdminContext()
-  const hasAdminKey = Boolean(auth.adminKey.trim())
 
   // URL-driven state — no useState for sessionId or search
   const selection = useConversationSelection()
@@ -194,16 +193,6 @@ export function Conversations() {
   ])
 
   // ── Guards ──────────────────────────────────────────────────────────────
-
-  if (!hasAdminKey) {
-    return (
-      <Alert className="max-w-2xl border-amber-200 bg-amber-50 text-amber-800">
-        <AlertDescription className="font-medium">
-          Set X-Admin-Key in the API Keys header to view conversations.
-        </AlertDescription>
-      </Alert>
-    )
-  }
 
   if (queries.conversationsQuery.error) {
     return (
