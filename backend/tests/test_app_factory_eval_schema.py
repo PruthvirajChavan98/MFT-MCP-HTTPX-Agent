@@ -6,7 +6,6 @@ from fastapi import FastAPI
 from src.agent_service.core import app_factory as app_factory_module
 from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.eval_store.pg_store import EvalSchemaUnavailableError
-from src.common.memgraph_mgr import memgraph_mgr
 from src.common.milvus_mgr import milvus_mgr
 
 
@@ -58,8 +57,6 @@ async def test_lifespan_fails_when_eval_schema_is_unavailable(monkeypatch):
     monkeypatch.setattr(app_factory_module.model_service, "start_background_loop", _noop_async)
     monkeypatch.setattr(app_factory_module.event_bus, "close", _noop_async)
     monkeypatch.setattr(prompt_manager, "load", lambda: None)
-    monkeypatch.setattr(memgraph_mgr, "connect", _noop_async)
-    monkeypatch.setattr(memgraph_mgr, "close", _noop_async)
     monkeypatch.setattr(milvus_mgr, "aconnect", _noop_async)
     monkeypatch.setattr(milvus_mgr, "close", _noop_async)
     monkeypatch.setattr(

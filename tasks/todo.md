@@ -96,7 +96,7 @@ Review
 - [x] Move icon files from `/icons/` to `Chatbot UI and Admin Console/public/icons/`.
 - [x] Update `DiagramNode` to support `imgSrc` prop alongside `icon`.
 - [x] Replace Lucide icons with custom SVGs/PNG in flow diagram nodes (Nginx, FastAPI, LangGraph, MCP Server).
-- [x] Replace Lucide icons in data layer nodes (PostgreSQL, Milvus, Redis, Memgraph).
+- [x] Replace Lucide icons in data layer nodes (PostgreSQL, Milvus, Redis).
 - [x] Run frontend verification: typecheck clean, build clean.
 
 ## 2026-04-04 - Landing page updates + architecture page

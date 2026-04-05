@@ -1,5 +1,5 @@
 # compose.yaml — All services run without profiles.
-# Infrastructure (redis, postgres, milvus, memgraph) is managed by
+# Infrastructure (redis, postgres, milvus) is managed by
 # /home/pruthvi/projects/databases/compose.yaml — start that first.
 
 # ── YAML Anchors ────────────────────────────────────────────────────────────
@@ -18,9 +18,6 @@ x-agent-env: &agent-env
   POSTGRES_POOL_MIN: "10"
   POSTGRES_POOL_MAX: "50"
   MILVUS_URI: "http://milvus:19530"
-  MEMGRAPH_URI: "bolt://memgraph:7687"
-  MEMGRAPH_USER: "${MEMGRAPH_USER}"
-  MEMGRAPH_PASSWORD: "${MEMGRAPH_PASSWORD}"
   SHADOW_EVAL_ENABLED: "1"
   SHADOW_EVAL_SAMPLE_RATE: "0.1"
   SHADOW_EVAL_CAPTURE: "light"
@@ -177,9 +174,6 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       MILVUS_URI: "http://milvus:19530"
-      MEMGRAPH_URI: "bolt://memgraph:7687"
-      MEMGRAPH_USER: "${MEMGRAPH_USER}"
-      MEMGRAPH_PASSWORD: "${MEMGRAPH_PASSWORD}"
     mem_limit: 768m
     cpus: 1.00
     networks:
@@ -246,9 +240,6 @@ services:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: "redis://redis:6379/0"
       MILVUS_URI: "http://milvus:19530"
-      MEMGRAPH_URI: "bolt://memgraph:7687"
-      MEMGRAPH_USER: "${MEMGRAPH_USER}"
-      MEMGRAPH_PASSWORD: "${MEMGRAPH_PASSWORD}"
       SHADOW_JUDGE_ENABLED: "1"
       POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
     mem_limit: 768m

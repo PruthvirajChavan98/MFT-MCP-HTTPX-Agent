@@ -68,23 +68,6 @@ describe('Guardrails page states', () => {
     useAdminContextMock.mockReset()
   })
 
-  it('shows admin key requirement when key is missing', async () => {
-    mockQueries()
-    useAdminContextMock.mockReturnValue({
-      adminKey: '',
-      setAdminKey: vi.fn(),
-      openrouterKey: '',
-      setOpenrouterKey: vi.fn(),
-      groqKey: '',
-      setGroqKey: vi.fn(),
-    })
-
-    const { GuardrailsPage: Guardrails } = await import('./GuardrailsPage')
-    render(<Guardrails />)
-
-    expect(screen.getByText(/Set X-Admin-Key to view guardrail events/i)).toBeInTheDocument()
-  })
-
   it('does not crash when auth state changes across rerenders', async () => {
     mockQueries()
 
@@ -117,7 +100,8 @@ describe('Guardrails page states', () => {
     const { GuardrailsPage: Guardrails } = await import('./GuardrailsPage')
     const { rerender } = render(<Guardrails />)
 
-    expect(screen.getAllByText(/Set X-Admin-Key to view guardrail events/i).length).toBeGreaterThan(0)
+    // With no admin key guard, page renders immediately
+    expect(screen.getByText(/Guardrails Observatory/i)).toBeInTheDocument()
 
     rerender(<Guardrails />)
 

@@ -354,14 +354,6 @@ export function GuardrailsPage() {
     .map((error) => (error as Error | undefined)?.message)
     .filter((message): message is string => Boolean(message))
 
-  if (!adminContext.adminKey) {
-    return (
-      <Alert>
-        <AlertDescription>Set X-Admin-Key to view guardrail events.</AlertDescription>
-      </Alert>
-    )
-  }
-
   return (
     <div className="space-y-6 p-1">
       <MobileHeader

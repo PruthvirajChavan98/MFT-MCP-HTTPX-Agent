@@ -7,7 +7,6 @@ import asyncpg
 from redis.asyncio import Redis
 
 from src.agent_service.core.config import POSTGRES_DSN, REDIS_URL
-from src.common.memgraph_mgr import memgraph_mgr
 from src.common.milvus_mgr import milvus_mgr
 
 from .service import RouterService
@@ -39,9 +38,8 @@ async def ensure_group(r: Redis):
 
 
 async def run_worker():
-    await memgraph_mgr.connect()
     await milvus_mgr.aconnect()
-    log.info("Router worker: Memgraph and Milvus connected.")
+    log.info("Router worker: Milvus connected.")
 
     pool: asyncpg.Pool | None = None
     if POSTGRES_DSN:

@@ -94,11 +94,7 @@ class AppFactory:
                 prompt_manager.load()
                 app.state.prompt_manager = prompt_manager
 
-                from src.common.memgraph_mgr import memgraph_mgr
                 from src.common.milvus_mgr import milvus_mgr
-
-                await memgraph_mgr.connect()
-                log.info("✅ Memgraph connected (long-term memory graph)")
 
                 await milvus_mgr.aconnect()
                 log.info(
@@ -144,7 +140,6 @@ class AppFactory:
                 await mcp_manager.shutdown()
                 await close_http_client()
                 await config_manager.close()
-                await memgraph_mgr.close()
                 await milvus_mgr.close()
 
                 # Graceful EventBus Shutdown

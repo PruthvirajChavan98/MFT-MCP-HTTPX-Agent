@@ -225,7 +225,6 @@ export function ArchitecturePage() {
               <Badge color="emerald">Redis</Badge>
               <Badge color="indigo">Docker</Badge>
               <Badge color="indigo">Nginx</Badge>
-              <Badge color="emerald">Memgraph</Badge>
             </div>
           </div>
         </motion.div>
@@ -248,7 +247,6 @@ export function ArchitecturePage() {
             <DiagramNode imgSrc="/icons/postgresql-logo-svgrepo-com.svg" label="PostgreSQL" subtext="State & Traces" color="indigo" />
             <DiagramNode imgSrc="/icons/milvus.png" label="Milvus" subtext="Vector DB" color="indigo" />
             <DiagramNode imgSrc="/icons/Redis.svg" label="Redis" subtext="Cache / State" color="emerald" />
-            <DiagramNode imgSrc="/icons/memgraph-seeklogo.svg" label="Memgraph" subtext="Graph DB" color="emerald" />
           </div>
         </motion.div>
 
@@ -295,7 +293,7 @@ export function ArchitecturePage() {
               Services: agent, mcp, router_worker, shadow_judge_worker, frontend, cloudflared
             </ListItem>
             <ListItem>Monitoring: Prometheus, Grafana, Alertmanager</ListItem>
-            <ListItem>PostgreSQL (pool: 10-50), Redis, Milvus, Memgraph</ListItem>
+            <ListItem>PostgreSQL (pool: 10-50), Redis, Milvus</ListItem>
           </Card>
 
           <Card title="Security Layers" icon={Shield} delay={0.8}>
