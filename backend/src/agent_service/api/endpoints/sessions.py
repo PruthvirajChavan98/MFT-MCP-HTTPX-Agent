@@ -3,7 +3,7 @@
 import logging
 
 import uuid_utils  # Added dependency
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.agent_service.core.config import DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER
 from src.agent_service.core.prompts import prompt_manager
@@ -61,6 +61,67 @@ async def list_active_sessions():
     except Exception as e:
         log.error("List sessions error: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/sessions/{session_id}/messages")
+async def get_session_messages(
+    session_id: str,
+    request: Request,
+    limit: int = Query(default=120, ge=1, le=500),
+):
+    """Retrieve chat messages from the LangGraph checkpointer.
+
+    Returns messages in the frontend ChatMessage shape, hydrated from the
+    server-side checkpoint rather than client-side localStorage.
+    """
+    try:
+        sid = session_utils.validate_session_id(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    checkpointer = getattr(request.app.state, "checkpointer", None)
+    if not checkpointer:
+        raise HTTPException(status_code=503, detail="Checkpointer unavailable")
+
+    config = {"configurable": {"thread_id": sid}}
+    checkpoint_tuple = await checkpointer.aget_tuple(config)
+
+    if not checkpoint_tuple or not checkpoint_tuple.checkpoint:
+        return {"session_id": sid, "messages": []}
+
+    state = checkpoint_tuple.checkpoint.get("channel_values", {})
+    raw_messages = state.get("messages", [])
+
+    messages = []
+    for i, msg in enumerate(raw_messages[-limit:]):
+        msg_type = getattr(msg, "type", "")
+        if msg_type not in ("human", "ai"):
+            continue
+
+        kwargs = getattr(msg, "additional_kwargs", {}) or {}
+        resp_meta = getattr(msg, "response_metadata", {}) or {}
+
+        created = resp_meta.get("created")
+        timestamp = int(created * 1000) if created else 0
+
+        messages.append(
+            {
+                "id": kwargs.get("msg_id") or f"{sid}~{i}",
+                "role": "user" if msg_type == "human" else "assistant",
+                "content": getattr(msg, "content", ""),
+                "reasoning": str(kwargs.get("reasoning") or ""),
+                "timestamp": timestamp,
+                "status": "done",
+                "traceId": kwargs.get("trace_id"),
+                "provider": kwargs.get("provider") or resp_meta.get("model_provider"),
+                "model": kwargs.get("model") or resp_meta.get("model_name"),
+                "totalTokens": kwargs.get("total_tokens"),
+                "cost": kwargs.get("cost"),
+                "followUps": kwargs.get("follow_ups"),
+            }
+        )
+
+    return {"session_id": sid, "messages": messages}
 
 
 @router.get("/verify/{session_id}")

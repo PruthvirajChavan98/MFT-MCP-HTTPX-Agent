@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL, requestJson } from '@shared/api/http'
+import { fetchSessionMessages } from '@shared/api/sessions'
 import { streamSse } from '@shared/api/sse'
 import { parseMaybeJson } from '@shared/lib/json'
 import type { ChatMessage, CostEvent, ToolCallEvent } from '@shared/types/chat'
@@ -116,18 +117,31 @@ export function useChatStream() {
     }
   }, [])
 
-  // Initialize session on mount
+  // Initialize session on mount — hydrate from server, localStorage fallback
   useEffect(() => {
     const existing = localStorage.getItem(SESSION_KEY)
     if (existing) {
       setSessionId(existing)
-      setMessages(safeParseMessages(localStorage.getItem(messageKey(existing))))
+      // Primary: fetch history from backend checkpointer
+      fetchSessionMessages(existing)
+        .then((serverMsgs) => {
+          if (serverMsgs.length > 0) {
+            setMessages(serverMsgs as ChatMessage[])
+          } else {
+            // Fallback: localStorage cache for sessions not yet in checkpointer
+            setMessages(safeParseMessages(localStorage.getItem(messageKey(existing))))
+          }
+        })
+        .catch(() => {
+          // Network error: use localStorage cache for offline/degraded mode
+          setMessages(safeParseMessages(localStorage.getItem(messageKey(existing))))
+        })
     } else {
       initNewSession()
     }
   }, [initNewSession])
 
-  // Persist messages whenever they change
+  // Write-through cache: persist to localStorage for fast reload / offline fallback
   useEffect(() => {
     if (!sessionId) return
     localStorage.setItem(messageKey(sessionId), JSON.stringify(messages.slice(-120)))

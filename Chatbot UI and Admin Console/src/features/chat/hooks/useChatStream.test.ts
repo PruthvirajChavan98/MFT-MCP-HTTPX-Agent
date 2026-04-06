@@ -2,9 +2,10 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStream } from './useChatStream'
 
-const { streamSseMock, requestJsonMock } = vi.hoisted(() => ({
+const { streamSseMock, requestJsonMock, fetchSessionMessagesMock } = vi.hoisted(() => ({
   streamSseMock: vi.fn(),
   requestJsonMock: vi.fn(),
+  fetchSessionMessagesMock: vi.fn(),
 }))
 
 type StreamOnEvent = (eventName: string, data: string, parsed?: unknown) => void
@@ -12,6 +13,10 @@ type StreamOnEvent = (eventName: string, data: string, parsed?: unknown) => void
 vi.mock('@shared/api/http', () => ({
   API_BASE_URL: '/api',
   requestJson: requestJsonMock,
+}))
+
+vi.mock('@shared/api/sessions', () => ({
+  fetchSessionMessages: fetchSessionMessagesMock,
 }))
 
 vi.mock('@shared/api/sse', () => ({
@@ -22,6 +27,7 @@ describe('useChatStream stream-only contract', () => {
   beforeEach(() => {
     streamSseMock.mockReset()
     requestJsonMock.mockReset()
+    fetchSessionMessagesMock.mockReset()
     localStorage.clear()
 
     requestJsonMock.mockResolvedValue({
@@ -30,6 +36,9 @@ describe('useChatStream stream-only contract', () => {
       model_name: 'test-model',
       system_prompt: 'sys',
     })
+
+    // Default: server returns empty messages (new session)
+    fetchSessionMessagesMock.mockResolvedValue([])
   })
 
   async function initHook() {
