@@ -33,8 +33,12 @@ def _redact_uri(uri: str) -> str:
     return uri
 
 
-async def get_redis(redis_uri: Optional[str] = None) -> AsyncRedis:
-    """Return (and lazily create) the module-level async Redis client."""
+async def get_redis() -> AsyncRedis:
+    """Return (and lazily create) the module-level async Redis client.
+
+    Uses the REDIS_URL from config. A single connection pool is shared
+    process-wide — no per-caller URI overrides to prevent pool contamination.
+    """
     global _pool, _client
 
     if _client is not None:
@@ -44,9 +48,8 @@ async def get_redis(redis_uri: Optional[str] = None) -> AsyncRedis:
         if _client is not None:
             return _client
 
-        uri = redis_uri or REDIS_URL
         _pool = ConnectionPool.from_url(
-            uri,
+            REDIS_URL,
             decode_responses=True,
             encoding="utf-8",
             max_connections=20,
@@ -54,7 +57,7 @@ async def get_redis(redis_uri: Optional[str] = None) -> AsyncRedis:
         )
         _client = AsyncRedis(connection_pool=_pool)
         await _client.ping()
-        log.info("Connected to Redis: %s", _redact_uri(uri))
+        log.info("Connected to Redis: %s", _redact_uri(REDIS_URL))
 
     return _client
 
@@ -90,11 +93,8 @@ def valid_session_id(session_id: object) -> str:
 class RedisSessionStore:
     """Async Redis session store used by MCP tool implementations."""
 
-    def __init__(self, redis_uri: Optional[str] = None) -> None:
-        self._redis_uri = redis_uri
-
     async def _redis(self) -> AsyncRedis:
-        return await get_redis(self._redis_uri)
+        return await get_redis()
 
     @staticmethod
     def _valid_session_id(session_id: object) -> Optional[str]:

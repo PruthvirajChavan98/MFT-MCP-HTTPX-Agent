@@ -23,32 +23,70 @@ interface GraphQLResponse<T> {
   errors?: Array<{ message: string }>
 }
 
+class CrmGraphQLError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number,
+    public readonly graphqlErrors?: Array<{ message: string }>,
+  ) {
+    super(message)
+    this.name = 'CrmGraphQLError'
+  }
+}
+
+const CRM_TIMEOUT_MS = 15_000
+const CRM_MAX_RETRIES = 1
+
 async function crmGraphQL<T>(
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<T> {
   const base = getCrmBase()
-  const res = await fetch(`${base}/graphql`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  })
+  const url = `${base}/graphql`
 
-  const json: GraphQLResponse<T> = await res.json()
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= CRM_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), CRM_TIMEOUT_MS)
 
-  if (json.errors && json.errors.length > 0) {
-    throw new Error(json.errors[0].message)
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables }),
+        signal: controller.signal,
+      })
+      clearTimeout(timer)
+
+      const json: GraphQLResponse<T> = await res.json()
+
+      if (json.errors && json.errors.length > 0) {
+        throw new CrmGraphQLError(
+          json.errors[0].message,
+          res.status,
+          json.errors,
+        )
+      }
+
+      if (!res.ok) {
+        throw new CrmGraphQLError(`CRM request failed (${res.status})`, res.status)
+      }
+
+      if (!json.data) {
+        throw new CrmGraphQLError('Empty response from CRM')
+      }
+
+      return json.data
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      if (attempt < CRM_MAX_RETRIES && !(err instanceof CrmGraphQLError)) {
+        continue // Retry on network/timeout errors only, not GraphQL errors
+      }
+      throw lastError
+    }
   }
 
-  if (!res.ok) {
-    throw new Error(`CRM request failed (${res.status})`)
-  }
-
-  if (!json.data) {
-    throw new Error('Empty response from CRM')
-  }
-
-  return json.data
+  throw lastError ?? new Error('CRM request failed')
 }
 
 function normalizePhone(raw: string): string {

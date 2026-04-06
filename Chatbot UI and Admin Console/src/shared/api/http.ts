@@ -53,30 +53,44 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * RFC 7807 Problem Details for HTTP APIs + FastAPI error shape support.
+ *
+ * Extraction priority:
+ * 1. RFC 7807 `title` / `detail` fields (standardised)
+ * 2. FastAPI `detail` string (default HTTPException shape)
+ * 3. Generic `message` / `error` fields (common REST conventions)
+ * 4. Fallback to status code
+ */
+interface ProblemDetails {
+  type?: string
+  title?: string
+  status?: number
+  detail?: string | { message?: string; detail?: string }
+  instance?: string
+  message?: string
+  error?: string
+}
+
 function resolveErrorMessage(parsed: unknown, status: number): string {
   if (typeof parsed === 'string' && parsed.trim()) return parsed
   if (typeof parsed !== 'object' || parsed === null) return `Request failed (${status})`
 
-  const payload = parsed as {
-    message?: string
-    detail?: string | { message?: string; detail?: string }
+  const p = parsed as ProblemDetails
+
+  // RFC 7807: prefer `title` for short user-facing messages, `detail` for specifics
+  if (typeof p.title === 'string' && p.title.trim()) return p.title.trim()
+  if (typeof p.detail === 'string' && p.detail.trim()) return p.detail.trim()
+  // FastAPI nested detail object
+  if (p.detail && typeof p.detail === 'object') {
+    const nested = p.detail
+    if (typeof nested.message === 'string' && nested.message.trim()) return nested.message.trim()
+    if (typeof nested.detail === 'string' && nested.detail.trim()) return nested.detail.trim()
   }
-  if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
-  if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail.trim()
-  if (payload.detail && typeof payload.detail === 'object') {
-    if (
-      typeof payload.detail.message === 'string' &&
-      payload.detail.message.trim()
-    ) {
-      return payload.detail.message.trim()
-    }
-    if (
-      typeof payload.detail.detail === 'string' &&
-      payload.detail.detail.trim()
-    ) {
-      return payload.detail.detail.trim()
-    }
-  }
+  // Common REST conventions
+  if (typeof p.message === 'string' && p.message.trim()) return p.message.trim()
+  if (typeof p.error === 'string' && p.error.trim()) return p.error.trim()
+
   return `Request failed (${status})`
 }
 
