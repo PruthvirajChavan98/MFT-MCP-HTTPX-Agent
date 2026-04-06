@@ -1,4 +1,3 @@
-// src/app/components/admin/trace/parse.ts
 import type { FlatNode, TraceDetail, TraceEvent } from './types'
 
 type SegmentKind = 'llm' | 'parser' | 'tool'

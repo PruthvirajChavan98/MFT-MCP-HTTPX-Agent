@@ -10,8 +10,9 @@ Provides:
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.config import RATE_LIMIT_ENABLED
 from src.agent_service.core.rate_limiter_manager import (
     enforce_rate_limit,
@@ -95,7 +96,11 @@ async def get_identifier_status(identifier: str, http_request: Request) -> Dict[
 
 
 @router.post("/reset/{identifier}")
-async def reset_identifier_limit(identifier: str, http_request: Request) -> Dict[str, Any]:
+async def reset_identifier_limit(
+    identifier: str,
+    http_request: Request,
+    _admin: None = Depends(require_admin_key),
+) -> Dict[str, Any]:
     """
     Reset rate limit for a specific identifier (ADMIN ONLY).
 
@@ -111,15 +116,11 @@ async def reset_identifier_limit(identifier: str, http_request: Request) -> Dict
     - VIP customer support
 
     **Security:**
-    - Should be protected by admin authentication middleware
+    - Protected by admin key authentication via X-Admin-Key header
     - Logs all reset operations for audit trail
     """
     if not RATE_LIMIT_ENABLED:
         return {"enabled": False, "message": "Rate limiting is globally disabled"}
-
-    # TODO: Add admin authentication check here
-    # if not is_admin(http_request):
-    #     raise HTTPException(status_code=403, detail="Admin access required")
 
     # Rate limit this endpoint (prevent reset abuse)
     manager = get_rate_limiter_manager()

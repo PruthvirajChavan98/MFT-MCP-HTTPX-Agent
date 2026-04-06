@@ -1,4 +1,3 @@
-// src/app/components/admin/trace/TraceTree.tsx
 import { ArrowLeft, CheckCircle2, Eye, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@components/ui/skeleton'
 import { getNodeIcon, getNodeChipClasses, getBarColor } from './nodeUtils'

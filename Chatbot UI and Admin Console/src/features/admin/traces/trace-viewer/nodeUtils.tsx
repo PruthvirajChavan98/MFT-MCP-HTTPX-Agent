@@ -1,4 +1,3 @@
-// src/app/components/admin/trace/nodeUtils.tsx
 import React from 'react'
 import { Brain, Link2, Bot, Code, Wrench, GitBranch } from 'lucide-react'
 import type { AggNodeType } from './types'

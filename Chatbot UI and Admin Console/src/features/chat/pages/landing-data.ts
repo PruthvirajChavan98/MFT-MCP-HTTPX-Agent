@@ -60,7 +60,7 @@ export const FEATURES = [
   {
     icon: '🔒',
     title: 'Bank-Grade Security',
-    desc: '256-bit encryption and Non-RBI-compliant data handling keeps your information safe.',
+    desc: '256-bit encryption and RBI-compliant data handling keeps your information safe.',
   },
   {
     icon: '📱',

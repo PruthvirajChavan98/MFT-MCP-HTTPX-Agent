@@ -3,8 +3,9 @@
 import logging
 
 import uuid_utils  # Added dependency
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from src.agent_service.api.admin_auth import require_admin_key
 from src.agent_service.core.config import DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER
 from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.core.resource_resolver import ResourceResolver
@@ -53,8 +54,8 @@ async def initialize_session():
 
 
 @router.get("/sessions")
-async def list_active_sessions():
-    """List all active sessions."""
+async def list_active_sessions(_admin: None = Depends(require_admin_key)):
+    """List all active sessions (admin only)."""
     try:
         sessions = await config_manager.list_sessions()
         return {"count": len(sessions), "sessions": sessions}
@@ -289,9 +290,9 @@ async def reset_session_cost(session_id: str):
 
 
 @router.get("/sessions/summary")
-async def get_all_sessions_cost_summary():
+async def get_all_sessions_cost_summary(_admin: None = Depends(require_admin_key)):
     """
-    Get cost summary across all active sessions.
+    Get cost summary across all active sessions (admin only).
 
     Returns:
         - active_sessions: Count of sessions with cost data
@@ -305,9 +306,9 @@ async def get_all_sessions_cost_summary():
 
 
 @router.delete("/sessions/cleanup")
-async def cleanup_corrupted_cost_keys():
+async def cleanup_corrupted_cost_keys(_admin: None = Depends(require_admin_key)):
     """
-    Admin endpoint: Clean up corrupted cost tracking keys.
+    Admin endpoint: Clean up corrupted cost tracking keys (admin only).
 
     This removes keys with wrong Redis types (from old implementations).
     """

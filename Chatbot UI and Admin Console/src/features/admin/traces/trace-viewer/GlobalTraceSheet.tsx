@@ -1,4 +1,3 @@
-// src/app/components/admin/trace/GlobalTraceSheet.tsx
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'

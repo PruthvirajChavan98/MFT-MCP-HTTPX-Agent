@@ -1,4 +1,3 @@
-// src/app/components/admin/trace/types.ts
 export type AggNodeType = 'trace' | 'chain' | 'llm' | 'parser' | 'tool'
 
 export type NodeStatus = 'success' | 'error' | 'pending'

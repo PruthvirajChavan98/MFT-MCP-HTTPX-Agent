@@ -19,8 +19,9 @@ export function PrototypeDisclaimer() {
     const [open, setOpen] = useState(false)
 
     useEffect(() => {
-        // Open immediately on mount to ensure it shows every time (even on refresh)
-        setOpen(true)
+        if (!localStorage.getItem(DISCLAIMER_ACCEPTED_KEY)) {
+            setOpen(true)
+        }
     }, [])
 
     const handleAccept = () => {

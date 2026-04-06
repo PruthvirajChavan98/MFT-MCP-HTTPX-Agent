@@ -1,10 +1,10 @@
 # Architectural Audit Remediation — Complete Code Diff
 
-**Branch:** `fix/type-safety-audit`  
-**Date:** 2026-04-05  
-**Backend Tests:** 146/146 passing  
+**Branches:** `refactor/architectural-audit-remediation`, `fix/final-audit-remediation`  
+**Date:** 2026-04-05 — 2026-04-06  
+**Backend Tests:** 149/149 passing  
 **Frontend Tests:** 92/92 passing (23 test files)  
-**Net change:** -2,929 lines (2,394 added, 5,323 removed across 75 files)
+**Commits:** 3 (`3f9a15a` refactor, `b9e1861` server hydration, `99093c4` final fixes)
 
 ---
 
@@ -20,6 +20,8 @@
 - [Frontend Phase 2: KnowledgeBasePage Extraction](#fe-phase-2)
 - [Frontend Phase 3: GuardrailsPage Extraction](#fe-phase-3)
 - [Frontend Phase 4-5: Data Extraction + API Typing](#fe-phase-4-5)
+- [Server-Side Chat Hydration — localStorage → Checkpointer](#server-hydration)
+- [Final Audit Fixes — Redis Singleton + CRM Client + Error Parsing](#final-fixes)
 
 ---
 
@@ -7485,4 +7487,603 @@ index 63b91ef..65b1f3a 100644
 +export async function fetchRateLimitConfig(): Promise<RateLimitConfigResponse> {
    return requestJson({ method: 'GET', path: '/rate-limit/config' })
  }
+```
+
+---
+
+<a id="server-hydration"></a>
+## Server-Side Chat Hydration — localStorage → Checkpointer (Post-Audit Fix)
+
+### sessions.py — NEW: GET /agent/sessions/{id}/messages endpoint
+```diff
+diff --git a/backend/src/agent_service/api/endpoints/sessions.py b/backend/src/agent_service/api/endpoints/sessions.py
+index d56fab2..4c345ed 100644
+--- a/backend/src/agent_service/api/endpoints/sessions.py
++++ b/backend/src/agent_service/api/endpoints/sessions.py
+@@ -3,7 +3,7 @@
+ import logging
+ 
+ import uuid_utils  # Added dependency
+-from fastapi import APIRouter, HTTPException, Query
++from fastapi import APIRouter, HTTPException, Query, Request
+ 
+ from src.agent_service.core.config import DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER
+ from src.agent_service.core.prompts import prompt_manager
+@@ -63,6 +63,67 @@ async def list_active_sessions():
+         raise HTTPException(status_code=500, detail=str(e)) from e
+ 
+ 
++@router.get("/sessions/{session_id}/messages")
++async def get_session_messages(
++    session_id: str,
++    request: Request,
++    limit: int = Query(default=120, ge=1, le=500),
++):
++    """Retrieve chat messages from the LangGraph checkpointer.
++
++    Returns messages in the frontend ChatMessage shape, hydrated from the
++    server-side checkpoint rather than client-side localStorage.
++    """
++    try:
++        sid = session_utils.validate_session_id(session_id)
++    except ValueError as e:
++        raise HTTPException(status_code=400, detail=str(e)) from e
++
++    checkpointer = getattr(request.app.state, "checkpointer", None)
++    if not checkpointer:
++        raise HTTPException(status_code=503, detail="Checkpointer unavailable")
++
++    config = {"configurable": {"thread_id": sid}}
++    checkpoint_tuple = await checkpointer.aget_tuple(config)
++
++    if not checkpoint_tuple or not checkpoint_tuple.checkpoint:
++        return {"session_id": sid, "messages": []}
++
++    state = checkpoint_tuple.checkpoint.get("channel_values", {})
++    raw_messages = state.get("messages", [])
++
++    messages = []
++    for i, msg in enumerate(raw_messages[-limit:]):
++        msg_type = getattr(msg, "type", "")
++        if msg_type not in ("human", "ai"):
++            continue
++
++        kwargs = getattr(msg, "additional_kwargs", {}) or {}
++        resp_meta = getattr(msg, "response_metadata", {}) or {}
++
++        created = resp_meta.get("created")
++        timestamp = int(created * 1000) if created else 0
++
++        messages.append(
++            {
++                "id": kwargs.get("msg_id") or f"{sid}~{i}",
++                "role": "user" if msg_type == "human" else "assistant",
++                "content": getattr(msg, "content", ""),
++                "reasoning": str(kwargs.get("reasoning") or ""),
++                "timestamp": timestamp,
++                "status": "done",
++                "traceId": kwargs.get("trace_id"),
++                "provider": kwargs.get("provider") or resp_meta.get("model_provider"),
++                "model": kwargs.get("model") or resp_meta.get("model_name"),
++                "totalTokens": kwargs.get("total_tokens"),
++                "cost": kwargs.get("cost"),
++                "followUps": kwargs.get("follow_ups"),
++            }
++        )
++
++    return {"session_id": sid, "messages": messages}
++
++
+ @router.get("/verify/{session_id}")
+ async def verify_session(session_id: str):
+     """Verify if a session exists."""
+```
+
+### test_session_messages.py — NEW: 3 endpoint tests
+```diff
+diff --git a/backend/tests/test_session_messages.py b/backend/tests/test_session_messages.py
+new file mode 100644
+index 0000000..3633db4
+--- /dev/null
++++ b/backend/tests/test_session_messages.py
+@@ -0,0 +1,126 @@
++"""Tests for GET /agent/sessions/{session_id}/messages endpoint."""
++
++from __future__ import annotations
++
++from types import SimpleNamespace
++from typing import Any, Optional
++
++import pytest
++from langchain_core.messages import AIMessage, HumanMessage
++
++import src.agent_service.api.endpoints.sessions as sessions_mod
++
++
++class _FakeCheckpointTuple:
++    def __init__(self, checkpoint: dict[str, Any]) -> None:
++        self.checkpoint = checkpoint
++        self.config = {"configurable": {"thread_id": "sess-1"}}
++
++
++class _FakeCheckpointer:
++    def __init__(self, checkpoint: Optional[dict[str, Any]] = None) -> None:
++        self._checkpoint = checkpoint
++
++    async def aget_tuple(self, config: dict) -> Optional[_FakeCheckpointTuple]:
++        if self._checkpoint is None:
++            return None
++        return _FakeCheckpointTuple(self._checkpoint)
++
++
++@pytest.mark.asyncio
++async def test_session_messages_returns_human_and_ai_messages():
++    """Endpoint transforms LangChain messages into frontend ChatMessage shape."""
++    ai_msg = AIMessage(
++        content="Your EMI is ₹12,500.",
++        additional_kwargs={
++            "trace_id": "trace-abc",
++            "provider": "groq",
++            "model": "openai/gpt-oss-120b",
++            "total_tokens": 350,
++        },
++        response_metadata={
++            "created": 1712345678.0,
++            "model_name": "openai/gpt-oss-120b",
++            "model_provider": "groq",
++        },
++    )
++    checkpoint = {
++        "channel_values": {
++            "messages": [
++                HumanMessage(content="What is my EMI?"),
++                ai_msg,
++            ],
++        },
++    }
++    checkpointer = _FakeCheckpointer(checkpoint)
++    fake_app = SimpleNamespace(state=SimpleNamespace(checkpointer=checkpointer))
++    request = SimpleNamespace(app=fake_app)
++
++    response = await sessions_mod.get_session_messages(
++        session_id="sess-1",
++        request=request,
++        limit=120,
++    )
++
++    assert response["session_id"] == "sess-1"
++    assert len(response["messages"]) == 2
++
++    user_msg = response["messages"][0]
++    assert user_msg["role"] == "user"
++    assert user_msg["content"] == "What is my EMI?"
++    assert user_msg["status"] == "done"
++
++    assistant_msg = response["messages"][1]
++    assert assistant_msg["role"] == "assistant"
++    assert assistant_msg["content"] == "Your EMI is ₹12,500."
++    assert assistant_msg["traceId"] == "trace-abc"
++    assert assistant_msg["provider"] == "groq"
++    assert assistant_msg["model"] == "openai/gpt-oss-120b"
++    assert assistant_msg["totalTokens"] == 350
++    assert assistant_msg["timestamp"] == 1712345678000
++
++
++@pytest.mark.asyncio
++async def test_session_messages_returns_empty_for_missing_checkpoint():
++    """Endpoint returns empty messages when checkpoint does not exist."""
++    checkpointer = _FakeCheckpointer(checkpoint=None)
++    fake_app = SimpleNamespace(state=SimpleNamespace(checkpointer=checkpointer))
++    request = SimpleNamespace(app=fake_app)
++
++    response = await sessions_mod.get_session_messages(
++        session_id="sess-unknown",
++        request=request,
++        limit=120,
++    )
++
++    assert response["session_id"] == "sess-unknown"
++    assert response["messages"] == []
++
++
++@pytest.mark.asyncio
++async def test_session_messages_skips_tool_messages():
++    """Tool messages are filtered out — frontend displays them inline via SSE."""
++    from langchain_core.messages import ToolMessage
++
++    checkpoint = {
++        "channel_values": {
++            "messages": [
++                HumanMessage(content="Show my loan details"),
++                ToolMessage(content="tool output", tool_call_id="tc-1"),
++                AIMessage(content="Here are your loan details."),
++            ],
++        },
++    }
++    checkpointer = _FakeCheckpointer(checkpoint)
++    fake_app = SimpleNamespace(state=SimpleNamespace(checkpointer=checkpointer))
++    request = SimpleNamespace(app=fake_app)
++
++    response = await sessions_mod.get_session_messages(
++        session_id="sess-2",
++        request=request,
++        limit=120,
++    )
++
++    assert len(response["messages"]) == 2
++    assert response["messages"][0]["role"] == "user"
++    assert response["messages"][1]["role"] == "assistant"
+```
+
+### sessions.ts — NEW: fetchSessionMessages API + ServerChatMessage type
+```diff
+diff --git a/Chatbot UI and Admin Console/src/shared/api/sessions.ts b/Chatbot UI and Admin Console/src/shared/api/sessions.ts
+index f2c62c7..a713ffa 100644
+--- a/Chatbot UI and Admin Console/src/shared/api/sessions.ts	
++++ b/Chatbot UI and Admin Console/src/shared/api/sessions.ts	
+@@ -1,3 +1,4 @@
++import type { CostEvent } from '@shared/types/chat'
+ import { requestJson } from './http'
+ 
+ // ── Types ────────────────────────────────────────────────────────────────────
+@@ -22,6 +23,32 @@ export async function fetchSessionConfig(sessionId: string): Promise<SessionConf
+   })
+ }
+ 
++export interface ServerChatMessage {
++  id: string
++  role: 'user' | 'assistant'
++  content: string
++  reasoning: string
++  timestamp: number
++  status: string
++  traceId?: string
++  provider?: string
++  model?: string
++  totalTokens?: number
++  cost?: CostEvent | null
++  followUps?: string[]
++}
++
++export async function fetchSessionMessages(
++  sessionId: string,
++  limit = 120,
++): Promise<ServerChatMessage[]> {
++  const res = await requestJson<{ messages: ServerChatMessage[] }>({
++    method: 'GET',
++    path: `/agent/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}`,
++  })
++  return res.messages ?? []
++}
++
+ export async function saveSessionConfig(payload: {
+   session_id: string
+   system_prompt?: string
+```
+
+### useChatStream.ts — Server hydration primary, localStorage fallback
+```diff
+diff --git a/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.ts b/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.ts
+index 2276ba4..01843ce 100644
+--- a/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.ts	
++++ b/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.ts	
+@@ -1,5 +1,6 @@
+ import { useCallback, useEffect, useRef, useState } from 'react'
+ import { API_BASE_URL, requestJson } from '@shared/api/http'
++import { fetchSessionMessages } from '@shared/api/sessions'
+ import { streamSse } from '@shared/api/sse'
+ import { parseMaybeJson } from '@shared/lib/json'
+ import type { ChatMessage, CostEvent, ToolCallEvent } from '@shared/types/chat'
+@@ -116,18 +117,31 @@ export function useChatStream() {
+     }
+   }, [])
+ 
+-  // Initialize session on mount
++  // Initialize session on mount — hydrate from server, localStorage fallback
+   useEffect(() => {
+     const existing = localStorage.getItem(SESSION_KEY)
+     if (existing) {
+       setSessionId(existing)
+-      setMessages(safeParseMessages(localStorage.getItem(messageKey(existing))))
++      // Primary: fetch history from backend checkpointer
++      fetchSessionMessages(existing)
++        .then((serverMsgs) => {
++          if (serverMsgs.length > 0) {
++            setMessages(serverMsgs as ChatMessage[])
++          } else {
++            // Fallback: localStorage cache for sessions not yet in checkpointer
++            setMessages(safeParseMessages(localStorage.getItem(messageKey(existing))))
++          }
++        })
++        .catch(() => {
++          // Network error: use localStorage cache for offline/degraded mode
++          setMessages(safeParseMessages(localStorage.getItem(messageKey(existing))))
++        })
+     } else {
+       initNewSession()
+     }
+   }, [initNewSession])
+ 
+-  // Persist messages whenever they change
++  // Write-through cache: persist to localStorage for fast reload / offline fallback
+   useEffect(() => {
+     if (!sessionId) return
+     localStorage.setItem(messageKey(sessionId), JSON.stringify(messages.slice(-120)))
+```
+
+### useChatStream.test.ts — Mock for new API dependency
+```diff
+diff --git a/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.test.ts b/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.test.ts
+index 4cfcfd5..92e08e2 100644
+--- a/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.test.ts	
++++ b/Chatbot UI and Admin Console/src/features/chat/hooks/useChatStream.test.ts	
+@@ -2,9 +2,10 @@ import { act, renderHook } from '@testing-library/react'
+ import { beforeEach, describe, expect, it, vi } from 'vitest'
+ import { useChatStream } from './useChatStream'
+ 
+-const { streamSseMock, requestJsonMock } = vi.hoisted(() => ({
++const { streamSseMock, requestJsonMock, fetchSessionMessagesMock } = vi.hoisted(() => ({
+   streamSseMock: vi.fn(),
+   requestJsonMock: vi.fn(),
++  fetchSessionMessagesMock: vi.fn(),
+ }))
+ 
+ type StreamOnEvent = (eventName: string, data: string, parsed?: unknown) => void
+@@ -14,6 +15,10 @@ vi.mock('@shared/api/http', () => ({
+   requestJson: requestJsonMock,
+ }))
+ 
++vi.mock('@shared/api/sessions', () => ({
++  fetchSessionMessages: fetchSessionMessagesMock,
++}))
++
+ vi.mock('@shared/api/sse', () => ({
+   streamSse: streamSseMock,
+ }))
+@@ -22,6 +27,7 @@ describe('useChatStream stream-only contract', () => {
+   beforeEach(() => {
+     streamSseMock.mockReset()
+     requestJsonMock.mockReset()
++    fetchSessionMessagesMock.mockReset()
+     localStorage.clear()
+ 
+     requestJsonMock.mockResolvedValue({
+@@ -30,6 +36,9 @@ describe('useChatStream stream-only contract', () => {
+       model_name: 'test-model',
+       system_prompt: 'sys',
+     })
++
++    // Default: server returns empty messages (new session)
++    fetchSessionMessagesMock.mockResolvedValue([])
+   })
+ 
+   async function initHook() {
+```
+
+
+---
+
+<a id="final-fixes"></a>
+## Final Audit Fixes — Redis Singleton + CRM Client + Error Parsing
+
+### session_store.py — Removed misleading redis_uri parameter from get_redis()
+```diff
+diff --git a/backend/src/mcp_service/session_store.py b/backend/src/mcp_service/session_store.py
+index dd8e087..b31acb1 100644
+--- a/backend/src/mcp_service/session_store.py
++++ b/backend/src/mcp_service/session_store.py
+@@ -33,8 +33,12 @@ def _redact_uri(uri: str) -> str:
+     return uri
+ 
+ 
+-async def get_redis(redis_uri: Optional[str] = None) -> AsyncRedis:
+-    """Return (and lazily create) the module-level async Redis client."""
++async def get_redis() -> AsyncRedis:
++    """Return (and lazily create) the module-level async Redis client.
++
++    Uses the REDIS_URL from config. A single connection pool is shared
++    process-wide — no per-caller URI overrides to prevent pool contamination.
++    """
+     global _pool, _client
+ 
+     if _client is not None:
+@@ -44,9 +48,8 @@ async def get_redis(redis_uri: Optional[str] = None) -> AsyncRedis:
+         if _client is not None:
+             return _client
+ 
+-        uri = redis_uri or REDIS_URL
+         _pool = ConnectionPool.from_url(
+-            uri,
++            REDIS_URL,
+             decode_responses=True,
+             encoding="utf-8",
+             max_connections=20,
+@@ -54,7 +57,7 @@ async def get_redis(redis_uri: Optional[str] = None) -> AsyncRedis:
+         )
+         _client = AsyncRedis(connection_pool=_pool)
+         await _client.ping()
+-        log.info("Connected to Redis: %s", _redact_uri(uri))
++        log.info("Connected to Redis: %s", _redact_uri(REDIS_URL))
+ 
+     return _client
+ 
+@@ -90,11 +93,8 @@ def valid_session_id(session_id: object) -> str:
+ class RedisSessionStore:
+     """Async Redis session store used by MCP tool implementations."""
+ 
+-    def __init__(self, redis_uri: Optional[str] = None) -> None:
+-        self._redis_uri = redis_uri
+-
+     async def _redis(self) -> AsyncRedis:
+-        return await get_redis(self._redis_uri)
++        return await get_redis()
+ 
+     @staticmethod
+     def _valid_session_id(session_id: object) -> Optional[str]:
+```
+
+### crm.ts — CrmGraphQLError class, timeout, retry
+```diff
+diff --git a/Chatbot UI and Admin Console/src/shared/api/crm.ts b/Chatbot UI and Admin Console/src/shared/api/crm.ts
+index 3b2edb2..10c38f5 100644
+--- a/Chatbot UI and Admin Console/src/shared/api/crm.ts	
++++ b/Chatbot UI and Admin Console/src/shared/api/crm.ts	
+@@ -23,32 +23,70 @@ interface GraphQLResponse<T> {
+   errors?: Array<{ message: string }>
+ }
+ 
++class CrmGraphQLError extends Error {
++  constructor(
++    message: string,
++    public readonly status?: number,
++    public readonly graphqlErrors?: Array<{ message: string }>,
++  ) {
++    super(message)
++    this.name = 'CrmGraphQLError'
++  }
++}
++
++const CRM_TIMEOUT_MS = 15_000
++const CRM_MAX_RETRIES = 1
++
+ async function crmGraphQL<T>(
+   query: string,
+   variables?: Record<string, unknown>,
+ ): Promise<T> {
+   const base = getCrmBase()
+-  const res = await fetch(`${base}/graphql`, {
+-    method: 'POST',
+-    headers: { 'Content-Type': 'application/json' },
+-    body: JSON.stringify({ query, variables }),
+-  })
++  const url = `${base}/graphql`
+ 
+-  const json: GraphQLResponse<T> = await res.json()
++  let lastError: Error | null = null
++  for (let attempt = 0; attempt <= CRM_MAX_RETRIES; attempt++) {
++    try {
++      const controller = new AbortController()
++      const timer = setTimeout(() => controller.abort(), CRM_TIMEOUT_MS)
+ 
+-  if (json.errors && json.errors.length > 0) {
+-    throw new Error(json.errors[0].message)
+-  }
++      const res = await fetch(url, {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ query, variables }),
++        signal: controller.signal,
++      })
++      clearTimeout(timer)
+ 
+-  if (!res.ok) {
+-    throw new Error(`CRM request failed (${res.status})`)
+-  }
++      const json: GraphQLResponse<T> = await res.json()
++
++      if (json.errors && json.errors.length > 0) {
++        throw new CrmGraphQLError(
++          json.errors[0].message,
++          res.status,
++          json.errors,
++        )
++      }
++
++      if (!res.ok) {
++        throw new CrmGraphQLError(`CRM request failed (${res.status})`, res.status)
++      }
+ 
+-  if (!json.data) {
+-    throw new Error('Empty response from CRM')
++      if (!json.data) {
++        throw new CrmGraphQLError('Empty response from CRM')
++      }
++
++      return json.data
++    } catch (err) {
++      lastError = err instanceof Error ? err : new Error(String(err))
++      if (attempt < CRM_MAX_RETRIES && !(err instanceof CrmGraphQLError)) {
++        continue // Retry on network/timeout errors only, not GraphQL errors
++      }
++      throw lastError
++    }
+   }
+ 
+-  return json.data
++  throw lastError ?? new Error('CRM request failed')
+ }
+ 
+ function normalizePhone(raw: string): string {
+```
+
+### http.ts — RFC 7807 Problem Details error parsing
+```diff
+diff --git a/Chatbot UI and Admin Console/src/shared/api/http.ts b/Chatbot UI and Admin Console/src/shared/api/http.ts
+index 0dde66d..d978a23 100644
+--- a/Chatbot UI and Admin Console/src/shared/api/http.ts	
++++ b/Chatbot UI and Admin Console/src/shared/api/http.ts	
+@@ -53,30 +53,44 @@ async function parseBody(response: Response): Promise<unknown> {
+   }
+ }
+ 
++/**
++ * RFC 7807 Problem Details for HTTP APIs + FastAPI error shape support.
++ *
++ * Extraction priority:
++ * 1. RFC 7807 `title` / `detail` fields (standardised)
++ * 2. FastAPI `detail` string (default HTTPException shape)
++ * 3. Generic `message` / `error` fields (common REST conventions)
++ * 4. Fallback to status code
++ */
++interface ProblemDetails {
++  type?: string
++  title?: string
++  status?: number
++  detail?: string | { message?: string; detail?: string }
++  instance?: string
++  message?: string
++  error?: string
++}
++
+ function resolveErrorMessage(parsed: unknown, status: number): string {
+   if (typeof parsed === 'string' && parsed.trim()) return parsed
+   if (typeof parsed !== 'object' || parsed === null) return `Request failed (${status})`
+ 
+-  const payload = parsed as {
+-    message?: string
+-    detail?: string | { message?: string; detail?: string }
+-  }
+-  if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
+-  if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail.trim()
+-  if (payload.detail && typeof payload.detail === 'object') {
+-    if (
+-      typeof payload.detail.message === 'string' &&
+-      payload.detail.message.trim()
+-    ) {
+-      return payload.detail.message.trim()
+-    }
+-    if (
+-      typeof payload.detail.detail === 'string' &&
+-      payload.detail.detail.trim()
+-    ) {
+-      return payload.detail.detail.trim()
+-    }
++  const p = parsed as ProblemDetails
++
++  // RFC 7807: prefer `title` for short user-facing messages, `detail` for specifics
++  if (typeof p.title === 'string' && p.title.trim()) return p.title.trim()
++  if (typeof p.detail === 'string' && p.detail.trim()) return p.detail.trim()
++  // FastAPI nested detail object
++  if (p.detail && typeof p.detail === 'object') {
++    const nested = p.detail
++    if (typeof nested.message === 'string' && nested.message.trim()) return nested.message.trim()
++    if (typeof nested.detail === 'string' && nested.detail.trim()) return nested.detail.trim()
+   }
++  // Common REST conventions
++  if (typeof p.message === 'string' && p.message.trim()) return p.message.trim()
++  if (typeof p.error === 'string' && p.error.trim()) return p.error.trim()
++
+   return `Request failed (${status})`
+ }
+ 
 ```

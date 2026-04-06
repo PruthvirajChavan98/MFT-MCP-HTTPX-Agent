@@ -71,7 +71,7 @@ ROLE_HINTS: dict[str, str] = {
     "src/agent_service/faqs": "FAQ parsing artifacts and ingest support assets.",
     "src/agent_service/features": "Feature flags/prototypes and answerability/follow-up behavior modules.",
     "src/agent_service/llm": "Model catalog and provider client orchestration.",
-    "src/agent_service/router": "NBFC router taxonomy, schemas, service, and worker runtime.",
+    "src/agent_service/features/routing": "NBFC router taxonomy, schemas, service, and worker runtime.",
     "src/agent_service/security": "Security middleware, runtime checks, metrics, and TOR/GeoIP controls.",
     "src/agent_service/tools": "Graph/tool adapters for knowledge and MCP integration.",
     "src/common": "Shared logging and connection management primitives.",

@@ -21,10 +21,11 @@ import { toast } from 'sonner'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { useChatStream } from '@features/chat/hooks/useChatStream'
-import { fetchSessionConfig, saveSessionConfig, type SessionConfig } from '@shared/api/sessions'
+import { fetchSessionConfig, saveSessionConfig } from '@shared/api/sessions'
 import type { AgentModel } from '@features/admin/api/health'
 import { useAvailableModels } from '@shared/hooks/useModels'
 import { cn } from '@components/ui/utils'
+import { providerRequiresSessionKey, hasSavedProviderKey } from '@shared/lib/provider-keys'
 
 const PUBLIC_PROMPTS = [
   {
@@ -66,17 +67,6 @@ const AUTHENTICATED_PROMPTS = [
 
 const DEFAULT_CHAT_PROVIDER = 'groq'
 const DEFAULT_CHAT_MODEL = 'openai/gpt-oss-120b'
-
-function providerRequiresSessionKey(provider: string) {
-  return provider === 'openrouter' || provider === 'nvidia'
-}
-
-function hasSavedProviderKey(provider: string, sessionCfg?: SessionConfig) {
-  if (provider === 'openrouter') return !!sessionCfg?.has_openrouter_key
-  if (provider === 'nvidia') return !!sessionCfg?.has_nvidia_key
-  if (provider === 'groq') return !!sessionCfg?.has_groq_key
-  return false
-}
 
 function providerKeyHeading(provider: string) {
   if (provider === 'openrouter') return 'OpenRouter Key (Required)'

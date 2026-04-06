@@ -5,7 +5,6 @@ import {
   fetchSessionConfig,
   saveSessionConfig,
   type AgentModel,
-  type SessionConfig,
 } from '@features/admin/api/admin'
 import { useAvailableModels } from '../../../shared/hooks/useModels'
 import { useAdminContext } from '@features/admin/context/AdminContext'
@@ -20,17 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Cpu, Save, Search, Server, Sparkles } from 'lucide-react'
 import { KeyInput } from '@components/ui/key-input'
 import { MobileHeader } from '@components/ui/mobile-header'
-
-function providerRequiresSessionKey(provider: string) {
-  return provider === 'openrouter' || provider === 'nvidia'
-}
-
-function hasSavedProviderKey(provider: string, sessionCfg?: SessionConfig) {
-  if (provider === 'openrouter') return !!sessionCfg?.has_openrouter_key
-  if (provider === 'nvidia') return !!sessionCfg?.has_nvidia_key
-  if (provider === 'groq') return !!sessionCfg?.has_groq_key
-  return false
-}
+import { providerRequiresSessionKey, hasSavedProviderKey } from '@shared/lib/provider-keys'
 
 function hasAdminProviderKey(
   provider: string,

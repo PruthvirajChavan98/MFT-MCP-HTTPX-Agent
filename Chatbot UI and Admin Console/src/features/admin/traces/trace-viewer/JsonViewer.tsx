@@ -1,4 +1,3 @@
-// src/app/components/admin/trace/JsonViewer.tsx
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 

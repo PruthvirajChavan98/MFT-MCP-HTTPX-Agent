@@ -1,4 +1,3 @@
-// src/app/components/admin/trace/TraceInspector.tsx
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {

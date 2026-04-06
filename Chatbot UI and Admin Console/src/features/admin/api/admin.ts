@@ -1,6 +1,8 @@
-// ── Barrel re-export ─────────────────────────────────────────────────────────
-// All existing imports from '@features/admin/api/admin' continue to work.
-// New code should import from the domain module directly.
+/**
+ * @deprecated This barrel file is a backward-compatibility shim.
+ * New code should import from the domain module directly
+ * (e.g. `@features/admin/api/faqs`, `@features/admin/api/traces`, etc.).
+ */
 
 export * from './faqs'
 export * from './guardrails'
