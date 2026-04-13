@@ -225,6 +225,11 @@ class AppFactory:
 
         app.include_router(admin_router, tags=["admin"])
         app.include_router(admin_analytics_router)
+        # Admin auth router (Phase 3b). Dormant until ADMIN_AUTH_ENABLED=true — see
+        # api/endpoints/admin_auth_routes.py and tasks/todo.md plan 2026-04-10.
+        from src.agent_service.api.endpoints.admin_auth_routes import router as admin_auth_router
+
+        app.include_router(admin_auth_router, tags=["admin-auth"])
         app.include_router(feedback_router)
 
         app.include_router(health_router)
