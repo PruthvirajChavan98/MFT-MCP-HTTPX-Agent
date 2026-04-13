@@ -32,8 +32,7 @@ log = logging.getLogger("security.tor")
 class AnonymizerCheckerProtocol(Protocol):
     """Protocol for optional VPN/proxy/hosting classification providers."""
 
-    def classify(self, ip_str: str) -> dict[str, bool]:
-        pass
+    def classify(self, ip_str: str) -> dict[str, bool]: ...
 
 
 def _audit_event(event_type: str, **fields: Any) -> None:

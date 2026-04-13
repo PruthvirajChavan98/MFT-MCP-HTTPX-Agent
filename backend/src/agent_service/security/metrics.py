@@ -108,7 +108,9 @@ def export_prometheus_metrics() -> tuple[bytes, str]:
     """Render all registered Prometheus metrics."""
     if PROMETHEUS_MULTIPROC_DIR:
         try:
-            registry = CollectorRegistry(support_collectors_without_names=True)
+            # Kwarg added in prometheus_client>=0.21; older builds raise TypeError,
+            # and the installed stub may not list it — hence the type-ignore.
+            registry = CollectorRegistry(support_collectors_without_names=True)  # type: ignore[call-arg]
         except TypeError:
             # Backward compatibility for older prometheus_client builds.
             registry = CollectorRegistry()

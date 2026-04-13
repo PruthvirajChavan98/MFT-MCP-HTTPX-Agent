@@ -208,7 +208,7 @@ class RedisRateLimiter(BaseRateLimiter):
             key = f"{self.key_prefix}:bucket:{identifier}"
             return key, ""
 
-    async def aacquire(self, blocking: bool = True, identifier: str = "global") -> bool:
+    async def aacquire(self, *, blocking: bool = True, identifier: str = "global") -> bool:
         """
         Async rate limit check with proper connection management.
 
@@ -304,7 +304,7 @@ class RedisRateLimiter(BaseRateLimiter):
             ),
         )
 
-    def acquire(self, blocking: bool = True, identifier: str = "global") -> bool:
+    def acquire(self, *, blocking: bool = True, identifier: str = "global") -> bool:
         """
         Synchronous rate limit check (runs async in event loop).
 
@@ -321,10 +321,10 @@ class RedisRateLimiter(BaseRateLimiter):
             if loop.is_running():
                 # Already in async context - this shouldn't happen
                 raise RuntimeError("Cannot use sync acquire() in async context - use aacquire()")
-            return loop.run_until_complete(self.aacquire(blocking, identifier))
+            return loop.run_until_complete(self.aacquire(blocking=blocking, identifier=identifier))
         except RuntimeError:
             # Fallback: create new event loop
-            return asyncio.run(self.aacquire(blocking, identifier))
+            return asyncio.run(self.aacquire(blocking=blocking, identifier=identifier))
 
     async def get_metrics(self) -> Dict[str, Any]:
         """Return rate limiter metrics for observability."""

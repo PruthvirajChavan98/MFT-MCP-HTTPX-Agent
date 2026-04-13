@@ -5,7 +5,6 @@ import logging
 import uuid
 from typing import Any
 
-from ragas import SingleTurnSample
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics.collections import AnswerRelevancy, ContextRelevance, Faithfulness
@@ -97,19 +96,20 @@ class RagasJudge:
         if not question or not answer:
             return []
 
-        sample = SingleTurnSample(
-            user_input=question,
-            response=answer,
-            retrieved_contexts=contexts or [],
-        )
+        ctxs = contexts or []
 
         short = self.model_name.split("/", 1)[-1] if "/" in self.model_name else self.model_name
         evaluator_id = f"ragas:{short}"
 
+        # ragas.metrics.collections classes expose per-metric ascore signatures
+        # (no shared SingleTurnSample arg in v0.4+), so we pass the fields each
+        # metric actually needs.
         scores = await asyncio.gather(
-            self._faithfulness.ascore(sample),
-            self._answer_rel.ascore(sample),
-            self._context_rel.ascore(sample),
+            self._faithfulness.ascore(
+                user_input=question, response=answer, retrieved_contexts=ctxs
+            ),
+            self._answer_rel.ascore(user_input=question, response=answer),
+            self._context_rel.ascore(user_input=question, retrieved_contexts=ctxs),
             return_exceptions=True,
         )
 

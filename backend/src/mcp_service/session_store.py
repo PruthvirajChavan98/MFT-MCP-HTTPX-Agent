@@ -56,7 +56,7 @@ async def get_redis() -> AsyncRedis:
             health_check_interval=30,
         )
         _client = AsyncRedis(connection_pool=_pool)
-        await _client.ping()
+        await _client.ping()  # type: ignore[misc]
         log.info("Connected to Redis: %s", _redact_uri(REDIS_URL))
 
     return _client

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal, Optional
+from typing import Any, Literal, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 from src.agent_service.eval_store.status import (
     SHADOW_TIMED_OUT_SECONDS,
     SHADOW_WORKER_BACKLOG_SECONDS,
@@ -17,7 +17,7 @@ from src.agent_service.eval_store.status import (
 from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("eval_read_api")
-router = APIRouter(dependencies=[Depends(require_admin_key)])
+router = APIRouter(dependencies=[Depends(require_admin)])
 _TRACE_STATUS_GRACE_SECONDS = TRACE_STATUS_GRACE_SECONDS
 _SHADOW_WORKER_BACKLOG_SECONDS = SHADOW_WORKER_BACKLOG_SECONDS
 _SHADOW_TIMED_OUT_SECONDS = SHADOW_TIMED_OUT_SECONDS
@@ -35,7 +35,7 @@ def _get_pool(request: Request) -> Any:
     return request.app.state.pool
 
 
-def _raise_db_error(exc: Exception, operation: str) -> None:
+def _raise_db_error(exc: Exception, operation: str) -> NoReturn:
     msg = str(exc)
     log.error("DB error in %s: %s", operation, msg)
     raise HTTPException(

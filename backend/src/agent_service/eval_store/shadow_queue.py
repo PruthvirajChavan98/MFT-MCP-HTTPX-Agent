@@ -89,6 +89,11 @@ class RedisTraceQueue:
             raw = await redis.rpop(self.queue_key)  # type: ignore[misc]
             if raw is None:
                 break
+            if not isinstance(raw, (str, bytes, bytearray)):
+                log.warning(
+                    "Skipping shadow queue payload of unexpected type: %s", type(raw).__name__
+                )
+                continue
             try:
                 parsed = json.loads(raw)
             except json.JSONDecodeError:

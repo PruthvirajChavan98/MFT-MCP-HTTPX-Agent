@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
@@ -167,7 +167,7 @@ def build_recursive_rag_graph(
 
         return {"messages": [ai_message]}
 
-    def route_after_llm(state: RecursiveRAGState) -> Literal["run_tools", "__end__"]:
+    def route_after_llm(state: RecursiveRAGState) -> str:
         messages = state.get("messages", [])
         if not messages:
             return END

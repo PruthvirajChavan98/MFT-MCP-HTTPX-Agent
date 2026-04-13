@@ -38,7 +38,7 @@ async def readiness_check(request: Request):
 
     try:
         redis = await get_redis()
-        pong = await redis.ping()
+        pong = await redis.ping()  # type: ignore[misc]
         checks["redis"] = {"ok": bool(pong)}
     except Exception as exc:
         healthy = False

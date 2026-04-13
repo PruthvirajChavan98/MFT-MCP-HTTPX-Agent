@@ -3,9 +3,10 @@
 import asyncio
 import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Mapping, cast
 
 from fastapi import APIRouter, HTTPException, Request
+from langchain_core.runnables import RunnableConfig
 from sse_starlette.sse import EventSourceResponse
 
 from src.agent_service.core.config import (
@@ -359,7 +360,7 @@ def _extract_usage_from_event_data(data: Any) -> Dict[str, int]:
     return _extract_usage_candidate(data)
 
 
-def _lifecycle_payload(event: Dict[str, Any]) -> Dict[str, Any]:
+def _lifecycle_payload(event: Mapping[str, Any]) -> Dict[str, Any]:
     event_name = str(event.get("event") or "")
     data = event.get("data", {})
 
@@ -733,7 +734,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
                 if not final_output:
                     try:
-                        cfg = {"configurable": {"thread_id": sid}}
+                        cfg = cast(RunnableConfig, {"configurable": {"thread_id": sid}})
                         current_state = await graph.aget_state(cfg)
                         fallback_text = _extract_final_response_from_graph_state(
                             current_state.values if current_state is not None else None
@@ -774,7 +775,7 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                 )
 
                 try:
-                    cfg = {"configurable": {"thread_id": sid}}
+                    cfg = cast(RunnableConfig, {"configurable": {"thread_id": sid}})
                     current_state = await graph.aget_state(cfg)
                     msgs = current_state.values.get("messages", [])
                     if msgs and getattr(msgs[-1], "type", "") == "ai":
