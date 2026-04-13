@@ -1,4 +1,5 @@
 import os
+from typing import Final
 
 # --- SERVER SETTINGS ---
 SERVER_NAME = "mock_fintech"
@@ -309,7 +310,20 @@ ADMIN_AUTH_COOKIE_NAME_REFRESH = os.getenv("ADMIN_AUTH_COOKIE_NAME_REFRESH", "mf
 
 # JWT settings — HS256 is intentional (single-issuer, single-verifier). Move to
 # RS256+JWKS only when a second service needs to verify tokens.
+#
+# JWT_ALGORITHM is allowlisted at module import to block the classic 'alg=none'
+# bypass and prevent algorithm-confusion if an operator misconfigures the env
+# (e.g. setting RS256 while JWT_SECRET is still an HMAC string). The check runs
+# unconditionally — NOT inside _validate_admin_auth_config(), which is bypassed
+# in pytest contexts.
+_ALLOWED_JWT_ALGORITHMS: Final[frozenset[str]] = frozenset({"HS256", "HS384", "HS512"})
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256").strip()
+if JWT_ALGORITHM not in _ALLOWED_JWT_ALGORITHMS:
+    raise ValueError(
+        f"JWT_ALGORITHM={JWT_ALGORITHM!r} is not in the allowed set "
+        f"{sorted(_ALLOWED_JWT_ALGORITHMS)}. Asymmetric algorithms (RS256/ES256) "
+        "require a separate JWKS verification path that this service does not implement."
+    )
 JWT_ISSUER = os.getenv("JWT_ISSUER", "mft-agent-service").strip()
 JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "mft-admin-console").strip()
 JWT_ACCESS_TTL_SECONDS = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "900"))  # 15 min
