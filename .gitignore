@@ -2,6 +2,12 @@
 backend/.env
 backend/notebook.ipynb
 
+# Runtime container snapshots (docker cp + docker commit) — large, local only
+snapshots/
+
+# Playwright MCP session logs — test-run artifacts, not source
+.playwright-mcp/
+
 NBFC_Chatbot_UI/node_modules/
 NBFC_Chatbot_UI/dist/
 NBFC_Chatbot_UI/.vite/
