@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from redis.asyncio import Redis
 from sse_starlette.sse import EventSourceResponse
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 from src.agent_service.core.config import REDIS_URL
 
 log = logging.getLogger("eval_live_api")
@@ -31,7 +31,7 @@ async def eval_live(
     cursor: str = Query(
         "$", description="Redis stream cursor. Use '$' for only-new. Use '0-0' to replay."
     ),
-    _admin: None = Depends(require_admin_key),
+    _admin: None = Depends(require_admin),
 ):
     """
     SSE live feed of new eval ingests.

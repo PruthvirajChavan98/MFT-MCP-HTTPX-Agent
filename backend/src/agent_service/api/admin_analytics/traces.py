@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from prometheus_client import Counter, Histogram
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 from src.agent_service.core.follow_ups import normalize_follow_up_content
 from src.agent_service.eval_store.status import build_eval_status_payload
 
@@ -27,7 +27,7 @@ from .utils import (
 router = APIRouter(
     prefix="/agent/admin/analytics",
     tags=["admin-analytics"],
-    dependencies=[Depends(require_admin_key)],
+    dependencies=[Depends(require_admin)],
 )
 logger = logging.getLogger(__name__)
 

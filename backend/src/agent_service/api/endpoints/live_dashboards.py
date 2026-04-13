@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 from src.agent_service.core.event_bus import event_bus
 
 log = logging.getLogger("live_dashboards")
@@ -19,7 +19,7 @@ PUBSUB_POLL_TIMEOUT_SECONDS = 1.0
 SSE_SEND_TIMEOUT_SECONDS = 30.0
 
 
-@router.get("/global", dependencies=[Depends(require_admin_key)])
+@router.get("/global", dependencies=[Depends(require_admin)])
 async def global_dashboard_feed(request: Request):
     """
     Multiplexed global stream for admin dashboards.

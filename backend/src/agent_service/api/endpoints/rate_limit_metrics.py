@@ -12,7 +12,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 from src.agent_service.core.config import RATE_LIMIT_ENABLED
 from src.agent_service.core.rate_limiter_manager import (
     enforce_rate_limit,
@@ -99,7 +99,7 @@ async def get_identifier_status(identifier: str, http_request: Request) -> Dict[
 async def reset_identifier_limit(
     identifier: str,
     http_request: Request,
-    _admin: None = Depends(require_admin_key),
+    _admin: None = Depends(require_admin),
 ) -> Dict[str, Any]:
     """
     Reset rate limit for a specific identifier (ADMIN ONLY).

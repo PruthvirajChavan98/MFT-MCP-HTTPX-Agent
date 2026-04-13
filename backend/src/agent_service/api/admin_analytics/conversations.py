@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 from src.agent_service.core.config import ADMIN_CURSOR_APIS_V2
 
 from .repo import analytics_repo
@@ -16,7 +16,7 @@ from .utils import _decode_cursor, _encode_cursor, _extract_question_preview
 router = APIRouter(
     prefix="/agent/admin/analytics",
     tags=["admin-analytics"],
-    dependencies=[Depends(require_admin_key)],
+    dependencies=[Depends(require_admin)],
 )
 logger = logging.getLogger(__name__)
 

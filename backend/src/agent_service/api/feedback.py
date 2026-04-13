@@ -6,7 +6,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 
 router = APIRouter(tags=["feedback"])
 
@@ -100,7 +100,7 @@ async def submit_feedback(payload: FeedbackCreateRequest, request: Request):
 @router.get("/agent/admin/feedback")
 async def get_feedback(
     request: Request,
-    _: None = Depends(require_admin_key),
+    _: None = Depends(require_admin),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     rating: Optional[Literal["thumbs_up", "thumbs_down"]] = None,
@@ -149,7 +149,7 @@ async def get_feedback(
 
 
 @router.get("/agent/admin/feedback/summary")
-async def get_feedback_summary(request: Request, _: None = Depends(require_admin_key)):
+async def get_feedback_summary(request: Request, _: None = Depends(require_admin)):
     pool = _get_pool(request)
     await _ensure_table(pool)
 

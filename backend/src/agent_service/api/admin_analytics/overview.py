@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin
 
 from .repo import analytics_repo
 
 router = APIRouter(
     prefix="/agent/admin/analytics",
     tags=["admin-analytics"],
-    dependencies=[Depends(require_admin_key)],
+    dependencies=[Depends(require_admin)],
 )
 
 

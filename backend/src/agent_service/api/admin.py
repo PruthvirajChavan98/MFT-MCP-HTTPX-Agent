@@ -6,12 +6,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from src.agent_service.api.admin_auth import require_admin_key
+from src.agent_service.api.admin_auth import require_admin, require_mfa_fresh
 from src.agent_service.core.config import KB_FAQ_BATCH_MAX_ITEMS, KB_FAQ_PDF_MAX_BYTES
 from src.agent_service.features.knowledge_base.service import knowledge_base_service
 
 log = logging.getLogger("admin_api")
-router = APIRouter(dependencies=[Depends(require_admin_key)])
+# Per-handler auth: reads gated by require_admin; mutations gated by require_mfa_fresh
+# (chains through require_super_admin → require_admin). See tasks/todo.md plan 2026-04-10 §4c.
+router = APIRouter()
 
 
 class FaqItem(BaseModel):
@@ -104,7 +106,10 @@ def _sse_error_payload(
     return json.dumps(payload)
 
 
-@router.post("/agent/admin/faqs/semantic-search")
+@router.post(
+    "/agent/admin/faqs/semantic-search",
+    dependencies=[Depends(require_mfa_fresh)],
+)
 async def semantic_search_endpoint(
     request: Request,
     payload: SemanticSearchRequest | None = None,
@@ -125,7 +130,10 @@ async def semantic_search_endpoint(
         _raise_kb_http_error("semantic_search", str(e))
 
 
-@router.post("/agent/admin/faqs/batch-json")
+@router.post(
+    "/agent/admin/faqs/batch-json",
+    dependencies=[Depends(require_mfa_fresh)],
+)
 async def update_faqs_json_stream(payload: BatchFaqRequest, request: Request):
     pool = _get_pool(request)
 
@@ -158,7 +166,10 @@ async def update_faqs_json_stream(payload: BatchFaqRequest, request: Request):
     return EventSourceResponse(_events(), headers={"Cache-Control": "no-cache"})
 
 
-@router.post("/agent/admin/faqs/upload-pdf")
+@router.post(
+    "/agent/admin/faqs/upload-pdf",
+    dependencies=[Depends(require_mfa_fresh)],
+)
 async def update_faqs_pdf_stream(request: Request, file: UploadFile = File(...)):
     pool = _get_pool(request)
 
@@ -206,7 +217,10 @@ async def update_faqs_pdf_stream(request: Request, file: UploadFile = File(...))
     return EventSourceResponse(_events(), headers={"Cache-Control": "no-cache"})
 
 
-@router.get("/agent/admin/faqs")
+@router.get(
+    "/agent/admin/faqs",
+    dependencies=[Depends(require_admin)],
+)
 async def get_faqs(
     request: Request,
     limit: int = Query(default=200, ge=1, le=500),
@@ -220,7 +234,10 @@ async def get_faqs(
         _raise_kb_http_error("list_faqs", str(e))
 
 
-@router.get("/agent/admin/faq-categories")
+@router.get(
+    "/agent/admin/faq-categories",
+    dependencies=[Depends(require_admin)],
+)
 async def get_faq_categories(request: Request):
     try:
         pool = _get_pool(request)
@@ -230,7 +247,10 @@ async def get_faq_categories(request: Request):
         _raise_kb_http_error("list_faq_categories", str(e))
 
 
-@router.put("/agent/admin/faqs")
+@router.put(
+    "/agent/admin/faqs",
+    dependencies=[Depends(require_mfa_fresh)],
+)
 async def edit_faq(request: Request, payload: EditFaqRequest):
     try:
         if not payload.id and not payload.original_question:
@@ -261,7 +281,10 @@ async def edit_faq(request: Request, payload: EditFaqRequest):
         _raise_kb_http_error("edit_faq", str(e))
 
 
-@router.delete("/agent/admin/faqs")
+@router.delete(
+    "/agent/admin/faqs",
+    dependencies=[Depends(require_mfa_fresh)],
+)
 async def delete_faq_endpoint(
     request: Request,
     question: Optional[str] = Query(default=None, min_length=1),
@@ -288,7 +311,10 @@ async def delete_faq_endpoint(
         _raise_kb_http_error("delete_faq", str(e))
 
 
-@router.delete("/agent/admin/faqs/all")
+@router.delete(
+    "/agent/admin/faqs/all",
+    dependencies=[Depends(require_mfa_fresh)],
+)
 async def clear_all_faqs_endpoint(request: Request):
     try:
         pool = _get_pool(request)
@@ -298,7 +324,10 @@ async def clear_all_faqs_endpoint(request: Request):
         _raise_kb_http_error("clear_all_faqs", str(e))
 
 
-@router.post("/agent/admin/faqs/semantic-delete")
+@router.post(
+    "/agent/admin/faqs/semantic-delete",
+    dependencies=[Depends(require_mfa_fresh)],
+)
 async def semantic_delete_endpoint(request: Request, payload: SemanticDeleteRequest):
     try:
         pool = _get_pool(request)
