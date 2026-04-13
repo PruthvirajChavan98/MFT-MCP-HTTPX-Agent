@@ -31,9 +31,10 @@ Reference UI/.vite/
 Reference UI/dist/
 Reference UI/dist-ssr/
 
-# Crash dumps
-core
-core.*
+# Crash dumps — scope to repo root so backend/src/agent_service/core/
+# and any core.py file elsewhere are not silently ignored.
+/core
+/core.[0-9]*
 
 # Temporary files
 files_dump_*.txt

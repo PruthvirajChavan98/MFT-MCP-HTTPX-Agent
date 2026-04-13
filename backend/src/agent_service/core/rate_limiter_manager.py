@@ -20,6 +20,8 @@ from fastapi import HTTPException, Request, status
 from redis.asyncio import Redis as AsyncRedis
 
 from src.agent_service.core.config import (
+    RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS,
+    RATE_LIMIT_ADMIN_AUTH_MFA_RPS,
     RATE_LIMIT_ADMIN_TIER_RPS,
     RATE_LIMIT_AGENT_QUERY_RPS,
     RATE_LIMIT_AGENT_STREAM_RPS,
@@ -152,6 +154,21 @@ class RateLimiterManager:
     async def get_health_limiter(self) -> RedisRateLimiter:
         """Rate limiter for /health endpoint."""
         return await self._get_limiter("endpoint:health", RATE_LIMIT_HEALTH_RPS)
+
+    async def get_admin_auth_login_limiter(self) -> RedisRateLimiter:
+        """Rate limiter for POST /admin/auth/login — brute-force protection.
+
+        Fail-closed per-IP, ~5 requests/minute default (0.083 rps). Plan §4d.
+        """
+        return await self._get_limiter("endpoint:admin_auth_login", RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS)
+
+    async def get_admin_auth_mfa_limiter(self) -> RedisRateLimiter:
+        """Rate limiter for POST /admin/auth/mfa/verify — TOTP brute-force protection.
+
+        Belt-and-braces on top of admin_totp.verify_totp_code's built-in lockout.
+        Per-IP, ~5 requests/minute default (0.083 rps). Plan §4d.
+        """
+        return await self._get_limiter("endpoint:admin_auth_mfa", RATE_LIMIT_ADMIN_AUTH_MFA_RPS)
 
     async def get_default_limiter(self) -> RedisRateLimiter:
         """Default rate limiter for unspecified endpoints."""

@@ -36,7 +36,6 @@ NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 # We define them here so imports in other modules do not crash.
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
-ADMIN_API_KEY = (os.getenv("ADMIN_API_KEY") or "").strip() or None
 
 # Groq support for multiple keys (Load Balancing)
 _groq_env = os.getenv("GROQ_API_KEYS", os.getenv("GROQ_API_KEY", ""))
@@ -163,6 +162,11 @@ RATE_LIMIT_MODELS_RPS = float(os.getenv("RATE_LIMIT_MODELS_RPS", "100.0"))
 # Health checks (should be very high or unlimited)
 RATE_LIMIT_HEALTH_RPS = float(os.getenv("RATE_LIMIT_HEALTH_RPS", "1000.0"))
 
+# Admin auth — login and MFA verify (brute-force protection, fail-closed).
+# 5 requests per minute ≈ 0.083 rps per-IP. Plan 2026-04-10 §D17/D18.
+RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS = float(os.getenv("RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS", "0.083"))
+RATE_LIMIT_ADMIN_AUTH_MFA_RPS = float(os.getenv("RATE_LIMIT_ADMIN_AUTH_MFA_RPS", "0.083"))
+
 # --- Per-User/Tenant Rate Limits ---
 # Free tier users
 RATE_LIMIT_FREE_TIER_RPS = float(os.getenv("RATE_LIMIT_FREE_TIER_RPS", "1.0"))
@@ -285,3 +289,81 @@ SHADOW_JUDGE_BATCH_SIZE = int(os.getenv("SHADOW_JUDGE_BATCH_SIZE", "50"))
 SHADOW_JUDGE_MODEL = os.getenv("SHADOW_JUDGE_MODEL", "openai/gpt-oss-120b").strip()
 SHADOW_JUDGE_MODEL_FALLBACK = os.getenv("SHADOW_JUDGE_MODEL_FALLBACK", "gpt-oss-120b").strip()
 SHADOW_JUDGE_REASONING_EFFORT = os.getenv("SHADOW_JUDGE_REASONING_EFFORT", "medium").strip().lower()
+
+# =============================================================================
+# ADMIN AUTHENTICATION (JWT + TOTP + ARGON2ID — plan 2026-04-10, cutover 6h)
+# =============================================================================
+# JWT session cookie is the ONLY admin auth path. Legacy X-Admin-Key fallback
+# and the ADMIN_AUTH_ENABLED feature flag were retired in Phase 6h. Env vars
+# below are REQUIRED for the app to boot — enroll via
+# `uv run python backend/scripts/enroll_super_admin.py`.
+
+# Cookie settings — Secure flag must be True in prod; False only acceptable for local HTTP dev
+ADMIN_AUTH_COOKIE_SECURE = os.getenv("ADMIN_AUTH_COOKIE_SECURE", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+ADMIN_AUTH_COOKIE_NAME_ACCESS = os.getenv("ADMIN_AUTH_COOKIE_NAME_ACCESS", "mft_admin_at").strip()
+ADMIN_AUTH_COOKIE_NAME_REFRESH = os.getenv("ADMIN_AUTH_COOKIE_NAME_REFRESH", "mft_admin_rt").strip()
+
+# JWT settings — HS256 is intentional (single-issuer, single-verifier). Move to
+# RS256+JWKS only when a second service needs to verify tokens.
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256").strip()
+JWT_ISSUER = os.getenv("JWT_ISSUER", "mft-agent-service").strip()
+JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "mft-admin-console").strip()
+JWT_ACCESS_TTL_SECONDS = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "900"))  # 15 min
+JWT_REFRESH_TTL_SECONDS = int(os.getenv("JWT_REFRESH_TTL_SECONDS", "28800"))  # 8 hours
+JWT_MFA_FRESHNESS_SECONDS = int(os.getenv("JWT_MFA_FRESHNESS_SECONDS", "300"))  # 5 min
+
+# Secrets — required only when ADMIN_AUTH_ENABLED=True. See tasks/lessons.md L1:
+# PyJWT 2.12.x enforces HS256 keys to be >=32 bytes (RFC 7518 §3.2) via InsecureKeyLengthWarning.
+JWT_SECRET: str | None = os.getenv("JWT_SECRET") or None
+FERNET_MASTER_KEY: str | None = os.getenv("FERNET_MASTER_KEY") or None
+
+# Single super-admin identity — env-var seeded for prototype phase. When the user count
+# grows beyond one, these scalars become a query against an admin_users Postgres table
+# without any contract change in the JWT layer.
+SUPER_ADMIN_EMAIL: str | None = os.getenv("SUPER_ADMIN_EMAIL") or None
+SUPER_ADMIN_PASSWORD_HASH: str | None = os.getenv("SUPER_ADMIN_PASSWORD_HASH") or None  # argon2id
+SUPER_ADMIN_TOTP_SECRET_ENC: str | None = (
+    os.getenv("SUPER_ADMIN_TOTP_SECRET_ENC") or None
+)  # Fernet-encrypted base32
+
+
+def _validate_admin_auth_config() -> None:
+    """Fail-closed validation — admin auth env vars are mandatory for app boot.
+
+    Test contexts (pytest loaded in sys.modules) skip validation to allow fixtures
+    to monkeypatch values after import. Production imports fail fast if any
+    required value is missing, with a pointer at the enrollment script.
+    """
+    import sys
+
+    if "pytest" in sys.modules:
+        return
+    missing: list[str] = []
+    if not JWT_SECRET:
+        missing.append("JWT_SECRET")
+    elif len(JWT_SECRET.encode("utf-8")) < 32:
+        raise ValueError(
+            "JWT_SECRET must be >=32 bytes (RFC 7518 §3.2; PyJWT 2.12.x enforces "
+            "via InsecureKeyLengthWarning). Generate one with: "
+            'python -c "import secrets; print(secrets.token_urlsafe(32))"'
+        )
+    if not FERNET_MASTER_KEY:
+        missing.append("FERNET_MASTER_KEY")
+    if not SUPER_ADMIN_EMAIL:
+        missing.append("SUPER_ADMIN_EMAIL")
+    if not SUPER_ADMIN_PASSWORD_HASH:
+        missing.append("SUPER_ADMIN_PASSWORD_HASH")
+    if not SUPER_ADMIN_TOTP_SECRET_ENC:
+        missing.append("SUPER_ADMIN_TOTP_SECRET_ENC")
+    if missing:
+        raise ValueError(
+            f"admin auth config missing required env vars: {', '.join(missing)}. "
+            "Run `uv run python backend/scripts/enroll_super_admin.py` to generate them."
+        )
+
+
+_validate_admin_auth_config()

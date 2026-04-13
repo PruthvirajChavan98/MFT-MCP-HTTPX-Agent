@@ -117,9 +117,13 @@ lint:
 	@echo "Running mypy type checker..."
 	uv run mypy --explicit-package-bases --follow-imports=skip --ignore-missing-imports \
 		src/agent_service/api/admin.py \
-		src/agent_service/features/knowledge_base_repo.py \
-		src/agent_service/features/knowledge_base_service.py \
-		src/agent_service/features/faq_pdf_parser.py
+		src/agent_service/features/knowledge_base/repo.py \
+		src/agent_service/features/knowledge_base/service.py \
+		src/agent_service/features/knowledge_base/faq_pdf_parser.py \
+		src/agent_service/security/admin_crypto.py \
+		src/agent_service/security/admin_jwt.py \
+		src/agent_service/security/password_hash.py \
+		src/agent_service/security/admin_totp.py
 
 format:
 	@echo "Formatting code with Black..."
