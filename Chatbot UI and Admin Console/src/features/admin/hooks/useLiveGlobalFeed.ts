@@ -7,18 +7,23 @@ import type { SessionCostSummary } from '@features/admin/costs/viewmodel';
 
 const SSE_URL = API_BASE_URL + '/live/global';
 
-export function useLiveGlobalFeed(adminKey: string) {
+/**
+ * Subscribe to the admin live global SSE feed.
+ *
+ * Admin auth is JWT-cookie-based. `fetchEventSource` supports `credentials:
+ * 'include'` which routes the httpOnly session cookie through the request so
+ * the backend's `require_admin` dependency can verify it.
+ */
+export function useLiveGlobalFeed() {
     const queryClient = useQueryClient();
 
     useEffect(() => {
-        if (!adminKey) return;
-
         const controller = new AbortController();
 
         fetchEventSource(SSE_URL, {
             method: 'GET',
+            credentials: 'include',
             headers: {
-                'X-Admin-Key': adminKey,
                 'Accept': 'text/event-stream',
             },
             signal: controller.signal,
@@ -59,5 +64,5 @@ export function useLiveGlobalFeed(adminKey: string) {
         return () => {
             controller.abort();
         };
-    }, [adminKey, queryClient]);
+    }, [queryClient]);
 }

@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const requestJsonMock = vi.fn()
-const withAdminHeadersMock = vi.fn((key?: string) => ({ 'X-Admin-Key': key ?? '' }))
 
 vi.mock('@shared/api/http', () => ({
   API_BASE_URL: '/api',
   requestJson: requestJsonMock,
-  withAdminHeaders: withAdminHeadersMock,
 }))
 
 describe('admin guardrails api contract', () => {
@@ -14,7 +12,7 @@ describe('admin guardrails api contract', () => {
     requestJsonMock.mockResolvedValueOnce({ items: [], count: 0, total: 0, offset: 0, limit: 25 })
     const { fetchGuardrailEvents } = await import('./admin')
 
-    await fetchGuardrailEvents('admin-key', {
+    await fetchGuardrailEvents({
       tenantId: 'tenant-123',
       decision: 'deny',
       offset: 25,

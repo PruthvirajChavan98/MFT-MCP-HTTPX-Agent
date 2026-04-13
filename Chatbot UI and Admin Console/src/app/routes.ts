@@ -10,6 +10,10 @@ const AdminLayout = lazy(async () => {
   const module = await import('@features/admin/layout/AdminLayout')
   return { default: module.AdminLayout }
 })
+const AdminLoginRoute = lazy(async () => {
+  const module = await import('@features/admin/auth/AdminLoginRoute')
+  return { default: module.AdminLoginRoute }
+})
 const Dashboard = lazy(async () => {
   const module = await import('@features/admin/pages/Dashboard')
   return { default: module.Dashboard }
@@ -68,6 +72,11 @@ export const router = createBrowserRouter([
   {
     path: '/architecture',
     Component: ArchitecturePage,
+    errorElement: createElement(RouteErrorBoundary),
+  },
+  {
+    path: '/admin/login',
+    Component: AdminLoginRoute,
     errorElement: createElement(RouteErrorBoundary),
   },
   {

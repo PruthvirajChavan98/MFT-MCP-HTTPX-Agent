@@ -18,7 +18,6 @@ import {
 export const ADMIN_REFETCH_MS = 30_000
 
 type GuardrailEventsParams = {
-  adminKey: string
   tenantId: string
   decision: string
   offset: number
@@ -26,13 +25,11 @@ type GuardrailEventsParams = {
 }
 
 type TracesQueryParams = {
-  adminKey: string
   search: string
   limit: number
 }
 
 type FaqSemanticParams = {
-  adminKey: string
   query: string
   limit: number
 }
@@ -47,9 +44,9 @@ export function sessionCostSummaryQueryOptions() {
 
 export function tracesPageInfiniteQueryOptions(params: TracesQueryParams) {
   return infiniteQueryOptions({
-    queryKey: ['traces-page', params.adminKey, params.search, params.limit] as const,
+    queryKey: ['traces-page', params.search, params.limit] as const,
     queryFn: ({ pageParam }) =>
-      fetchTracesPage(params.adminKey, {
+      fetchTracesPage({
         limit: params.limit,
         cursor: pageParam,
         search: params.search,
@@ -59,43 +56,43 @@ export function tracesPageInfiniteQueryOptions(params: TracesQueryParams) {
   })
 }
 
-export function adminTraceQueryOptions(adminKey: string, traceId: string | null) {
+export function adminTraceQueryOptions(traceId: string | null) {
   return queryOptions({
-    queryKey: ['admin-trace', adminKey, traceId] as const,
-    queryFn: () => fetchAdminTrace(adminKey, traceId || ''),
+    queryKey: ['admin-trace', traceId] as const,
+    queryFn: () => fetchAdminTrace(traceId || ''),
     enabled: Boolean(traceId),
   })
 }
 
-export function guardrailSummaryQueryOptions(adminKey: string, tenantId: string) {
+export function guardrailSummaryQueryOptions(tenantId: string) {
   return queryOptions({
-    queryKey: ['guardrail-summary', adminKey, tenantId] as const,
-    queryFn: () => fetchGuardrailSummary(adminKey, tenantId),
+    queryKey: ['guardrail-summary', tenantId] as const,
+    queryFn: () => fetchGuardrailSummary(tenantId),
     enabled: Boolean(tenantId.trim()),
     refetchInterval: ADMIN_REFETCH_MS,
   })
 }
 
-export function guardrailQueueHealthQueryOptions(adminKey: string) {
+export function guardrailQueueHealthQueryOptions() {
   return queryOptions({
-    queryKey: ['guardrail-queue', adminKey] as const,
-    queryFn: () => fetchGuardrailQueueHealth(adminKey),
+    queryKey: ['guardrail-queue'] as const,
+    queryFn: () => fetchGuardrailQueueHealth(),
     refetchInterval: 10_000,
   })
 }
 
-export function guardrailJudgeSummaryQueryOptions(adminKey: string) {
+export function guardrailJudgeSummaryQueryOptions() {
   return queryOptions({
-    queryKey: ['guardrail-judge', adminKey] as const,
-    queryFn: () => fetchGuardrailJudgeSummary(adminKey),
+    queryKey: ['guardrail-judge'] as const,
+    queryFn: () => fetchGuardrailJudgeSummary(),
     refetchInterval: ADMIN_REFETCH_MS,
   })
 }
 
-export function guardrailTrendsQueryOptions(adminKey: string, tenantId: string, hours: number) {
+export function guardrailTrendsQueryOptions(tenantId: string, hours: number) {
   return queryOptions({
-    queryKey: ['guardrail-trends', adminKey, tenantId, hours] as const,
-    queryFn: () => fetchGuardrailTrends(adminKey, tenantId, hours),
+    queryKey: ['guardrail-trends', tenantId, hours] as const,
+    queryFn: () => fetchGuardrailTrends(tenantId, hours),
     enabled: Boolean(tenantId.trim()),
     refetchInterval: ADMIN_REFETCH_MS,
   })
@@ -105,14 +102,13 @@ export function guardrailEventsQueryOptions(params: GuardrailEventsParams) {
   return queryOptions({
     queryKey: [
       'guardrail-events',
-      params.adminKey,
       params.tenantId,
       params.decision,
       params.offset,
       params.limit,
     ] as const,
     queryFn: () =>
-      fetchGuardrailEvents(params.adminKey, {
+      fetchGuardrailEvents({
         tenantId: params.tenantId,
         decision: params.decision,
         offset: params.offset,
@@ -121,10 +117,10 @@ export function guardrailEventsQueryOptions(params: GuardrailEventsParams) {
   })
 }
 
-export function faqListQueryOptions(adminKey: string, limit = 500, skip = 0) {
+export function faqListQueryOptions(limit = 500, skip = 0) {
   return queryOptions({
-    queryKey: ['faqs', adminKey, limit, skip] as const,
-    queryFn: () => fetchFaqs(adminKey, limit, skip),
+    queryKey: ['faqs', limit, skip] as const,
+    queryFn: () => fetchFaqs(limit, skip),
     refetchInterval(query) {
       const data = query.state.data as FaqRecord[] | undefined
       const hasActive = data?.some(
@@ -135,18 +131,18 @@ export function faqListQueryOptions(adminKey: string, limit = 500, skip = 0) {
   })
 }
 
-export function faqCategoriesQueryOptions(adminKey: string) {
+export function faqCategoriesQueryOptions() {
   return queryOptions({
-    queryKey: ['faq-categories', adminKey] as const,
-    queryFn: () => fetchFaqCategories(adminKey),
+    queryKey: ['faq-categories'] as const,
+    queryFn: () => fetchFaqCategories(),
     staleTime: 60_000,
   })
 }
 
 export function faqSemanticSearchQueryOptions(params: FaqSemanticParams) {
   return queryOptions({
-    queryKey: ['faq-semantic-search', params.adminKey, params.query, params.limit] as const,
-    queryFn: () => searchFaqSemantic(params.adminKey, params.query, params.limit),
+    queryKey: ['faq-semantic-search', params.query, params.limit] as const,
+    queryFn: () => searchFaqSemantic(params.query, params.limit),
     enabled: false,
   })
 }

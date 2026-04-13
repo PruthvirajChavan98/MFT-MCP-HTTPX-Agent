@@ -34,7 +34,6 @@ import { ResponsiveGrid } from '@components/ui/responsive-grid'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@components/ui/sheet'
 import { Skeleton } from '@components/ui/skeleton'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import {
   adminTraceQueryOptions,
   guardrailEventsQueryOptions,
@@ -77,17 +76,14 @@ export function GuardrailsPage() {
   const [sortField, setSortField] = useState<SortField>('time')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  const adminContext = useAdminContext()
-
-  const summaryQuery = useQuery(guardrailSummaryQueryOptions(adminContext.adminKey, tenantId))
-  const queueQuery = useQuery(guardrailQueueHealthQueryOptions(adminContext.adminKey))
-  const judgeQuery = useQuery(guardrailJudgeSummaryQueryOptions(adminContext.adminKey))
+  const summaryQuery = useQuery(guardrailSummaryQueryOptions(tenantId))
+  const queueQuery = useQuery(guardrailQueueHealthQueryOptions())
+  const judgeQuery = useQuery(guardrailJudgeSummaryQueryOptions())
   const trendsQuery = useQuery(
-    guardrailTrendsQueryOptions(adminContext.adminKey, tenantId, Number(hours)),
+    guardrailTrendsQueryOptions(tenantId, Number(hours)),
   )
   const eventsQuery = useQuery(
     guardrailEventsQueryOptions({
-      adminKey: adminContext.adminKey,
       tenantId,
       decision: decisionFilter,
       offset,
@@ -150,7 +146,7 @@ export function GuardrailsPage() {
   }, [expandedEvent, expandedEventKey])
 
   const expandedTraceId = expandedEvent?.trace_id || null
-  const expandedTraceQuery = useQuery(adminTraceQueryOptions(adminContext.adminKey, expandedTraceId))
+  const expandedTraceQuery = useQuery(adminTraceQueryOptions(expandedTraceId))
   const expandedInput = extractInputTextFromTraceDetail(expandedTraceQuery.data)
 
   const kpiErrors = [summaryQuery.error, queueQuery.error, judgeQuery.error]

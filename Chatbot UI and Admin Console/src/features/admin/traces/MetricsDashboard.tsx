@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchMetricsSummary, fetchMetricFailures } from '@features/admin/api/admin';
-import { useAdminContext } from '@features/admin/context/AdminContext';
 import { Skeleton } from '@components/ui/skeleton';
 import { Alert, AlertDescription } from '@components/ui/alert';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from 'recharts';
@@ -11,17 +10,15 @@ import { buildTraceHref } from '@features/admin/lib/admin-links';
 const COLORS = ['#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fb923c', '#fbbf24', '#2dd4bf'];
 
 export function MetricsDashboard() {
-    const auth = useAdminContext();
-
     const { data: summary, isLoading: sLoading, error: sError } = useQuery({
-        queryKey: ['eval-metrics-summary', auth.adminKey],
-        queryFn: () => fetchMetricsSummary(auth.adminKey),
+        queryKey: ['eval-metrics-summary'],
+        queryFn: () => fetchMetricsSummary(),
         refetchInterval: 30000,
     });
 
     const { data: failures, isLoading: fLoading, error: fError } = useQuery({
-        queryKey: ['eval-metrics-failures', auth.adminKey],
-        queryFn: () => fetchMetricFailures(auth.adminKey, 100),
+        queryKey: ['eval-metrics-failures'],
+        queryFn: () => fetchMetricFailures(100),
         refetchInterval: 30000,
     });
 

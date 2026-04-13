@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, BrainCircuit, ExternalLink } from 'lucide-react';
 import { fetchVectorSearch } from '@features/admin/api/admin';
-import { useAdminContext } from '@features/admin/context/AdminContext';
 import { Input } from '@components/ui/input';
 import { Button } from '@components/ui/button';
 import { Skeleton } from '@components/ui/skeleton';
@@ -10,13 +9,12 @@ import { formatDateTime } from '@shared/lib/format';
 import { buildTraceHref } from '@features/admin/lib/admin-links';
 
 export function SemanticSearchUI() {
-    const auth = useAdminContext();
     const [query, setQuery] = useState('');
     const [activeQuery, setActiveQuery] = useState('');
 
     const { data, isLoading, error } = useQuery({
-        queryKey: ['vector-search', auth.adminKey, activeQuery],
-        queryFn: () => fetchVectorSearch({ adminKey: auth.adminKey, kind: 'trace', text: activeQuery, k: 5 }),
+        queryKey: ['vector-search', activeQuery],
+        queryFn: () => fetchVectorSearch({ kind: 'trace', text: activeQuery, k: 5 }),
         enabled: activeQuery.length > 2,
     });
 

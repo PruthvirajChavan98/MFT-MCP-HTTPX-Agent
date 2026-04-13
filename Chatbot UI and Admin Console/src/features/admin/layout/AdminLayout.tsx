@@ -1,12 +1,17 @@
 // src/app/components/admin/AdminLayout.tsx
-import { useState, useEffect } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { type ReactNode, useEffect, useState } from "react";
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard, Database, DollarSign, Activity, MessageSquare,
   Shield as ShieldIcon, Gauge, Cpu, Heart, ChevronLeft, Menu,
-  Settings, LogOut, Search, Bell, Tag, Key, AlertCircle, Users
+  Settings, LogOut, Search, Bell, Tag, Key, Users
 } from "lucide-react";
 import { AdminProvider, useAdminContext } from "@features/admin/context/AdminContext";
+import { AdminAuthProvider, useAdminAuth } from "@features/admin/auth/AdminAuthProvider";
+// `useAdminContext` is kept for the BYOK provider keys (openrouter/nvidia/groq)
+// used by the model-config page. The legacy X-Admin-Key field was retired in
+// Phase 6g of the admin auth plan.
+import { ADMIN_SESSION_EXPIRED_EVENT } from "@/shared/api/http";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalTraceSheet } from "@features/admin/traces/trace-viewer/GlobalTraceSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/ui/popover";
@@ -28,6 +33,25 @@ const NAV_ITEMS = [
 
 // KeyInput extracted to @components/ui/key-input
 
+/**
+ * Route guard — redirects to `/admin/login` when no JWT session is present.
+ *
+ * While the session is still hydrating from `GET /admin/auth/me`, render
+ * nothing (prevents a flash of unauthorized → redirect).
+ *
+ * The legacy `X-Admin-Key` fallback branch was removed in Phase 6g of the
+ * admin auth plan; the JWT cookie is now the only admin auth path.
+ */
+export function AuthGuard({ children }: { children: ReactNode }) {
+  const { session, isLoading } = useAdminAuth();
+
+  if (isLoading) return null;
+  if (session === null) {
+    return <Navigate to="/admin/login" replace />;
+  }
+  return <>{children}</>;
+}
+
 function AdminShell() {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== 'undefined' && window.innerWidth >= 768
@@ -36,8 +60,20 @@ function AdminShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAdminContext();
+  const { session, logout, refreshSession } = useAdminAuth();
 
-  useLiveGlobalFeed(auth.adminKey);
+  useLiveGlobalFeed();
+
+  // Listen for 401 events dispatched by http.ts and attempt to re-hydrate
+  // the session. If the refresh fails (server confirms the session is gone)
+  // the AuthGuard will route to /admin/login on the next render.
+  useEffect(() => {
+    const handler = () => {
+      void refreshSession();
+    };
+    window.addEventListener(ADMIN_SESSION_EXPIRED_EVENT, handler);
+    return () => window.removeEventListener(ADMIN_SESSION_EXPIRED_EVENT, handler);
+  }, [refreshSession]);
 
   // Command Palette Keyboard Shortcut
   useEffect(() => {
@@ -57,10 +93,6 @@ function AdminShell() {
       setSidebarOpen(false);
     }
   }, [location.pathname]);
-
-  // Admin key is optional — backend accepts requests when ADMIN_API_KEY env var is unset.
-  // The key input stays available in the popover for environments that enforce authentication.
-  const missingAdminKey = false;
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
@@ -121,9 +153,21 @@ function AdminShell() {
             </div>
             {sidebarOpen && <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-gray-200 rounded text-gray-500">⌘K</kbd>}
           </button>
-          <button onClick={() => navigate("/")} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all">
+          <button
+            onClick={async () => {
+              if (session) {
+                await logout();
+              }
+              navigate("/");
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all"
+          >
             <LogOut className="w-4 h-4 shrink-0" />
-            {sidebarOpen && <span className="text-sm font-medium">Exit Admin</span>}
+            {sidebarOpen && (
+              <span className="text-sm font-medium">
+                {session ? "Sign out" : "Exit Admin"}
+              </span>
+            )}
           </button>
         </div>
       </aside>
@@ -149,24 +193,16 @@ function AdminShell() {
             {/* Keys Popover */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all text-xs font-semibold ${missingAdminKey ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all text-xs font-semibold">
                   <Key size={14} />
-                  <span className="hidden sm:inline">API Keys</span>
-                  {missingAdminKey && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
+                  <span className="hidden sm:inline">Provider Keys</span>
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl">
                 <div className="space-y-1 mb-2">
-                  <h4 className="font-semibold text-sm text-slate-900">Authentication</h4>
-                  <p className="text-xs text-slate-500">Admin access plus provider keys for session-scoped model execution.</p>
+                  <h4 className="font-semibold text-sm text-slate-900">Provider Keys</h4>
+                  <p className="text-xs text-slate-500">BYOK provider keys for session-scoped model execution. Admin auth now uses JWT session cookies.</p>
                 </div>
-                {missingAdminKey && (
-                  <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
-                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                    <p>Admin API key is required for admin analytics endpoints. OpenRouter and NVIDIA session models require matching provider keys. Groq remains optional.</p>
-                  </div>
-                )}
-                <KeyInput label="Admin API Key (X-Admin-Key)" value={auth.adminKey} onChange={auth.setAdminKey} />
                 <KeyInput label="OpenRouter Key (Required for OpenRouter sessions)" value={auth.openrouterKey} onChange={auth.setOpenrouterKey} />
                 <KeyInput label="NVIDIA Key (Required for NVIDIA sessions)" value={auth.nvidiaKey} onChange={auth.setNvidiaKey} />
                 <KeyInput label="Groq Key (Optional)" value={auth.groqKey} onChange={auth.setGroqKey} />
@@ -196,8 +232,12 @@ function AdminShell() {
 
 export function AdminLayout() {
   return (
-    <AdminProvider>
-      <AdminShell />
-    </AdminProvider>
+    <AdminAuthProvider>
+      <AdminProvider>
+        <AuthGuard>
+          <AdminShell />
+        </AuthGuard>
+      </AdminProvider>
+    </AdminAuthProvider>
   );
 }

@@ -103,11 +103,54 @@ interface RequestConfig {
   signal?: AbortSignal
 }
 
+const CSRF_COOKIE_NAME = 'mft_admin_csrf'
+const STATE_CHANGING_METHODS: ReadonlySet<RequestConfig['method']> = new Set([
+  'POST',
+  'PUT',
+  'DELETE',
+])
+
+/**
+ * Read a cookie value from document.cookie by name. Returns null when missing.
+ * Used for CSRF double-submit — the httpOnly session cookies are invisible to
+ * JS, but the CSRF cookie is set with `httpOnly: false` exactly so we can
+ * read it here and echo it back in the X-CSRF-Token header.
+ */
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const prefix = `${name}=`
+  const parts = document.cookie.split(';')
+  for (const part of parts) {
+    const trimmed = part.trim()
+    if (trimmed.startsWith(prefix)) {
+      return decodeURIComponent(trimmed.slice(prefix.length))
+    }
+  }
+  return null
+}
+
+/**
+ * Dispatched on any 401 response so app-level handlers (e.g. AdminAuthProvider)
+ * can clear session state and redirect to the login page without every caller
+ * needing to handle auth failures individually.
+ */
+export const ADMIN_SESSION_EXPIRED_EVENT = 'admin:session-expired'
+
 export async function requestJson<T>(config: RequestConfig): Promise<T> {
+  const csrfHeader: Record<string, string> = {}
+  if (STATE_CHANGING_METHODS.has(config.method)) {
+    const csrf = readCookie(CSRF_COOKIE_NAME)
+    if (csrf) {
+      csrfHeader['X-CSRF-Token'] = csrf
+    }
+  }
+
   const response = await fetch(`${joinPath(config.path)}${toQuery(config.query)}`, {
     method: config.method,
+    credentials: 'include',
     headers: {
       ...(config.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...csrfHeader,
       ...(config.headers ?? {}),
     },
     body: config.body !== undefined ? JSON.stringify(config.body) : undefined,
@@ -117,19 +160,18 @@ export async function requestJson<T>(config: RequestConfig): Promise<T> {
   const parsed = await parseBody(response)
   if (!response.ok) {
     const message = resolveErrorMessage(parsed, response.status)
+    // Emit a session-expired signal on 401 so AdminAuthProvider can drop local
+    // state and redirect to /admin/login. Individual callers still receive the
+    // ApiError via the throw below.
+    if (
+      response.status === 401 &&
+      typeof window !== 'undefined' &&
+      !config.path.startsWith('/admin/auth/')
+    ) {
+      window.dispatchEvent(new CustomEvent(ADMIN_SESSION_EXPIRED_EVENT))
+    }
     throw new ApiError(message, response.status, parsed)
   }
 
   return parsed as T
-}
-
-export function withAdminHeaders(
-  adminKey?: string,
-  extra?: Record<string, string>,
-): Record<string, string> {
-  const headers: Record<string, string> = { ...(extra ?? {}) }
-  if (adminKey?.trim()) {
-    headers['X-Admin-Key'] = adminKey.trim()
-  }
-  return headers
 }

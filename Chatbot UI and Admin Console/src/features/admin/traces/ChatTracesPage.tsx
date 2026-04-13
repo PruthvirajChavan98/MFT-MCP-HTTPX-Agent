@@ -15,7 +15,6 @@ import { Input } from '@components/ui/input'
 import { ResponsiveTable, type Column } from '@components/ui/responsive-table'
 import { Skeleton } from '@components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import { MetricsDashboard } from './MetricsDashboard'
 import { SemanticSearchUI } from './SemanticSearchUI'
 import { formatDateTime } from '@shared/lib/format'
@@ -35,7 +34,6 @@ const traceColumns: Column<TraceListRow>[] = [
 
 export function ChatTracesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const auth = useAdminContext()
 
   const initialSearch = searchParams.get('search') || ''
   const [search, setSearch] = useState(initialSearch)
@@ -59,7 +57,6 @@ export function ChatTracesPage() {
 
   const tracesQuery = useInfiniteQuery(
     tracesPageInfiniteQueryOptions({
-      adminKey: auth.adminKey,
       search: deferredSearch,
       limit: PAGE_SIZE,
     }),

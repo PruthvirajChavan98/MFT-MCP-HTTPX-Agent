@@ -15,19 +15,6 @@ vi.mock('@tanstack/react-query', async () => {
   }
 })
 
-vi.mock('@features/admin/context/AdminContext', () => ({
-  useAdminContext: () => ({
-    adminKey: 'adm_test',
-    setAdminKey: vi.fn(),
-    openrouterKey: '',
-    setOpenrouterKey: vi.fn(),
-    nvidiaKey: '',
-    setNvidiaKey: vi.fn(),
-    groqKey: '',
-    setGroqKey: vi.fn(),
-  }),
-}))
-
 vi.mock('./MetricsDashboard', () => ({
   MetricsDashboard: () => <div>Metrics dashboard</div>,
 }))

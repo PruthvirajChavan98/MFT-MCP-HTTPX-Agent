@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { fetchQuestionTypes } from '@features/admin/api/admin'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
 import { Skeleton } from '@components/ui/skeleton'
 import { Alert, AlertDescription } from '@components/ui/alert'
@@ -15,11 +14,9 @@ function humanizeCategory(value: string): string {
 }
 
 export function QuestionCategories() {
-  const auth = useAdminContext()
-
   const { data = [], isLoading, error } = useQuery({
-    queryKey: ['question-types', auth.adminKey],
-    queryFn: () => fetchQuestionTypes(auth.adminKey, 200),
+    queryKey: ['question-types'],
+    queryFn: () => fetchQuestionTypes(200),
     refetchInterval: 30_000,
   })
 

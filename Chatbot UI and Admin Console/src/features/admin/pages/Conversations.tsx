@@ -10,7 +10,6 @@ import { SplitPane } from '@components/ui/split-pane'
 import { ResponsiveGrid } from '@components/ui/responsive-grid'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
 import { TranscriptMessage } from '@features/admin/components/TranscriptMessage'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import { useConversationSelection } from '@features/admin/hooks/useConversationSelection'
 import {
   useConversationQueries,
@@ -146,14 +145,11 @@ function EmptyListState() {
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function Conversations() {
-  const auth = useAdminContext()
-
   // URL-driven state — no useState for sessionId or search
   const selection = useConversationSelection()
 
   // All queries centralized — proper staleTime, placeholderData
   const queries = useConversationQueries({
-    adminKey: auth.adminKey,
     deferredSearch: selection.deferredSearch,
     sessionId: selection.sessionId,
   })

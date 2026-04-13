@@ -4,7 +4,6 @@ import { Link } from 'react-router';
 import { Activity, Users, DollarSign, MessageSquare, Shield, Clock } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { fetchEvalTraces, fetchSessionCostSummary, fetchQuestionTypes, fetchGuardrailEvents } from '@features/admin/api/admin';
-import { useAdminContext } from '@features/admin/context/AdminContext';
 import { Skeleton } from '@components/ui/skeleton';
 import { Alert, AlertDescription } from '@components/ui/alert';
 import { ResponsiveGrid } from '@components/ui/responsive-grid';
@@ -70,11 +69,9 @@ function renderDashboardTraceCell(t: EvalTraceSummary, column: Column<EvalTraceS
 }
 
 export function Dashboard() {
-  const auth = useAdminContext();
-
   const { data: traces = [], isLoading: tLoading, error: tError } = useQuery({
-    queryKey: ['eval-traces', auth.adminKey],
-    queryFn: () => fetchEvalTraces(auth.adminKey, 200),
+    queryKey: ['eval-traces'],
+    queryFn: () => fetchEvalTraces(200),
     refetchInterval: 30_000,
   });
 
@@ -85,13 +82,13 @@ export function Dashboard() {
   });
 
   const { data: categories = [], isLoading: catLoading } = useQuery({
-    queryKey: ['question-types', auth.adminKey],
-    queryFn: () => fetchQuestionTypes(auth.adminKey, 50),
+    queryKey: ['question-types'],
+    queryFn: () => fetchQuestionTypes(50),
   });
 
   const { data: guardrails = [] } = useQuery({
-    queryKey: ['guardrail-events', auth.adminKey],
-    queryFn: async () => (await fetchGuardrailEvents(auth.adminKey, { limit: 100 })).items,
+    queryKey: ['guardrail-events'],
+    queryFn: async () => (await fetchGuardrailEvents({ limit: 100 })).items,
   });
 
   const loading = tLoading || cLoading || catLoading;

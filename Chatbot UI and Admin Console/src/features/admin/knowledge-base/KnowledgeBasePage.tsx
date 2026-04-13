@@ -21,7 +21,6 @@ import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
 import { MobileHeader } from '@components/ui/mobile-header'
 import { CollapsiblePanel } from '@components/ui/collapsible-panel'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import {
   buildKnowledgeBaseViewModel,
   type KnowledgeBaseFaqRow,
@@ -42,7 +41,6 @@ import { AddEditFaqModal } from './components/AddEditFaqModal'
 // ────────────────────────────────────────────────────────────────────────────
 
 export function KnowledgeBasePage() {
-  const auth = useAdminContext()
   const queryClient = useQueryClient()
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -58,12 +56,11 @@ export function KnowledgeBasePage() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const faqsQuery = useQuery(faqListQueryOptions(auth.adminKey, 500, 0))
-  const categoriesQuery = useQuery(faqCategoriesQueryOptions(auth.adminKey))
+  const faqsQuery = useQuery(faqListQueryOptions(500, 0))
+  const categoriesQuery = useQuery(faqCategoriesQueryOptions())
 
   const semanticQuery = useQuery(
     faqSemanticSearchQueryOptions({
-      adminKey: auth.adminKey,
       query: searchQuery.trim(),
       limit: 5,
     }),
@@ -93,7 +90,7 @@ export function KnowledgeBasePage() {
 
   const deleteMut = useMutation({
     mutationFn: (row: KnowledgeBaseFaqRow) =>
-      deleteFaq(auth.adminKey, row.serverId ? { id: row.serverId } : { question: row.question }),
+      deleteFaq(row.serverId ? { id: row.serverId } : { question: row.question }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['faqs'] })
       toast.success('FAQ deleted')
@@ -102,7 +99,7 @@ export function KnowledgeBasePage() {
   })
 
   const deleteAllMut = useMutation({
-    mutationFn: () => clearAllFaqs(auth.adminKey),
+    mutationFn: () => clearAllFaqs(),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['faqs'] })
       toast.success('All FAQs deleted')
@@ -157,7 +154,7 @@ export function KnowledgeBasePage() {
     setModalSaving(true)
     try {
       if (editTarget) {
-        await updateFaq(auth.adminKey, {
+        await updateFaq({
           ...(editTarget.serverId ? { id: editTarget.serverId } : { original_question: editTarget.question }),
           new_question: entries[0].question,
           new_answer: entries[0].answer,
@@ -166,7 +163,7 @@ export function KnowledgeBasePage() {
         })
         toast.success('FAQ updated')
       } else {
-        await ingestFaqBatch(auth.adminKey, entries)
+        await ingestFaqBatch(entries)
         toast.success(
           entries.length === 1
             ? 'FAQ added and queued for vectorization'
@@ -187,7 +184,7 @@ export function KnowledgeBasePage() {
     if (!pdfFile) return
     setPdfLoading(true)
     try {
-      await ingestFaqPdf(auth.adminKey, pdfFile)
+      await ingestFaqPdf(pdfFile)
       toast.success(`PDF parsed and ingested successfully`)
       setPdfFile(null)
       if (fileRef.current) fileRef.current.value = ''

@@ -40,11 +40,9 @@ function renderWithQueryClient(ui: ReactElement) {
 
 function defaultAdminContext(overrides: Partial<ReturnType<typeof useAdminContextMock>> = {}) {
   return {
-    adminKey: 'admin-key',
     openrouterKey: '',
     nvidiaKey: '',
     groqKey: '',
-    setAdminKey: vi.fn(),
     setOpenrouterKey: vi.fn(),
     setNvidiaKey: vi.fn(),
     setGroqKey: vi.fn(),

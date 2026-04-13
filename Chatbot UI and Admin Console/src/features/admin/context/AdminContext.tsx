@@ -1,8 +1,18 @@
-import React, { createContext, useCallback, useContext, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 
+/**
+ * AdminContext — BYOK provider keys only.
+ *
+ * The legacy `adminKey` field and the `nbfc_admin_key` localStorage entry
+ * were retired in Phase 6g of the admin auth plan (2026-04-11). Admin
+ * authentication now flows through AdminAuthProvider (JWT session cookie).
+ * This context is kept solely for the three BYOK LLM provider keys used by
+ * session-scoped model execution in the model-config page.
+ *
+ * A one-time migration on mount removes the stale `nbfc_admin_key` entry
+ * from localStorage if it exists.
+ */
 interface AdminContextValue {
-  adminKey: string
-  setAdminKey: (v: string) => void
   openrouterKey: string
   setOpenrouterKey: (v: string) => void
   nvidiaKey: string
@@ -12,11 +22,13 @@ interface AdminContextValue {
 }
 
 const STORAGE = {
-  adminKey: 'nbfc_admin_key',
   openrouterKey: 'nbfc_openrouter_key',
   nvidiaKey: 'nbfc_nvidia_key',
   groqKey: 'nbfc_groq_key',
 } as const
+
+/** Legacy localStorage key retired in Phase 6g — removed on provider mount. */
+const LEGACY_ADMIN_KEY_STORAGE = 'nbfc_admin_key'
 
 const AdminContext = createContext<AdminContextValue | null>(null)
 
@@ -28,17 +40,24 @@ function safeGetItem(key: string): string {
   }
 }
 
+function safeRemoveItem(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // Ignore — localStorage may be unavailable in some sandboxed contexts
+  }
+}
+
 export function AdminProvider({ children }: { children: React.ReactNode }) {
-  const [adminKey, _setAdminKey] = useState(() => safeGetItem(STORAGE.adminKey))
-  const [openrouterKey, _setOpenrouterKey] = useState(
-    () => safeGetItem(STORAGE.openrouterKey),
+  const [openrouterKey, _setOpenrouterKey] = useState(() =>
+    safeGetItem(STORAGE.openrouterKey),
   )
   const [nvidiaKey, _setNvidiaKey] = useState(() => safeGetItem(STORAGE.nvidiaKey))
   const [groqKey, _setGroqKey] = useState(() => safeGetItem(STORAGE.groqKey))
 
-  const setAdminKey = useCallback((v: string) => {
-    localStorage.setItem(STORAGE.adminKey, v)
-    _setAdminKey(v)
+  // One-time migration: drop the legacy adminKey localStorage entry on mount.
+  useEffect(() => {
+    safeRemoveItem(LEGACY_ADMIN_KEY_STORAGE)
   }, [])
 
   const setOpenrouterKey = useCallback((v: string) => {
@@ -59,8 +78,6 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   return (
     <AdminContext.Provider
       value={{
-        adminKey,
-        setAdminKey,
         openrouterKey,
         setOpenrouterKey,
         nvidiaKey,

@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { ExternalLink } from 'lucide-react'
 import { fetchUserAnalytics } from '@features/admin/api/admin'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import { Card, CardContent } from '@components/ui/card'
 import { Skeleton } from '@components/ui/skeleton'
 import { Alert, AlertDescription } from '@components/ui/alert'
@@ -26,14 +25,13 @@ const userColumns: Column<UserAnalyticsRow>[] = [
 ]
 
 export function UsersAnalytics() {
-  const auth = useAdminContext()
   const navigate = useNavigate()
   const [sortKey, setSortKey] = useState<SortKey>('trace_count')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const { data = [], isLoading, error } = useQuery({
-    queryKey: ['user-analytics', auth.adminKey],
-    queryFn: () => fetchUserAnalytics(auth.adminKey),
+    queryKey: ['user-analytics'],
+    queryFn: () => fetchUserAnalytics(),
   })
   if (error) return <Alert variant="destructive"><AlertDescription>{(error as Error).message}</AlertDescription></Alert>
 

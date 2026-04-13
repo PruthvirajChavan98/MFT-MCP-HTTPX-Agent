@@ -1,4 +1,4 @@
-import { requestJson, withAdminHeaders } from '@shared/api/http'
+import { requestJson } from '@shared/api/http'
 import {
   fetchSessionConfig,
   saveSessionConfig,
@@ -44,6 +44,9 @@ export interface ConversationQuery {
 }
 
 // ── API ──────────────────────────────────────────────────────────────────────
+//
+// Admin auth is JWT-cookie-based. `requestJson` sends `credentials: 'include'`
+// on every call so the session cookie flows automatically.
 
 export async function fetchSessionCostSummary(): Promise<{
   active_sessions: number
@@ -70,33 +73,32 @@ export async function fetchSessionCost(
 }
 
 export async function fetchEvalSessions(
-  adminKey: string,
   limit = 100,
 ): Promise<Array<{ session_id: string; trace_count: number; last_active?: string }>> {
   const response = await requestJson<{
     items: Array<{ session_id: string; trace_count: number; last_active?: string }>
-  }>({ method: 'GET', path: '/eval/sessions', query: { limit }, headers: withAdminHeaders(adminKey) })
+  }>({ method: 'GET', path: '/eval/sessions', query: { limit } })
   return response.items ?? []
 }
 
-export async function fetchUserAnalytics(
-  adminKey: string,
-  limit = 100,
-): Promise<UserAnalyticsRow[]> {
+export async function fetchUserAnalytics(limit = 100): Promise<UserAnalyticsRow[]> {
   const response = await requestJson<{ items: UserAnalyticsRow[] }>({
     method: 'GET',
     path: '/agent/admin/analytics/users',
     query: { limit },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
 export async function fetchConversationsPage(
-  adminKey: string,
   params: ConversationQuery = {},
 ): Promise<{ items: SessionListItem[]; count: number; limit: number; next_cursor?: string | null }> {
-  const response = await requestJson<{ items: SessionListItem[]; count: number; limit: number; next_cursor?: string | null }>({
+  const response = await requestJson<{
+    items: SessionListItem[]
+    count: number
+    limit: number
+    next_cursor?: string | null
+  }>({
     method: 'GET',
     path: '/agent/admin/analytics/conversations',
     query: {
@@ -104,7 +106,6 @@ export async function fetchConversationsPage(
       cursor: params.cursor ?? undefined,
       search: params.search?.trim() || undefined,
     },
-    headers: withAdminHeaders(adminKey),
   })
   return {
     items: response.items ?? [],

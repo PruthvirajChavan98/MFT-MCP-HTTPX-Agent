@@ -1,7 +1,11 @@
-import { requestJson, withAdminHeaders } from '@shared/api/http'
+import { requestJson } from '@shared/api/http'
 import type { FeedbackRecord } from '../types/admin'
 
 // ── API ──────────────────────────────────────────────────────────────────────
+//
+// Admin auth is JWT-cookie-based. `requestJson` sends `credentials: 'include'`
+// on every call so the session cookie flows automatically. The public
+// createFeedback endpoint is unauthenticated and unchanged.
 
 export async function createFeedback(payload: {
   session_id: string
@@ -13,20 +17,16 @@ export async function createFeedback(payload: {
   return requestJson({ method: 'POST', path: '/agent/feedback', body: payload })
 }
 
-export async function listFeedback(
-  adminKey: string,
-  limit = 100,
-): Promise<FeedbackRecord[]> {
+export async function listFeedback(limit = 100): Promise<FeedbackRecord[]> {
   const response = await requestJson<{ items: FeedbackRecord[] }>({
     method: 'GET',
     path: '/agent/admin/feedback',
     query: { limit },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function feedbackSummary(adminKey: string): Promise<{
+export async function feedbackSummary(): Promise<{
   total: number
   thumbs_up: number
   thumbs_down: number
@@ -35,6 +35,5 @@ export async function feedbackSummary(adminKey: string): Promise<{
   return requestJson({
     method: 'GET',
     path: '/agent/admin/feedback/summary',
-    headers: withAdminHeaders(adminKey),
   })
 }

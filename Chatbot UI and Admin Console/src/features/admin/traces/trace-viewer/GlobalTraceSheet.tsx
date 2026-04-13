@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAdminTrace } from '@features/admin/api/admin'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import { buildConversationHref, clearTraceIdSearchParams } from '@features/admin/lib/admin-links'
 import { mapTraceDetailToViewer } from '@features/admin/traces/viewmodel'
 import { Sheet, SheetContent, SheetTitle } from '@components/ui/sheet'
@@ -15,11 +14,10 @@ export function GlobalTraceSheet() {
   const [searchParams, setSearchParams] = useSearchParams()
   const traceId = searchParams.get('traceId')
   const [selectedNodeId, setSelectedNodeId] = useState<string>('root')
-  const auth = useAdminContext()
 
   const { data: detail, isLoading } = useQuery({
-    queryKey: ['admin-trace', traceId, auth.adminKey],
-    queryFn: () => fetchAdminTrace(auth.adminKey, traceId!),
+    queryKey: ['admin-trace', traceId],
+    queryFn: () => fetchAdminTrace(traceId!),
     enabled: !!traceId,
   })
 

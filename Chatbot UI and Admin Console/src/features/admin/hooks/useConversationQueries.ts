@@ -26,21 +26,19 @@ const SESSION_COST_STALE_MS = 15_000
 const SESSION_COST_REFETCH_MS = 30_000
 
 interface ConversationQueriesParams {
-  adminKey: string
   deferredSearch: string
   sessionId: string | null
 }
 
 export function useConversationQueries({
-  adminKey,
   deferredSearch,
   sessionId,
 }: ConversationQueriesParams) {
   // ── Paginated conversation list ───────────────────────────────────────────
   const conversationsQuery = useInfiniteQuery({
-    queryKey: ['conversations-page', adminKey, deferredSearch] as const,
+    queryKey: ['conversations-page', deferredSearch] as const,
     queryFn: ({ pageParam }) =>
-      fetchConversationsPage(adminKey, {
+      fetchConversationsPage({
         limit: PAGE_SIZE,
         cursor: (pageParam as string | undefined) ?? undefined,
         search: deferredSearch,
@@ -61,14 +59,14 @@ export function useConversationQueries({
 
   // ── Eval sessions (separate tab) ──────────────────────────────────────────
   const evalSessionsQuery = useQuery({
-    queryKey: ['eval-sessions', adminKey] as const,
-    queryFn: () => fetchEvalSessions(adminKey, 100),
+    queryKey: ['eval-sessions'] as const,
+    queryFn: () => fetchEvalSessions(100),
   })
 
   // ── Session transcript ────────────────────────────────────────────────────
   const sessionTracesQuery = useQuery({
-    queryKey: ['session-traces', adminKey, sessionId] as const,
-    queryFn: () => fetchSessionTraces(adminKey, sessionId!),
+    queryKey: ['session-traces', sessionId] as const,
+    queryFn: () => fetchSessionTraces(sessionId!),
     enabled: sessionId !== null,
     staleTime: SESSION_TRACES_STALE_MS,
   })

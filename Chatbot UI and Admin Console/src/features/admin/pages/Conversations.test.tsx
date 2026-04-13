@@ -28,19 +28,6 @@ vi.mock('@features/admin/api/admin', () => ({
   fetchSessionTraces: (...args: unknown[]) => fetchSessionTracesMock(...args),
 }))
 
-vi.mock('@features/admin/context/AdminContext', () => ({
-  useAdminContext: () => ({
-    adminKey: 'admin-key',
-    setAdminKey: vi.fn(),
-    openrouterKey: '',
-    setOpenrouterKey: vi.fn(),
-    nvidiaKey: '',
-    setNvidiaKey: vi.fn(),
-    groqKey: '',
-    setGroqKey: vi.fn(),
-  }),
-}))
-
 vi.mock('@features/chat/hooks/useEvalStatus', () => ({
   useEvalStatus: (...args: unknown[]) => useEvalStatusMock(...args),
 }))
@@ -157,14 +144,14 @@ describe('Conversations — URL-driven selection', () => {
 
     expect(await screen.findByText('Transcript for')).toBeInTheDocument()
     expect(await screen.findByText('Hi again!')).toBeInTheDocument()
-    expect(fetchSessionTracesMock).toHaveBeenCalledWith('admin-key', 'session-1')
+    expect(fetchSessionTracesMock).toHaveBeenCalledWith('session-1')
   })
 
   it('auto-selects first session when no sessionId in URL', async () => {
     renderConversations('/admin/conversations')
 
     await waitFor(() => {
-      expect(fetchSessionTracesMock).toHaveBeenCalledWith('admin-key', 'session-1')
+      expect(fetchSessionTracesMock).toHaveBeenCalledWith('session-1')
     })
   })
 
@@ -172,10 +159,10 @@ describe('Conversations — URL-driven selection', () => {
     renderConversations('/admin/conversations?sessionId=session-2')
 
     await waitFor(() => {
-      expect(fetchSessionTracesMock).toHaveBeenCalledWith('admin-key', 'session-2')
+      expect(fetchSessionTracesMock).toHaveBeenCalledWith('session-2')
     })
     // Should NOT have fetched session-1 (auto-select should not fire)
-    expect(fetchSessionTracesMock).not.toHaveBeenCalledWith('admin-key', 'session-1')
+    expect(fetchSessionTracesMock).not.toHaveBeenCalledWith('session-1')
   })
 
   it('preserves transcript when selected session is not in search results', async () => {
@@ -189,7 +176,7 @@ describe('Conversations — URL-driven selection', () => {
     renderConversations('/admin/conversations?sessionId=session-1&search=hi')
 
     await waitFor(() => {
-      expect(fetchSessionTracesMock).toHaveBeenCalledWith('admin-key', 'session-1')
+      expect(fetchSessionTracesMock).toHaveBeenCalledWith('session-1')
     })
 
     expect(await screen.findByText('Not in current search')).toBeInTheDocument()

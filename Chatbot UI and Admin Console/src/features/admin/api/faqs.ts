@@ -1,44 +1,39 @@
-import { API_BASE_URL, requestJson, withAdminHeaders } from '@shared/api/http'
+import { API_BASE_URL, requestJson } from '@shared/api/http'
 import { streamSse } from '@shared/api/sse'
 import type { FaqCategory, FaqRecord } from '../types/admin'
 
 // ── Knowledge Base (FAQ) ──────────────────────────────────────────────────────
+//
+// Admin auth is JWT-cookie-based (ADMIN_AUTH_ENABLED=true). `requestJson`
+// already sends `credentials: 'include'` so the cookie flows automatically;
+// SSE calls add `credentials: 'include'` inline because `streamSse` is a
+// thinner wrapper over `fetch` that doesn't apply defaults.
 
-export async function fetchFaqs(
-  adminKey: string,
-  limit = 200,
-  skip = 0,
-): Promise<FaqRecord[]> {
+export async function fetchFaqs(limit = 200, skip = 0): Promise<FaqRecord[]> {
   const response = await requestJson<{ items: FaqRecord[] }>({
     method: 'GET',
     path: '/agent/admin/faqs',
     query: { limit, skip },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function updateFaq(
-  adminKey: string,
-  payload: {
-    id?: string
-    original_question?: string
-    new_question?: string
-    new_answer?: string
-    new_category?: string
-    new_tags?: string[]
-  },
-): Promise<{ status: string; message?: string }> {
+export async function updateFaq(payload: {
+  id?: string
+  original_question?: string
+  new_question?: string
+  new_answer?: string
+  new_category?: string
+  new_tags?: string[]
+}): Promise<{ status: string; message?: string }> {
   return requestJson({
     method: 'PUT',
     path: '/agent/admin/faqs',
-    headers: withAdminHeaders(adminKey),
     body: payload,
   })
 }
 
 export async function deleteFaq(
-  adminKey: string,
   target: string | { id?: string; question?: string },
 ): Promise<{ status: string; message?: string }> {
   const query =
@@ -52,38 +47,34 @@ export async function deleteFaq(
     method: 'DELETE',
     path: '/agent/admin/faqs',
     query,
-    headers: withAdminHeaders(adminKey),
   })
 }
 
-export async function clearAllFaqs(
-  adminKey: string,
-): Promise<{ status: string; message?: string }> {
+export async function clearAllFaqs(): Promise<{ status: string; message?: string }> {
   return requestJson({
     method: 'DELETE',
     path: '/agent/admin/faqs/all',
-    headers: withAdminHeaders(adminKey),
   })
 }
 
-export async function fetchFaqCategories(adminKey: string): Promise<FaqCategory[]> {
+export async function fetchFaqCategories(): Promise<FaqCategory[]> {
   const response = await requestJson<{ items: FaqCategory[] }>({
     method: 'GET',
     path: '/agent/admin/faq-categories',
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
 export async function searchFaqSemantic(
-  adminKey: string,
   query: string,
   limit = 5,
 ): Promise<Array<{ question: string; answer: string; score: number }>> {
-  const response = await requestJson<{ status: string; results: Array<{ question: string; answer: string; score: number }> }>({
+  const response = await requestJson<{
+    status: string
+    results: Array<{ question: string; answer: string; score: number }>
+  }>({
     method: 'POST',
     path: '/agent/admin/faqs/semantic-search',
-    headers: withAdminHeaders(adminKey),
     body: { query, limit },
   })
   return response.results ?? []
@@ -117,7 +108,6 @@ function resolveSseErrorMessage(data: string, parsed?: unknown): string {
 }
 
 export async function ingestFaqBatch(
-  adminKey: string,
   items: Array<{ question: string; answer: string; category?: string; tags?: string[] }>,
   onProgress?: (message: string) => void,
 ): Promise<string> {
@@ -126,9 +116,8 @@ export async function ingestFaqBatch(
     `${API_BASE_URL}/agent/admin/faqs/batch-json`,
     {
       method: 'POST',
-      headers: withAdminHeaders(adminKey, {
-        'Content-Type': 'application/json',
-      }),
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items }),
     },
     {
@@ -145,7 +134,6 @@ export async function ingestFaqBatch(
 }
 
 export async function ingestFaqPdf(
-  adminKey: string,
   file: File,
   onProgress?: (message: string) => void,
 ): Promise<string> {
@@ -157,7 +145,7 @@ export async function ingestFaqPdf(
     `${API_BASE_URL}/agent/admin/faqs/upload-pdf`,
     {
       method: 'POST',
-      headers: withAdminHeaders(adminKey),
+      credentials: 'include',
       body: formData,
     },
     {

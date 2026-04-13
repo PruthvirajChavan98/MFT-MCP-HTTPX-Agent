@@ -1,4 +1,4 @@
-import { requestJson, withAdminHeaders } from '@shared/api/http'
+import { requestJson } from '@shared/api/http'
 import type { ChatMessage as ChatMessageType } from '@shared/types/chat'
 import type { EvalTraceDetail, EvalTraceSummary } from '../types/admin'
 
@@ -88,33 +88,30 @@ export function extractTraceQuestion(trace: EvalTraceSummary): string {
 }
 
 // ── API ──────────────────────────────────────────────────────────────────────
+//
+// Admin auth is JWT-cookie-based. `requestJson` sends `credentials: 'include'`
+// on every call so the session cookie flows automatically.
 
-export async function fetchEvalTraces(
-  adminKey: string,
-  limit = 100,
-): Promise<EvalTraceSummary[]> {
+export async function fetchEvalTraces(limit = 100): Promise<EvalTraceSummary[]> {
   const response = await requestJson<{ items: EvalTraceSummary[] }>({
     method: 'GET',
     path: '/eval/search',
     query: { limit, order: 'desc' },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchEvalTrace(adminKey: string, traceId: string): Promise<EvalTraceDetail> {
+export async function fetchEvalTrace(traceId: string): Promise<EvalTraceDetail> {
   return requestJson<EvalTraceDetail>({
     method: 'GET',
     path: `/eval/trace/${encodeURIComponent(traceId)}`,
-    headers: withAdminHeaders(adminKey),
   })
 }
 
-export async function fetchAdminTrace(adminKey: string, traceId: string): Promise<EvalTraceDetail> {
+export async function fetchAdminTrace(traceId: string): Promise<EvalTraceDetail> {
   return requestJson<EvalTraceDetail>({
     method: 'GET',
     path: `/agent/admin/analytics/trace/${encodeURIComponent(traceId)}`,
-    headers: withAdminHeaders(adminKey),
   })
 }
 
@@ -122,7 +119,6 @@ export async function fetchAdminTrace(adminKey: string, traceId: string): Promis
 export const fetchCheckpointTrace = fetchAdminTrace
 
 export async function fetchVectorSearch(payload: {
-  adminKey: string
   kind: 'trace' | 'chunk'
   text: string
   k?: number
@@ -132,65 +128,49 @@ export async function fetchVectorSearch(payload: {
   min_score: number
   items: VectorSearchItem[]
 }> {
-  const { adminKey, ...body } = payload
   return requestJson({
     method: 'POST',
     path: '/eval/vector-search',
-    body,
-    headers: withAdminHeaders(adminKey),
+    body: payload,
   })
 }
 
-export async function fetchMetricsSummary(adminKey: string): Promise<MetricsSummaryItem[]> {
+export async function fetchMetricsSummary(): Promise<MetricsSummaryItem[]> {
   const response = await requestJson<{ items: MetricsSummaryItem[] }>({
     method: 'GET',
     path: '/eval/metrics/summary',
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchMetricFailures(
-  adminKey: string,
-  limit = 100,
-): Promise<MetricFailureItem[]> {
+export async function fetchMetricFailures(limit = 100): Promise<MetricFailureItem[]> {
   const response = await requestJson<{ items: MetricFailureItem[] }>({
     method: 'GET',
     path: '/eval/metrics/failures',
     query: { limit },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchQuestionTypes(
-  adminKey: string,
-  limit = 200,
-): Promise<QuestionTypeItem[]> {
+export async function fetchQuestionTypes(limit = 200): Promise<QuestionTypeItem[]> {
   const response = await requestJson<{ items: QuestionTypeItem[] }>({
     method: 'GET',
     path: '/eval/question-types',
     query: { limit },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchTraces(
-  adminKey: string,
-  limit = 200,
-): Promise<EvalTraceSummary[]> {
+export async function fetchTraces(limit = 200): Promise<EvalTraceSummary[]> {
   const response = await requestJson<{ items: EvalTraceSummary[] }>({
     method: 'GET',
     path: '/agent/admin/analytics/traces',
     query: { limit },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
 export async function fetchTracesPage(
-  adminKey: string,
   params: TraceQuery = {},
 ): Promise<CursorPage<EvalTraceSummary>> {
   const response = await requestJson<CursorPage<EvalTraceSummary>>({
@@ -203,7 +183,6 @@ export async function fetchTracesPage(
       status: params.status?.trim() || undefined,
       model: params.model?.trim() || undefined,
     },
-    headers: withAdminHeaders(adminKey),
   })
   return {
     items: response.items ?? [],
@@ -214,7 +193,6 @@ export async function fetchTracesPage(
 }
 
 export async function fetchSessionTraces(
-  adminKey: string,
   sessionId: string,
   limit = 500,
 ): Promise<ChatMessageType[]> {
@@ -222,7 +200,6 @@ export async function fetchSessionTraces(
     method: 'GET',
     path: `/agent/admin/analytics/session/${encodeURIComponent(sessionId)}`,
     query: { limit },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }

@@ -1,4 +1,4 @@
-import { requestJson, withAdminHeaders } from '@shared/api/http'
+import { requestJson } from '@shared/api/http'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,9 +67,12 @@ export interface GuardrailEventFilters {
 }
 
 // ── API ──────────────────────────────────────────────────────────────────────
+//
+// Admin auth is JWT-cookie-based. `requestJson` sends `credentials: 'include'`
+// on every call so the session cookie flows automatically. No `adminKey` param
+// needed on any of these functions.
 
 export async function fetchGuardrailEvents(
-  adminKey: string,
   filters: GuardrailEventFilters = {},
 ): Promise<{ items: GuardrailEvent[]; count: number; total: number; offset: number; limit: number }> {
   const response = await requestJson<{
@@ -91,25 +94,21 @@ export async function fetchGuardrailEvents(
       offset: filters.offset ?? 0,
       limit: filters.limit ?? 100,
     },
-    headers: withAdminHeaders(adminKey),
   })
   return response
 }
 
 export async function fetchGuardrailSummary(
-  adminKey: string,
   tenantId = 'default',
 ): Promise<GuardrailSummary> {
   return requestJson({
     method: 'GET',
     path: '/agent/admin/analytics/guardrails/summary',
     query: { tenant_id: tenantId },
-    headers: withAdminHeaders(adminKey),
   })
 }
 
 export async function fetchGuardrailTrends(
-  adminKey: string,
   tenantId = 'default',
   hours = 24,
 ): Promise<GuardrailTrendPoint[]> {
@@ -117,27 +116,23 @@ export async function fetchGuardrailTrends(
     method: 'GET',
     path: '/agent/admin/analytics/guardrails/trends',
     query: { tenant_id: tenantId, hours },
-    headers: withAdminHeaders(adminKey),
   })
   return response.items ?? []
 }
 
-export async function fetchGuardrailQueueHealth(adminKey: string): Promise<GuardrailQueueHealth> {
+export async function fetchGuardrailQueueHealth(): Promise<GuardrailQueueHealth> {
   return requestJson({
     method: 'GET',
     path: '/agent/admin/analytics/guardrails/queue-health',
-    headers: withAdminHeaders(adminKey),
   })
 }
 
 export async function fetchGuardrailJudgeSummary(
-  adminKey: string,
   limitFailures = 20,
 ): Promise<GuardrailJudgeSummary> {
   return requestJson({
     method: 'GET',
     path: '/agent/admin/analytics/guardrails/judge-summary',
     query: { limit_failures: limitFailures },
-    headers: withAdminHeaders(adminKey),
   })
 }

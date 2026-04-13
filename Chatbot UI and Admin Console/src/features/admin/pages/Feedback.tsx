@@ -4,7 +4,6 @@ import { ThumbsUp, ThumbsDown, MessageCircle } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { listFeedback, feedbackSummary, createFeedback } from '@features/admin/api/admin'
-import { useAdminContext } from '@features/admin/context/AdminContext'
 import { Card, CardContent } from '@components/ui/card'
 import { Button } from '@components/ui/button'
 import { Input } from '@components/ui/input'
@@ -61,20 +60,19 @@ function renderFeedbackCell(f: FeedbackRecord, column: Column<FeedbackRecord>) {
 }
 
 export function Feedback() {
-  const auth = useAdminContext()
   const qc = useQueryClient()
   const [ratingFilter, setRatingFilter] = useState('all')
   const [sheetOpen, setSheetOpen] = useState(false)
   const form = useForm<FeedbackForm>({ defaultValues: { rating: 'thumbs_up' } })
 
   const { data: items = [], isLoading: fLoading, error: fError } = useQuery({
-    queryKey: ['feedback', auth.adminKey],
-    queryFn: () => listFeedback(auth.adminKey),
+    queryKey: ['feedback'],
+    queryFn: () => listFeedback(),
   })
 
   const { data: summary, isLoading: sLoading } = useQuery({
-    queryKey: ['feedback-summary', auth.adminKey],
-    queryFn: () => feedbackSummary(auth.adminKey),
+    queryKey: ['feedback-summary'],
+    queryFn: () => feedbackSummary(),
   })
 
   const createMut = useMutation({

@@ -3,17 +3,12 @@ import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const useQueryMock = vi.fn()
-const useAdminContextMock = vi.fn()
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
   // queryOptions / infiniteQueryOptions are identity helpers used at module-init time in queryOptions.ts
   queryOptions: (opts: unknown) => opts,
   infiniteQueryOptions: (opts: unknown) => opts,
-}))
-
-vi.mock('@features/admin/context/AdminContext', () => ({
-  useAdminContext: () => useAdminContextMock(),
 }))
 
 vi.mock('recharts', () => ({
@@ -65,42 +60,14 @@ describe('Guardrails page states', () => {
   afterEach(() => {
     cleanup()
     useQueryMock.mockReset()
-    useAdminContextMock.mockReset()
   })
 
-  it('does not crash when auth state changes across rerenders', async () => {
+  it('renders cleanly with empty data', async () => {
     mockQueries()
-
-    const adminContextValues = [
-      {
-        adminKey: '',
-        setAdminKey: vi.fn(),
-        openrouterKey: '',
-        setOpenrouterKey: vi.fn(),
-        groqKey: '',
-        setGroqKey: vi.fn(),
-      },
-      {
-        adminKey: 'admin-key',
-        setAdminKey: vi.fn(),
-        openrouterKey: '',
-        setOpenrouterKey: vi.fn(),
-        groqKey: '',
-        setGroqKey: vi.fn(),
-      },
-    ]
-
-    let idx = 0
-    useAdminContextMock.mockImplementation(() => {
-      const value = adminContextValues[Math.min(idx, adminContextValues.length - 1)]
-      idx += 1
-      return value
-    })
 
     const { GuardrailsPage: Guardrails } = await import('./GuardrailsPage')
     const { rerender } = render(<Guardrails />)
 
-    // With no admin key guard, page renders immediately
     expect(screen.getByText(/Guardrails Observatory/i)).toBeInTheDocument()
 
     rerender(<Guardrails />)
@@ -110,14 +77,6 @@ describe('Guardrails page states', () => {
 
   it('keeps page rendering when trends request fails', async () => {
     mockQueries({ 'guardrail-trends': new Error('Trends unavailable') })
-    useAdminContextMock.mockReturnValue({
-      adminKey: 'admin-key',
-      setAdminKey: vi.fn(),
-      openrouterKey: '',
-      setOpenrouterKey: vi.fn(),
-      groqKey: '',
-      setGroqKey: vi.fn(),
-    })
 
     const { GuardrailsPage: Guardrails } = await import('./GuardrailsPage')
     render(<Guardrails />)
@@ -129,14 +88,6 @@ describe('Guardrails page states', () => {
 
   it('shows inline events error without collapsing trend and summary panels', async () => {
     mockQueries({ 'guardrail-events': new Error('Events unavailable') })
-    useAdminContextMock.mockReturnValue({
-      adminKey: 'admin-key',
-      setAdminKey: vi.fn(),
-      openrouterKey: '',
-      setOpenrouterKey: vi.fn(),
-      groqKey: '',
-      setGroqKey: vi.fn(),
-    })
 
     const { GuardrailsPage: Guardrails } = await import('./GuardrailsPage')
     render(<Guardrails />)
