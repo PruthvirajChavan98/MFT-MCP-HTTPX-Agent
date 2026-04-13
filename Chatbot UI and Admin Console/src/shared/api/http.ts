@@ -95,7 +95,7 @@ function resolveErrorMessage(parsed: unknown, status: number): string {
 }
 
 interface RequestConfig {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   path: string
   query?: Record<string, string | number | boolean | undefined | null>
   body?: unknown
@@ -107,6 +107,7 @@ const CSRF_COOKIE_NAME = 'mft_admin_csrf'
 const STATE_CHANGING_METHODS: ReadonlySet<RequestConfig['method']> = new Set([
   'POST',
   'PUT',
+  'PATCH',
   'DELETE',
 ])
 

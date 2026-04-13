@@ -76,16 +76,20 @@ describe('requestJson', () => {
     expect(headers['X-CSRF-Token']).toBeUndefined()
   })
 
-  it('injects X-CSRF-Token on PUT and DELETE', async () => {
+  it('injects X-CSRF-Token on PUT, PATCH, and DELETE', async () => {
     setCsrfCookie('csrf-xyz')
     fetchSpy.mockResolvedValue(makeResponse(200, '{}'))
 
     await requestJson({ method: 'PUT', path: '/a', body: { x: 1 } })
+    await requestJson({ method: 'PATCH', path: '/a', body: { x: 1 } })
     await requestJson({ method: 'DELETE', path: '/a' })
 
     const putHeaders = (fetchSpy.mock.calls[0][1] as RequestInit).headers as Record<string, string>
-    const delHeaders = (fetchSpy.mock.calls[1][1] as RequestInit).headers as Record<string, string>
+    const patchHeaders = (fetchSpy.mock.calls[1][1] as RequestInit)
+      .headers as Record<string, string>
+    const delHeaders = (fetchSpy.mock.calls[2][1] as RequestInit).headers as Record<string, string>
     expect(putHeaders['X-CSRF-Token']).toBe('csrf-xyz')
+    expect(patchHeaders['X-CSRF-Token']).toBe('csrf-xyz')
     expect(delHeaders['X-CSRF-Token']).toBe('csrf-xyz')
   })
 
