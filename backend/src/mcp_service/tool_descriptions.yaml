@@ -128,3 +128,21 @@ select_loan: |
     - This is a side-effect tool. If you already called it in the current turn with the same loan_number, do not call it again. Use the existing result and continue.
   Returns:
     - Confirmation string, or an error with the list of valid loan numbers.
+
+search_knowledge_base: |
+  Purpose: Search the product FAQ knowledge base for answers relevant to a user question.
+  Input variables:
+    - query: The user's natural-language question (required, non-empty).
+  Returns:
+    - Plaintext summary of the top 5 matching FAQs with question, answer, and relevance score.
+    - "No matching FAQs found." when the knowledge base has no relevant content.
+  When to use:
+    - The user asks a product/policy question (loan terms, fees, payment methods, foreclosure rules, document requirements, etc.) that is NOT session-state-dependent.
+    - Use this BEFORE calling user-specific tools (dashboard_home, loan_details, etc.) when the question is about general product knowledge rather than the user's specific account.
+  When NOT to use:
+    - The user asks about THEIR specific account data — use the session-state tools instead.
+    - The user is performing an action (login, payment, download) — those have dedicated tools.
+  Notes:
+    - This is a read-only tool with no side effects. Safe to call multiple times with different queries.
+    - Results are ordered by relevance (highest first). A score below ~0.5 means the match is weak; consider rephrasing or falling back to a session-state tool.
+    - Public tool: no authentication required. FAQ content is public product documentation.

@@ -14,6 +14,8 @@ from .auth_api import MockFinTechAuthAPIs
 from .config import MCP_SERVER_HOST, MCP_SERVER_PORT
 from .core_api import MockFinTechAPIs
 from .description_utils import _d
+from .kb_search import format_results as _format_kb_results
+from .kb_search import semantic_search as _kb_semantic_search
 from .session_store import RedisSessionStore
 
 log = logging.getLogger(name="mcp_server")
@@ -161,6 +163,18 @@ async def logout(session_id: str) -> str:
     await _touch(session_id, "logout")
     await session_store.delete(session_id)
     return "Logged out successfully. Please reload the page or generate a new OTP to log in again."
+
+
+@mcp.tool(name="search_knowledge_base", description=_d("search_knowledge_base"))
+async def search_knowledge_base(query: str, session_id: str) -> str:
+    """Public FAQ semantic search over the shared kb_faqs Milvus collection.
+
+    No authentication required — FAQ content is public product knowledge.
+    Returns top-5 matches formatted as plaintext for LLM consumption.
+    """
+    await _touch(session_id, "search_knowledge_base")
+    results = await _kb_semantic_search(query, limit=5)
+    return _format_kb_results(results)
 
 
 # ---------------------------------------------------------------------------

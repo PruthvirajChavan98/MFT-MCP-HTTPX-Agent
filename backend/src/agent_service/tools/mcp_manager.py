@@ -21,6 +21,7 @@ PUBLIC_TOOLS = {
     "validate_otp",
     "is_logged_in",
     "mock_fintech_knowledge_base",  # The FAQ RAG tool
+    "search_knowledge_base",  # Semantic FAQ search (MCP-side Milvus, Phase M1 plan 2026-04-11)
 }
 
 
