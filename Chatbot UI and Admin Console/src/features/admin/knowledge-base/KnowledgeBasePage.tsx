@@ -23,6 +23,8 @@ import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
 import { MobileHeader } from '@components/ui/mobile-header'
 import { CollapsiblePanel } from '@components/ui/collapsible-panel'
+import { useDebouncedLoading } from '@shared/hooks/useDebouncedLoading'
+import type { FaqRecord } from '@features/admin/types/admin'
 import {
   buildKnowledgeBaseViewModel,
   type KnowledgeBaseFaqRow,
@@ -70,6 +72,7 @@ export function KnowledgeBasePage() {
   )
 
   const semanticMatches: SemanticMatch[] = semanticQuery.data ?? []
+  const semanticLoading = useDebouncedLoading(semanticQuery.isFetching, 200)
 
   const model = useMemo(
     () =>
@@ -96,25 +99,51 @@ export function KnowledgeBasePage() {
       withMfa('delete this FAQ', () =>
         deleteFaq(row.serverId ? { id: row.serverId } : { question: row.question }),
       ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['faqs'] })
+    onMutate: async (row) => {
+      await queryClient.cancelQueries({ queryKey: ['faqs'] })
+      const snapshots = queryClient.getQueriesData<FaqRecord[]>({ queryKey: ['faqs'] })
+      queryClient.setQueriesData<FaqRecord[]>({ queryKey: ['faqs'] }, (prev) =>
+        (prev ?? []).filter((f) =>
+          row.serverId ? f.id !== row.serverId : f.question !== row.question,
+        ),
+      )
+      return { snapshots }
+    },
+    onSuccess: () => {
       toast.success('FAQ deleted')
     },
-    onError: (error) => {
+    onError: (error, _row, context) => {
+      if (context?.snapshots) {
+        for (const [key, data] of context.snapshots) queryClient.setQueryData(key, data)
+      }
       if (error instanceof MfaCancelled) return // user cancelled the TOTP prompt — silent
       toast.error(getErrorMessage(error))
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['faqs'] })
     },
   })
 
   const deleteAllMut = useMutation({
     mutationFn: () => withMfa('delete all FAQs', () => clearAllFaqs()),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['faqs'] })
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['faqs'] })
+      const snapshots = queryClient.getQueriesData<FaqRecord[]>({ queryKey: ['faqs'] })
+      queryClient.setQueriesData<FaqRecord[]>({ queryKey: ['faqs'] }, () => [])
+      return { snapshots }
+    },
+    onSuccess: () => {
       toast.success('All FAQs deleted')
     },
-    onError: (error) => {
+    onError: (error, _vars, context) => {
+      if (context?.snapshots) {
+        for (const [key, data] of context.snapshots) queryClient.setQueryData(key, data)
+      }
       if (error instanceof MfaCancelled) return
       toast.error(getErrorMessage(error))
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['faqs'] })
     },
   })
 
@@ -379,13 +408,13 @@ export function KnowledgeBasePage() {
           </div>
         </div>
 
-        {(semanticQuery.isFetching || semanticMatches.length > 0) && (
+        {(semanticLoading || semanticMatches.length > 0) && (
           <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/5 p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary">
               <Sparkles className="size-4" />
               Semantic Matches
             </h3>
-            {semanticQuery.isFetching ? (
+            {semanticLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-16 rounded-lg" />
                 <Skeleton className="h-16 rounded-lg" />
