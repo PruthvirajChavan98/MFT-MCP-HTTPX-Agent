@@ -119,6 +119,34 @@ class AppFactory:
                         "✅ PostgreSQL pool initialized, eval schema verified, and shared pool wired"
                     )
 
+                    # Seed the env-backed super-admin into admin_users on first
+                    # boot — no-op once any active super-admin row exists.
+                    from src.agent_service.api.admin_users.repo import (
+                        admin_users_repo,
+                    )
+                    from src.agent_service.core.config import (
+                        SUPER_ADMIN_EMAIL,
+                        SUPER_ADMIN_PASSWORD_HASH,
+                        SUPER_ADMIN_TOTP_SECRET_ENC,
+                    )
+
+                    if (
+                        SUPER_ADMIN_EMAIL
+                        and SUPER_ADMIN_PASSWORD_HASH
+                        and SUPER_ADMIN_TOTP_SECRET_ENC
+                    ):
+                        seeded = await admin_users_repo.seed_super_admin_if_absent(
+                            postgres_pool.pool,
+                            email=SUPER_ADMIN_EMAIL,
+                            password_hash=SUPER_ADMIN_PASSWORD_HASH,
+                            totp_secret_enc=SUPER_ADMIN_TOTP_SECRET_ENC,
+                        )
+                        if seeded is not None:
+                            log.info(
+                                "✅ Seeded super-admin %s into admin_users",
+                                seeded.email,
+                            )
+
                 if SECURITY_ENABLED:
                     redis = await get_redis()
                     security_runtime = build_security_runtime(redis)
