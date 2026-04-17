@@ -62,8 +62,21 @@ type TrendDatum = {
   allowed: number
 }
 
-function buildEventKey(event: GuardrailEvent, index: number): string {
-  return `${event.trace_id || 'trace'}:${event.event_time}:${index}`
+/**
+ * Build a stable key for a guardrail event row.
+ *
+ * Must NOT depend on array index — the same event appears at different indices
+ * depending on sort order (`sortedEvents` vs `events`) and filter-driven query
+ * refetches, which previously caused the expanded-row state to silently drop
+ * whenever a filter was applied.
+ *
+ * `session_id + event_time + trace_id` is the natural uniqueness tuple:
+ * event_time is a high-resolution timestamp (microseconds on the backend),
+ * two events on the same session at the same microsecond from the same trace
+ * are effectively impossible.
+ */
+function buildEventKey(event: GuardrailEvent): string {
+  return `${event.session_id}:${event.event_time}:${event.trace_id || ''}`
 }
 
 export function GuardrailsPage() {
@@ -136,7 +149,7 @@ export function GuardrailsPage() {
 
   const expandedEvent = useMemo(() => {
     if (!expandedEventKey) return null
-    return events.find((event, index) => buildEventKey(event, index) === expandedEventKey) || null
+    return events.find((event) => buildEventKey(event) === expandedEventKey) || null
   }, [events, expandedEventKey])
 
   useEffect(() => {
@@ -320,8 +333,8 @@ export function GuardrailsPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedEvents.map((event, index) => {
-                  const key = buildEventKey(event, index)
+                {sortedEvents.map((event) => {
+                  const key = buildEventKey(event)
                   const isExpanded = expandedEventKey === key
 
                   return (
