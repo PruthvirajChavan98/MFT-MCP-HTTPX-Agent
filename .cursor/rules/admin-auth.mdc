@@ -11,6 +11,32 @@ and the `ADMIN_AUTH_ENABLED` feature flag were retired** in Phase 6g/6h; they no
 longer exist in code. Any new admin endpoint or admin UI that sneaks them back
 in is wrong.
 
+## Identity storage
+
+All admin identities live in the `admin_users` Postgres table
+(`backend/infra/sql/03_admin_users.sql`). JWT `sub` is the admin's UUID,
+`email` is a claim-echoed field on `/admin/auth/me`, `roles` is
+`["admin"]` or `["admin", "super_admin"]` depending on
+`admin_users.is_super_admin`.
+
+The env-backed `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD_HASH` /
+`SUPER_ADMIN_TOTP_SECRET_ENC` vars are **bootstrap-only** — the app seeds
+them into the table on first boot (`seed_super_admin_if_absent`, idempotent
+on "any active super admin exists") and never reads them again at request
+time. Rotating the env password does not change the DB; rotate via SQL.
+
+Enrolling non-super-admins is done via the super-admin-only UI at
+`/admin/admins` (backed by `POST /agent/admin/admins`). See
+`docs/runbooks/admin-enrollment.md` for the full procedure. The raw
+TOTP secret is returned **once** in the POST response and never again —
+the server does not log it, and the frontend surfaces it in a one-time
+modal pane with a close-confirm guard.
+
+Revocation is soft: `admin_users.revoked_at = now()`. The partial unique
+index is on active rows only, so a revoked email can be re-enrolled.
+Two app-level guards on DELETE: **cannot_revoke_self** and
+**last_super_admin** (prevents locking everyone out).
+
 ## Backend dependency chain
 
 Declared in `backend/src/agent_service/api/admin_auth.py`:
