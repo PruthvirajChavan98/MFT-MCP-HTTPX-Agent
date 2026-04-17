@@ -18,6 +18,13 @@ Chatbot UI and Admin Console/.vite/
 Chatbot UI and Admin Console/dist/
 Chatbot UI and Admin Console/dist-ssr/
 
+# Playwright test output — runs, reports, traces. Baselines under
+# `tests/visual/*-snapshots/` ARE committed (visual regression ground truth).
+Chatbot UI and Admin Console/test-results/
+Chatbot UI and Admin Console/playwright-report/
+Chatbot UI and Admin Console/blob-report/
+Chatbot UI and Admin Console/.playwright/
+
 STALE_OLD_UI/node_modules/
 STALE_OLD_UI/.vite/
 STALE_OLD_UI/dist/
