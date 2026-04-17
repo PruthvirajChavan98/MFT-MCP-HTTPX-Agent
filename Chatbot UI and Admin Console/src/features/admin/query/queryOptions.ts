@@ -152,3 +152,14 @@ export function faqSemanticSearchQueryOptions(params: FaqSemanticParams) {
     enabled: false,
   })
 }
+
+export function adminsQueryOptions() {
+  return queryOptions({
+    queryKey: ['admins'] as const,
+    queryFn: async () => {
+      const { listAdmins } = await import('@features/admin/api/admins')
+      return listAdmins()
+    },
+    staleTime: 30_000,
+  })
+}

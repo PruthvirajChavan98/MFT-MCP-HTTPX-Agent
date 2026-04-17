@@ -62,6 +62,10 @@ const ArchitecturePage = lazy(async () => {
   const module = await import('@features/chat/pages/ArchitecturePage')
   return { default: module.ArchitecturePage }
 })
+const AdminUsersPage = lazy(async () => {
+  const module = await import('@features/admin/pages/AdminUsersPage')
+  return { default: module.AdminUsersPage }
+})
 
 export const router = createBrowserRouter([
   {
@@ -95,6 +99,7 @@ export const router = createBrowserRouter([
       { path: 'users', Component: UsersAnalytics },
       { path: 'feedback', Component: Feedback },
       { path: 'health', Component: SystemHealth },
+      { path: 'admins', Component: AdminUsersPage },
     ],
   },
 ])

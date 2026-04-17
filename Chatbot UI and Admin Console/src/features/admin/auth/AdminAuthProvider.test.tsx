@@ -39,7 +39,8 @@ import { AdminAuthProvider, useAdminAuth } from './AdminAuthProvider'
 import { AuthGuard } from '../layout/AdminLayout'
 
 const SESSION_SAMPLE = {
-  sub: 'super_admin',
+  sub: '11111111-1111-1111-1111-111111111111',
+  email: 'admin@example.com',
   roles: ['admin', 'super_admin'],
   mfa_fresh: false,
   exp: 9999999999,
@@ -99,7 +100,7 @@ describe('AdminAuthProvider', () => {
       </AdminAuthProvider>,
     )
     await waitForLoadingDone()
-    expect(screen.getByTestId('session').textContent).toBe('super_admin')
+    expect(screen.getByTestId('session').textContent).toBe(SESSION_SAMPLE.sub)
     expect(screen.getByTestId('error').textContent).toBe('none')
     expect(requestJsonMock).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'GET', path: '/admin/auth/me' }),
@@ -148,7 +149,7 @@ describe('AdminAuthProvider', () => {
     screen.getByRole('button', { name: 'login' }).click()
 
     await vi.waitFor(() => {
-      expect(screen.getByTestId('session').textContent).toBe('super_admin')
+      expect(screen.getByTestId('session').textContent).toBe(SESSION_SAMPLE.sub)
     })
 
     const loginCall = requestJsonMock.mock.calls.find(
@@ -190,7 +191,7 @@ describe('AdminAuthProvider', () => {
       </AdminAuthProvider>,
     )
     await waitForLoadingDone()
-    expect(screen.getByTestId('session').textContent).toBe('super_admin')
+    expect(screen.getByTestId('session').textContent).toBe(SESSION_SAMPLE.sub)
 
     screen.getByRole('button', { name: 'logout' }).click()
 

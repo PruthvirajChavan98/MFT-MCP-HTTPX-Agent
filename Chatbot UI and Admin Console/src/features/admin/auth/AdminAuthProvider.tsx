@@ -11,6 +11,7 @@ import { ApiError, requestJson } from '@/shared/api/http'
 
 export interface AdminSession {
   sub: string
+  email: string | null
   roles: readonly string[]
   mfa_fresh: boolean
   exp: number

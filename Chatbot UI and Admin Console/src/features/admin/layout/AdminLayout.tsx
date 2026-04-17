@@ -4,7 +4,7 @@ import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-route
 import {
   LayoutDashboard, Database, DollarSign, Activity, MessageSquare,
   Shield as ShieldIcon, Gauge, Cpu, Heart, ChevronLeft, Menu,
-  Settings, LogOut, Search, Bell, Tag, Key, Users
+  Settings, LogOut, Search, Bell, Tag, Key, Users, UserPlus
 } from "lucide-react";
 import { AdminProvider, useAdminContext } from "@features/admin/context/AdminContext";
 import { AdminAuthProvider, useAdminAuth } from "@features/admin/auth/AdminAuthProvider";
@@ -20,7 +20,15 @@ import { KeyInput } from "@components/ui/key-input";
 import { ThemeToggle } from "@components/ui/theme-toggle";
 import { useLiveGlobalFeed } from "@features/admin/hooks/useLiveGlobalFeed";
 
-const NAV_ITEMS = [
+type NavItem = {
+  path: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  superAdminOnly?: boolean;
+};
+
+const NAV_ITEMS: readonly NavItem[] = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { path: "/admin/knowledge-base", label: "Knowledge Base", icon: Database },
   { path: "/admin/costs", label: "Session Costs", icon: DollarSign },
@@ -31,6 +39,7 @@ const NAV_ITEMS = [
   { path: "/admin/users", label: "Users & Analytics", icon: Users },
   { path: "/admin/model-config", label: "Models & Router", icon: Cpu },
   { path: "/admin/health", label: "System Health", icon: Heart },
+  { path: "/admin/admins", label: "Admin Users", icon: UserPlus, superAdminOnly: true },
 ];
 
 // KeyInput extracted to @components/ui/key-input
@@ -134,7 +143,9 @@ function AdminShell() {
         </div>
 
         <nav className="flex-1 py-3 px-2 overflow-y-auto space-y-0.5 no-scrollbar">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter(
+            (item) => !item.superAdminOnly || (session?.roles ?? []).includes("super_admin"),
+          ).map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
