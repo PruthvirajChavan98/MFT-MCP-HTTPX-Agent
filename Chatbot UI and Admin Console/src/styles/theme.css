@@ -1,7 +1,22 @@
 @custom-variant dark (&:is(.dark *));
 
-/* 🚀 Tailwind v4 Theme Mapping Engine */
+/* ─────────────────────────────────────────────────────────────────────────
+   Tailwind v4 Theme Mapping Engine
+   Terminal-grade Fintech aesthetic:
+   - IBM Plex Sans (body / UI) + JetBrains Mono (numerics, code, IDs)
+   - Dark default; true neutrals (not slate-blue cast)
+   - Restrained cyan accent — one strong element per screen
+   - Hairline border language, layered surfaces, subtle atmospheric radials
+   ─────────────────────────────────────────────────────────────────────── */
 @theme inline {
+  /* Font families */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-display: var(--font-sans);
+
+  /* Colors — bound to CSS variables (defined below per theme) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -22,6 +37,19 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  /* Semantic status colors + their soft-tinted backgrounds */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  /* Surface layering — used by Card variants */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-hairline: var(--hairline);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -30,50 +58,90 @@
 
 @layer base {
   :root {
-    /* 🚀 Explicit HEX codes fix the Tailwind v4 transparency bug */
-    --background: #ffffff;
-    --foreground: #020817;
+    /* LIGHT theme — kept clean + neutral; explicit hex to dodge Tailwind v4 transparency bug */
+    --background: #fafaf9;
+    --foreground: #0a0a0a;
     --card: #ffffff;
-    --card-foreground: #020817;
+    --card-foreground: #0a0a0a;
     --popover: #ffffff;
-    --popover-foreground: #020817;
+    --popover-foreground: #0a0a0a;
     --primary: #06b6d4;
-    /* cyan-500 */
     --primary-foreground: #ffffff;
-    --secondary: #f1f5f9;
-    --secondary-foreground: #0f172a;
-    --muted: #f8fafc;
-    --muted-foreground: #64748b;
-    --accent: #f1f5f9;
-    --accent-foreground: #0f172a;
-    --destructive: #ef4444;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #18181b;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+    --accent: #f4f4f5;
+    --accent-foreground: #18181b;
+    --destructive: #dc2626;
     --destructive-foreground: #ffffff;
-    --border: #e2e8f0;
-    --input: #e2e8f0;
+    --border: #e4e4e7;
+    --input: #e4e4e7;
     --ring: #06b6d4;
-    --radius: 0.75rem;
+    --radius: 0.5rem;
+
+    /* Semantic status */
+    --success: #10b981;
+    --success-soft: #ecfdf5;
+    --warning: #f59e0b;
+    --warning-soft: #fffbeb;
+    --info: #06b6d4;
+    --info-soft: #ecfeff;
+
+    /* Surface layering (light) */
+    --surface-1: #ffffff;
+    --surface-2: #fafaf9;
+    --hairline: rgba(10, 10, 10, 0.06);
+
+    /* Atmospheric radial — used sparingly as backdrop accents */
+    --atmosphere-radial-1: radial-gradient(
+      ellipse 80% 50% at 50% 0%,
+      rgba(6, 182, 212, 0.06),
+      transparent 60%
+    );
   }
 
   .dark {
-    --background: #020617;
-    --foreground: #f8fafc;
-    --card: #0f172a;
-    --card-foreground: #f8fafc;
-    --popover: #0f172a;
-    --popover-foreground: #f8fafc;
-    --primary: #06b6d4;
-    --primary-foreground: #ffffff;
-    --secondary: #1e293b;
-    --secondary-foreground: #f8fafc;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
-    --destructive: #7f1d1d;
-    --destructive-foreground: #fca5a5;
-    --border: #1e293b;
-    --input: #1e293b;
-    --ring: #0891b2;
+    /* DARK theme (default) — true neutrals, not slate-blue */
+    --background: #0a0a0a;
+    --foreground: #f5f5f4;
+    --card: #111111;
+    --card-foreground: #f5f5f4;
+    --popover: #111111;
+    --popover-foreground: #f5f5f4;
+    --primary: #22d3ee;
+    --primary-foreground: #0a0a0a;
+    --secondary: #1c1c1c;
+    --secondary-foreground: #f5f5f4;
+    --muted: #1c1c1c;
+    --muted-foreground: #a1a1aa;
+    --accent: #1c1c1c;
+    --accent-foreground: #f5f5f4;
+    --destructive: #f87171;
+    --destructive-foreground: #0a0a0a;
+    --border: #262626;
+    --input: #262626;
+    --ring: #22d3ee;
+
+    /* Semantic status (dark-adjusted) */
+    --success: #34d399;
+    --success-soft: rgba(52, 211, 153, 0.12);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.12);
+    --info: #22d3ee;
+    --info-soft: rgba(34, 211, 238, 0.12);
+
+    /* Surface layering (dark) */
+    --surface-1: #111111;
+    --surface-2: #161616;
+    --hairline: rgba(255, 255, 255, 0.06);
+
+    /* Atmospheric radial — restrained cyan wash */
+    --atmosphere-radial-1: radial-gradient(
+      ellipse 70% 45% at 50% 0%,
+      rgba(34, 211, 238, 0.08),
+      transparent 65%
+    );
   }
 }
 
@@ -82,12 +150,43 @@
     @apply border-border outline-ring/50;
   }
 
+  html {
+    font-family: var(--font-sans);
+    /* IBM Plex Sans OpenType features — enable stylistic alternates */
+    font-feature-settings: "ss01", "ss02", "ss03", "ss04";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Signature utility: numerics-as-identity. Every number rendered through
+     this class reads as instrument-panel output — monospace + tabular-nums
+     so digits align column-wise across rows. Apply to cost totals, latency
+     values, counts, percentages, IDs, timestamps. */
+  .tabular,
+  .font-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "zero", "ss19";
+    letter-spacing: -0.01em;
   }
 
   /* Force Radix/Shadcn floating elements to respect background stacking */
   [data-radix-popper-content-wrapper] {
     @apply z-50;
+  }
+
+  /* Respect reduced-motion preference globally */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

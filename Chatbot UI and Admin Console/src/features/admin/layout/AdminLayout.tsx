@@ -17,6 +17,7 @@ import { CommandPalette } from "./CommandPalette";
 import { GlobalTraceSheet } from "@features/admin/traces/trace-viewer/GlobalTraceSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/ui/popover";
 import { KeyInput } from "@components/ui/key-input";
+import { ThemeToggle } from "@components/ui/theme-toggle";
 import { useLiveGlobalFeed } from "@features/admin/hooks/useLiveGlobalFeed";
 
 const NAV_ITEMS = [
@@ -96,63 +97,88 @@ function AdminShell() {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground font-sans">
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          className="fixed inset-0 z-30 bg-foreground/20 backdrop-blur-[2px] md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — hairline-bordered, bg-card */}
       <aside className={`
         ${sidebarOpen
-          ? "w-64 fixed inset-y-0 left-0 z-40 shadow-xl md:relative md:shadow-none"
+          ? "w-64 fixed inset-y-0 left-0 z-40 shadow-2xl md:relative md:shadow-none"
           : "w-0 overflow-hidden md:w-16"
         }
-        bg-white border-r border-gray-200 flex flex-col shrink-0 transition-all duration-300 ease-in-out
+        bg-card border-r border-border flex flex-col shrink-0 transition-[width] duration-200 ease-out
       `}>
-        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-border">
           {sidebarOpen && (
-            <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-linear-to-r from-cyan-500 to-teal-500">
-                <ShieldIcon className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              {/* Sidebar mark — subtle ring, not a gradient square */}
+              <div className="size-7 shrink-0 rounded-md flex items-center justify-center bg-primary/10 text-primary ring-1 ring-primary/20">
+                <ShieldIcon className="size-4" />
               </div>
-              <span className="font-bold text-slate-900 truncate" style={{ fontSize: 15 }}>MFT Admin</span>
+              <span className="text-[15px] font-semibold tracking-tight truncate">MFT Admin</span>
             </div>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-8 h-8 shrink-0 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+            className="size-8 shrink-0 rounded-md hover:bg-accent flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
-            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            {sidebarOpen ? <ChevronLeft className="size-4" /> : <Menu className="size-4" />}
           </button>
         </div>
 
-        <nav className="flex-1 py-3 px-2 overflow-y-auto space-y-1 no-scrollbar">
+        <nav className="flex-1 py-3 px-2 overflow-y-auto space-y-0.5 no-scrollbar">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               end={item.exact}
               title={!sidebarOpen ? item.label : undefined}
-              className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${isActive ? "text-white shadow-md bg-linear-to-r from-cyan-500 to-teal-500" : "text-gray-600 hover:bg-gray-100"
-                }`}
+              className={({ isActive }) =>
+                `group relative w-full flex items-center gap-3 px-3 py-2 rounded-md text-left text-sm transition-colors ${
+                  isActive
+                    ? "bg-accent text-foreground font-medium"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                }`
+              }
             >
-              <item.icon className="w-4 h-4 shrink-0" />
-              {sidebarOpen && <span className="text-sm font-medium truncate">{item.label}</span>}
+              {({ isActive }) => (
+                <>
+                  {/* Active-state marker: 2px accent bar on the left edge */}
+                  {isActive && (
+                    <span
+                      aria-hidden
+                      className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-primary"
+                    />
+                  )}
+                  <item.icon className="size-4 shrink-0" />
+                  {sidebarOpen && <span className="truncate">{item.label}</span>}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="border-t border-gray-100 p-2 space-y-1">
-          <button onClick={() => setCmdOpen(true)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all">
+        <div className="border-t border-border p-2 space-y-0.5">
+          <button
+            onClick={() => setCmdOpen(true)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-colors"
+          >
             <div className="flex items-center gap-3">
-              <Search className="w-4 h-4 shrink-0" />
-              {sidebarOpen && <span className="text-sm font-medium">Search</span>}
+              <Search className="size-4 shrink-0" />
+              {sidebarOpen && <span>Search</span>}
             </div>
-            {sidebarOpen && <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-gray-200 rounded text-gray-500">⌘K</kbd>}
+            {sidebarOpen && (
+              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-tabular bg-secondary rounded text-muted-foreground border border-border">
+                ⌘K
+              </kbd>
+            )}
           </button>
           <button
             onClick={async () => {
@@ -161,48 +187,60 @@ function AdminShell() {
               }
               navigate("/");
             }}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-colors"
           >
-            <LogOut className="w-4 h-4 shrink-0" />
+            <LogOut className="size-4 shrink-0" />
             {sidebarOpen && (
-              <span className="text-sm font-medium">
-                {session ? "Sign out" : "Exit Admin"}
-              </span>
+              <span>{session ? "Sign out" : "Exit Admin"}</span>
             )}
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Signature atmosphere — restrained cyan radial wash, dark-mode dominant */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[480px]"
+          style={{ backgroundImage: "var(--atmosphere-radial-1)" }}
+        />
+
         {/* Top Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shrink-0">
+        <header className="relative h-14 bg-card/50 backdrop-blur-xl border-b border-border flex items-center justify-between px-4 sm:px-6 shrink-0">
           <div className="flex items-center gap-3">
             {/* Hamburger — always visible when sidebar is closed, especially on mobile */}
             {!sidebarOpen && (
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="w-8 h-8 shrink-0 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors md:hidden"
+                className="size-8 shrink-0 rounded-md hover:bg-accent flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors md:hidden"
+                aria-label="Open sidebar"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="size-5" />
               </button>
             )}
-            <h2 className="text-sm font-semibold text-slate-800">Production Console</h2>
+            <h2 className="text-sm font-medium tracking-tight text-foreground">Production Console</h2>
+            <span
+              aria-hidden
+              className="hidden sm:inline-block text-[10px] font-tabular uppercase tracking-[0.2em] text-muted-foreground border border-border rounded px-1.5 py-0.5"
+            >
+              v2
+            </span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             {/* Keys Popover */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all text-xs font-semibold">
-                  <Key size={14} />
-                  <span className="hidden sm:inline">Provider Keys</span>
+                <button className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-background/50 text-foreground hover:bg-accent transition-colors text-xs font-medium">
+                  <Key size={13} className="text-muted-foreground" />
+                  <span>Provider Keys</span>
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl">
+              <PopoverContent align="end" className="w-80 p-4 space-y-4">
                 <div className="space-y-1 mb-2">
-                  <h4 className="font-semibold text-sm text-slate-900">Provider Keys</h4>
-                  <p className="text-xs text-slate-500">BYOK provider keys for session-scoped model execution. Admin auth now uses JWT session cookies.</p>
+                  <h4 className="font-semibold text-sm">Provider Keys</h4>
+                  <p className="text-xs text-muted-foreground">BYOK provider keys for session-scoped model execution. Admin auth uses JWT session cookies.</p>
                 </div>
                 <KeyInput label="OpenRouter Key (Required for OpenRouter sessions)" value={auth.openrouterKey} onChange={auth.setOpenrouterKey} />
                 <KeyInput label="NVIDIA Key (Required for NVIDIA sessions)" value={auth.nvidiaKey} onChange={auth.setNvidiaKey} />
@@ -210,17 +248,30 @@ function AdminShell() {
               </PopoverContent>
             </Popover>
 
-            <button className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 relative transition-colors">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full border border-white" />
+            <ThemeToggle />
+
+            <button
+              className="relative size-8 rounded-md hover:bg-accent flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Notifications"
+            >
+              <Bell className="size-4" />
+              <span
+                aria-hidden
+                className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive ring-2 ring-card"
+              />
             </button>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm" style={{ background: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)", fontSize: 11, fontWeight: 700 }}>
-              AD
+
+            {/* Super-admin mark — primary-tinted square, not a gradient */}
+            <div
+              aria-label={session?.sub ?? "admin"}
+              className="size-8 rounded-md flex items-center justify-center bg-primary/10 text-primary ring-1 ring-primary/20 text-[11px] font-semibold tracking-wider"
+            >
+              {(session?.sub ?? "AD").slice(0, 2).toUpperCase()}
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-50/50">
+        <main className="relative flex-1 overflow-y-auto p-3 sm:p-6">
           <Outlet />
         </main>
       </div>
