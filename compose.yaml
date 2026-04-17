@@ -159,27 +159,6 @@ services:
       - mft_net
       - databases
 
-  router_worker:
-    build:
-      <<: *backend-build
-      cache_from:
-        - mft_router_worker:latest
-    image: mft_router_worker:latest
-    container_name: mft_router_worker
-    command: ["python", "-m", "src.agent_service.router.worker"]
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      REDIS_URL: "redis://redis:6379/0"
-      POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
-      MILVUS_URI: "http://milvus:19530"
-    mem_limit: 768m
-    cpus: 1.00
-    networks:
-      - mft_net
-      - databases
-
   geoip_updater:
     build: *backend-build
     container_name: mft_geoip_updater
