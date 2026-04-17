@@ -6,17 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as adminsApi from '@features/admin/api/admins'
 import { MfaPromptContext } from '@features/admin/auth/MfaPromptProvider'
 
-// Stub AdminAuthProvider — the page only needs session.sub.
+// Mutable session stub — tests can override the roles to exercise the
+// client-side role guard added in Phase 2 hardening (S-M4).
+const mockSession = {
+  current: {
+    sub: 'self-id',
+    email: 'me@example.com',
+    roles: ['admin', 'super_admin'] as readonly string[],
+    mfa_fresh: true,
+    exp: 9_999_999_999,
+  },
+}
+
 vi.mock('@features/admin/auth/AdminAuthProvider', () => ({
-  useAdminAuth: () => ({
-    session: {
-      sub: 'self-id',
-      email: 'me@example.com',
-      roles: ['admin', 'super_admin'],
-      mfa_fresh: true,
-      exp: 9_999_999_999,
-    },
-  }),
+  useAdminAuth: () => ({ session: mockSession.current }),
 }))
 
 function withProviders(ui: React.ReactNode) {
@@ -46,6 +49,15 @@ async function loadPage() {
 
 describe('AdminUsersPage', () => {
   beforeEach(() => {
+    // Reset to super-admin session before each test so the guard test can
+    // downgrade without leaking into other tests.
+    mockSession.current = {
+      sub: 'self-id',
+      email: 'me@example.com',
+      roles: ['admin', 'super_admin'] as readonly string[],
+      mfa_fresh: true,
+      exp: 9_999_999_999,
+    }
     vi.spyOn(adminsApi, 'listAdmins').mockResolvedValue([
       {
         id: 'self-id',
@@ -122,5 +134,26 @@ describe('AdminUsersPage', () => {
     // Give the event loop a tick to show nothing happens.
     await new Promise((r) => setTimeout(r, 10))
     expect(revokeSpy).not.toHaveBeenCalled()
+  })
+
+  it('redirects plain admins away from the page (S-M4 role guard)', async () => {
+    // Downgrade the mocked session to a plain admin.
+    mockSession.current = {
+      sub: 'plain-admin-id',
+      email: 'plain@example.com',
+      roles: ['admin'] as readonly string[],
+      mfa_fresh: true,
+      exp: 9_999_999_999,
+    }
+    const listSpy = vi.spyOn(adminsApi, 'listAdmins')
+
+    const AdminUsersPage = await loadPage()
+    const { container } = render(withProviders(<AdminUsersPage />))
+
+    // Navigate renders nothing in this test's MemoryRouter — container is empty
+    // of the page's heading, and the data fetch never fires.
+    expect(container.textContent).not.toContain('Active admins')
+    expect(container.textContent).not.toContain('Add Admin')
+    expect(listSpy).not.toHaveBeenCalled()
   })
 })

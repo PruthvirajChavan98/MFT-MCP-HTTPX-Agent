@@ -127,8 +127,11 @@ describe('AdminUsersCreateModal', () => {
       (screen.getByDisplayValue('JBSWY3DPEHPK3PXP') as HTMLInputElement).readOnly,
     ).toBe(true)
     expect(screen.getByDisplayValue(created.otpauth_uri)).toBeTruthy()
-    // Three copy buttons (password, secret, otpauth)
-    expect(screen.getAllByRole('button', { name: /^copy$/i }).length).toBe(3)
+    // Three copy buttons — accessible-name comes from the aria-label attribute
+    // applied in Phase 2 hardening.
+    expect(screen.getByRole('button', { name: 'Copy Initial password' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Copy TOTP secret (base32)' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Copy TOTP otpauth URI' })).toBeTruthy()
   })
 
   it('warns on close when secret has not been copied', () => {

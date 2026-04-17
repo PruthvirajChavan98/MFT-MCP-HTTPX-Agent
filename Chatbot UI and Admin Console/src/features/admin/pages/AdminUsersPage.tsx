@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { Navigate } from 'react-router'
 import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '@components/ui/alert'
@@ -16,12 +17,8 @@ import {
   revokeAdmin,
 } from '@features/admin/api/admins'
 import { formatDateTime } from '@shared/lib/format'
+import { getErrorMessage } from '@shared/lib/errors'
 import { AdminUsersCreateModal } from './AdminUsersCreateModal'
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error && err.message.trim()) return err.message
-  return 'Request failed'
-}
 
 export function AdminUsersPage() {
   const queryClient = useQueryClient()
@@ -30,6 +27,13 @@ export function AdminUsersPage() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [lastCreated, setLastCreated] = useState<CreateAdminResult | null>(null)
+
+  // Client-side role guard — the backend already returns 403 for non-super-
+  // admin callers, but redirecting early avoids rendering a broken page for
+  // a plain admin who typed the URL directly (UI information leak).
+  if (session && !session.roles.includes('super_admin')) {
+    return <Navigate to="/admin" replace />
+  }
 
   const { data: admins = [], isLoading, error } = useQuery(adminsQueryOptions())
 
@@ -163,6 +167,13 @@ export function AdminUsersPage() {
         )}
       </div>
 
+      {/*
+        Mount condition is intentionally dual-triggered:
+        - `modalOpen` keeps the modal visible during the form phase.
+        - `lastCreated` keeps it visible during the credential-reveal phase
+          so the one-time TOTP secret pane stays mounted even after the
+          mutation resolves. Both must be falsy before we unmount.
+      */}
       {(modalOpen || lastCreated) && (
         <AdminUsersCreateModal
           open={modalOpen || Boolean(lastCreated)}

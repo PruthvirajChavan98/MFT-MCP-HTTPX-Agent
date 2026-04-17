@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { MfaCancelled } from '@features/admin/auth/MfaPromptProvider'
 import { useMfaPrompt } from '@features/admin/auth/useMfaPrompt'
 import { createAdmin, type CreateAdminResult } from '@features/admin/api/admins'
+import { getErrorMessage } from '@shared/lib/errors'
 
 const INPUT_BASE =
   'w-full rounded-md border bg-background px-3 py-2.5 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/30'
@@ -19,11 +20,6 @@ function randomPassword(length = 20): string {
   let out = ''
   for (let i = 0; i < length; i++) out += charset[bytes[i] % charset.length]
   return out
-}
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error && err.message.trim()) return err.message
-  return 'Request failed'
 }
 
 interface Props {
@@ -276,6 +272,7 @@ function CopyRow({
         <button
           type="button"
           onClick={onCopy}
+          aria-label={`Copy ${label}`}
           className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-3 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
         >
           <Copy size={14} /> Copy
