@@ -49,8 +49,8 @@ function CostTooltip({ active, payload }: TooltipContentProps<ValueType, NameTyp
 
   return (
     <div className="min-w-[140px] rounded-xl border border-border bg-card p-3 shadow-lg">
-      <p className="mb-1 text-xs text-muted-foreground">{datum?.name ?? 'Session'}</p>
-      <p className="text-[13px] font-semibold text-sky-600">Cost: {formatCurrency(numericValue)}</p>
+      <p className="mb-1 text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">{datum?.name ?? 'Session'}</p>
+      <p className="text-[13px] font-tabular font-semibold text-primary">Cost: {formatCurrency(numericValue)}</p>
     </div>
   )
 }
@@ -75,14 +75,14 @@ function StatCard({
   }
 }) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl border p-5 shadow-sm ${colors.panel} ${colors.border}`}>
+    <div className={`relative overflow-hidden rounded-2xl border p-5 ${colors.panel} ${colors.border}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className={`text-[10px] font-bold uppercase tracking-[0.1em] ${colors.heading}`}>{title}</p>
-          <p className="mt-1 text-3xl font-extrabold text-foreground leading-none">{value}</p>
+          <p className={`text-[10px] font-tabular uppercase tracking-[0.15em] ${colors.heading}`}>{title}</p>
+          <p className="mt-1 text-3xl font-semibold font-tabular text-foreground leading-none">{value}</p>
           <p className="mt-1.5 text-[11px] text-muted-foreground">{subtitle}</p>
         </div>
-        <div className={`rounded-xl p-3 text-white shadow-md ${colors.icon}`}>
+        <div className={`rounded-xl p-3 ${colors.icon}`}>
           <Icon className="size-5" />
         </div>
       </div>
@@ -104,13 +104,13 @@ function ChartSection({ series }: { series: CostSeriesPoint[] }) {
   if (!series.length) return <EmptyCostState />
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border/60 px-6 pb-2 pt-5">
         <div className="flex items-center gap-2">
-          <TrendingUp className="size-4 text-sky-500" />
+          <TrendingUp className="size-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">Cost by Session</span>
         </div>
-        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-tabular uppercase tracking-[0.15em] text-primary">
           {series.length} session{series.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -121,37 +121,35 @@ function ChartSection({ series }: { series: CostSeriesPoint[] }) {
             <AreaChart accessibilityLayer data={series} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
               <defs>
                 <linearGradient id="costGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.22} />
+                  <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
               <XAxis
                 dataKey="name"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: 'currentColor', fontSize: 12 }}
-                className="text-muted-foreground"
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
                 dy={8}
               />
               <YAxis
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: 'currentColor', fontSize: 11 }}
-                className="text-muted-foreground"
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
                 tickFormatter={(value: number) => `$${value.toFixed(4)}`}
                 domain={[0, 'auto']}
                 width={70}
               />
-              <Tooltip content={(props) => <CostTooltip {...props} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }} />
+              <Tooltip content={(props) => <CostTooltip {...props} />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
               <Area
                 type="monotone"
                 dataKey="cost"
-                stroke="#0ea5e9"
+                stroke="var(--primary)"
                 strokeWidth={2.5}
                 fill="url(#costGradient)"
-                dot={{ r: 5, fill: '#0ea5e9', stroke: '#fff', strokeWidth: 2 }}
-                activeDot={{ r: 7, fill: '#0ea5e9', stroke: '#fff', strokeWidth: 2 }}
+                dot={{ r: 5, fill: 'var(--primary)', stroke: 'var(--card)', strokeWidth: 2 }}
+                activeDot={{ r: 7, fill: 'var(--primary)', stroke: 'var(--card)', strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -173,31 +171,31 @@ function renderCostSessionCell(session: CostSessionRow, column: Column<CostSessi
   switch (column.key) {
     case 'sessionId':
       return (
-        <span className="rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-1 font-mono text-xs text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+        <span className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 font-tabular text-xs text-primary">
           {session.sessionId}
         </span>
       )
     case 'requests':
       return (
-        <span className="inline-flex size-7 items-center justify-center rounded-full bg-violet-100 text-[13px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+        <span className="inline-flex size-7 items-center justify-center rounded-full bg-[var(--info-soft)] text-[13px] font-tabular font-semibold text-[var(--info)]">
           {session.requests}
         </span>
       )
     case 'cost':
       return (
-        <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[13px] font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+        <span className="rounded-lg border border-[var(--success)]/30 bg-[var(--success-soft)] px-2.5 py-1 text-[13px] font-tabular font-semibold text-[var(--success)]">
           {formatCurrency(session.cost)}
         </span>
       )
     case 'lastActive':
-      return <span className="text-xs text-muted-foreground">{formatDateTime(session.lastActive)}</span>
+      return <span className="text-xs font-tabular text-muted-foreground">{formatDateTime(session.lastActive)}</span>
     case 'action':
       return (
         <div className="flex flex-col sm:flex-row gap-1 text-xs">
           {session.conversationHref ? (
             <Link
               to={session.conversationHref}
-              className="inline-flex items-center rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 font-semibold text-cyan-700 transition hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-300 dark:hover:bg-cyan-500/20"
+              className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 font-medium text-primary transition hover:bg-primary/10"
             >
               View Conversation
             </Link>
@@ -227,11 +225,11 @@ export function ChatCostsPage() {
   return (
     <div className="space-y-6 p-1">
       <div className="flex items-center gap-3">
-        <div className="rounded-lg bg-sky-50 p-2 dark:bg-sky-500/10">
-          <Activity className="size-5 text-sky-500" />
+        <div className="rounded-lg bg-primary/10 p-2 ring-1 ring-primary/20">
+          <Activity className="size-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-[20px] font-bold leading-tight text-foreground">Chat Costs</h1>
+          <h1 className="text-xl font-semibold leading-tight text-foreground">Chat Costs</h1>
           <p className="text-xs text-muted-foreground">Monitor session usage and billing</p>
         </div>
       </div>
@@ -247,11 +245,11 @@ export function ChatCostsPage() {
               value={String(model.activeSessions)}
               subtitle="Currently running"
               colors={{
-                panel: 'bg-gradient-to-br from-sky-50 to-card dark:from-sky-500/10 dark:to-card',
-                border: 'border-sky-100 dark:border-sky-500/30',
-                heading: 'text-sky-600 dark:text-sky-300',
-                icon: 'bg-sky-500',
-                orb: 'bg-sky-100/70 dark:bg-sky-500/20',
+                panel: 'bg-card',
+                border: 'border-border',
+                heading: 'text-primary',
+                icon: 'bg-primary/10 text-primary ring-1 ring-primary/20',
+                orb: 'bg-primary/5',
               }}
             />
             <StatCard
@@ -260,11 +258,11 @@ export function ChatCostsPage() {
               value={String(model.totalRequests)}
               subtitle="Across all sessions"
               colors={{
-                panel: 'bg-gradient-to-br from-violet-50 to-card dark:from-violet-500/10 dark:to-card',
-                border: 'border-violet-100 dark:border-violet-500/30',
-                heading: 'text-violet-600 dark:text-violet-300',
-                icon: 'bg-violet-500',
-                orb: 'bg-violet-100/70 dark:bg-violet-500/20',
+                panel: 'bg-card',
+                border: 'border-border',
+                heading: 'text-[var(--info)]',
+                icon: 'bg-[var(--info-soft)] text-[var(--info)] ring-1 ring-[var(--info)]/20',
+                orb: 'bg-[var(--info-soft)]',
               }}
             />
             <StatCard
@@ -273,11 +271,11 @@ export function ChatCostsPage() {
               value={formatCurrency(model.totalCost)}
               subtitle="Billing period total"
               colors={{
-                panel: 'bg-gradient-to-br from-amber-50 to-card dark:from-amber-500/10 dark:to-card',
-                border: 'border-amber-100 dark:border-amber-500/30',
-                heading: 'text-amber-600 dark:text-amber-300',
-                icon: 'bg-amber-500',
-                orb: 'bg-amber-100/70 dark:bg-amber-500/20',
+                panel: 'bg-card',
+                border: 'border-border',
+                heading: 'text-[var(--warning)]',
+                icon: 'bg-[var(--warning-soft)] text-[var(--warning)] ring-1 ring-[var(--warning)]/20',
+                orb: 'bg-[var(--warning-soft)]',
               }}
             />
           </>
@@ -286,11 +284,11 @@ export function ChatCostsPage() {
 
       {costsQuery.isLoading ? <Skeleton className="h-[360px] rounded-2xl" /> : <ChartSection series={model.series} />}
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center gap-2 border-b border-border/60 px-6 py-4">
           <Clock className="size-4 text-muted-foreground" />
           <span className="text-sm font-semibold text-foreground">Session Details</span>
-          <span className="ml-auto rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+          <span className="ml-auto rounded-full bg-muted px-2.5 py-1 text-[11px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">
             {model.sessions.length} record{model.sessions.length === 1 ? '' : 's'}
           </span>
         </div>

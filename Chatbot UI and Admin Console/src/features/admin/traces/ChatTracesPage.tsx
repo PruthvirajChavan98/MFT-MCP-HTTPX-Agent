@@ -170,10 +170,10 @@ export function ChatTracesPage() {
                       switch (column.key) {
                         case 'status':
                           return row.status === 'error'
-                            ? <XCircle size={16} className="text-rose-500" />
-                            : <CheckCircle2 size={16} className="text-emerald-500" />
+                            ? <XCircle size={16} className="text-destructive" />
+                            : <CheckCircle2 size={16} className="text-[var(--success)]" />
                         case 'traceId':
-                          return <span className="font-mono text-xs text-muted-foreground">{row.traceId}</span>
+                          return <span className="font-tabular text-xs text-primary">{row.traceId}</span>
                         case 'inputPreview':
                           return (
                             <div className="max-w-25 md:max-w-50 lg:max-w-85 truncate">
@@ -189,7 +189,7 @@ export function ChatTracesPage() {
                               {row.conversationHref ? (
                                 <Link
                                   to={row.conversationHref}
-                                  className="inline-flex items-center gap-1.5 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-300 dark:hover:bg-cyan-500/20"
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                                 >
                                   <MessageSquare size={12} />
                                   Conversation
@@ -200,7 +200,7 @@ export function ChatTracesPage() {
                               <button
                                 type="button"
                                 onClick={() => openTrace(row.traceId)}
-                                className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:bg-slate-800 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
                               >
                                 Inspect <ExternalLink size={12} />
                               </button>

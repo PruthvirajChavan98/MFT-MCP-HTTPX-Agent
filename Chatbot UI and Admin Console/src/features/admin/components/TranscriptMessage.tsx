@@ -34,8 +34,8 @@ export function TranscriptMessage({ message }: TranscriptMessageProps) {
     <div className={cn('flex gap-3', isUser && 'flex-row-reverse')}>
       <div
         className={cn(
-          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs text-white',
-          isUser ? 'bg-cyan-500' : 'bg-slate-700',
+          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs',
+          isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
         )}
       >
         {isUser ? <User size={14} /> : <Bot size={14} />}
@@ -43,7 +43,7 @@ export function TranscriptMessage({ message }: TranscriptMessageProps) {
 
       <div className={cn('group flex flex-col gap-1', isUser ? 'max-w-[80%] items-end' : 'w-full items-start')}>
         {isUser ? (
-          <div className="rounded-2xl rounded-tr-sm bg-cyan-500 px-4 py-3 text-sm leading-relaxed text-white">
+          <div className="rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-sm leading-relaxed text-primary-foreground">
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           </div>
         ) : (

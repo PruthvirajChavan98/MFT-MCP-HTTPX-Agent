@@ -46,15 +46,15 @@ export function UsersAnalytics() {
 
     switch (column.key) {
       case 'session_id':
-        return <span className="font-mono text-xs text-slate-500 max-w-40 truncate">{u.session_id}</span>
+        return <span className="font-tabular text-xs text-primary max-w-40 truncate">{u.session_id}</span>
       case 'trace_count':
-        return <span className="text-xs font-semibold">{u.trace_count}</span>
+        return <span className="text-xs font-tabular text-foreground">{u.trace_count}</span>
       case 'success_count':
-        return <span className="text-xs text-emerald-600">{u.success_count}</span>
+        return <span className="text-xs font-tabular text-[var(--success)]">{u.success_count}</span>
       case 'error_count':
-        return <span className="text-xs text-red-500">{u.error_count}</span>
+        return <span className="text-xs font-tabular text-destructive">{u.error_count}</span>
       case 'avg_latency_ms':
-        return <span className="text-xs">{u.avg_latency_ms ? `${Math.round(u.avg_latency_ms)}ms` : '\u2014'}</span>
+        return <span className="text-xs font-tabular text-foreground">{u.avg_latency_ms ? `${Math.round(u.avg_latency_ms)}ms` : '\u2014'}</span>
       case 'success_rate':
         return (
           <div className="min-w-30">
@@ -72,7 +72,7 @@ export function UsersAnalytics() {
           <div className="whitespace-nowrap text-right">
             <button
               onClick={() => navigate(`/admin/conversations?sessionId=${encodeURIComponent(u.session_id)}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-700 bg-cyan-50/50 hover:bg-cyan-100 hover:text-cyan-800 rounded-md transition-colors border border-cyan-100/50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-md transition-colors border border-primary/20"
             >
               <ExternalLink size={12} />
               View

@@ -25,8 +25,8 @@ function KpiCard({ icon: Icon, label, value, color }: { icon: React.ElementType;
   return (
     <Card>
       <CardContent className="p-5 flex items-start gap-4">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}><Icon size={18} className="text-white" /></div>
-        <div><p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p><p className="text-2xl font-bold mt-0.5">{value}</p></div>
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}><Icon size={18} className="text-primary-foreground" /></div>
+        <div><p className="text-[10px] font-tabular text-muted-foreground uppercase tracking-[0.15em]">{label}</p><p className="text-2xl font-semibold text-foreground mt-0.5 font-tabular">{value}</p></div>
       </CardContent>
     </Card>
   )
@@ -44,10 +44,10 @@ function renderFeedbackCell(f: FeedbackRecord, column: Column<FeedbackRecord>) {
   switch (column.key) {
     case 'rating':
       return f.rating === 'thumbs_up'
-        ? <ThumbsUp size={16} className="text-emerald-500" />
-        : <ThumbsDown size={16} className="text-red-500" />
+        ? <ThumbsUp size={16} className="text-[var(--success)]" />
+        : <ThumbsDown size={16} className="text-destructive" />
     case 'session_id':
-      return <span className="font-mono text-xs text-slate-500 max-w-[130px] truncate">{f.session_id}</span>
+      return <span className="font-tabular text-xs text-primary max-w-[130px] truncate">{f.session_id}</span>
     case 'category':
       return <span className="text-xs">{f.category ?? '\u2014'}</span>
     case 'comment':
@@ -116,9 +116,9 @@ export function Feedback() {
       <ResponsiveGrid cols={{ base: 1, sm: 3 }}>
         {sLoading ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />) : (
           <>
-            <KpiCard icon={MessageCircle} label="Total Feedback" value={String(summary?.total ?? 0)} color="bg-cyan-500" />
-            <KpiCard icon={ThumbsUp} label="Thumbs Up" value={String(summary?.thumbs_up ?? 0)} color="bg-emerald-500" />
-            <KpiCard icon={ThumbsDown} label="Thumbs Down" value={String(summary?.thumbs_down ?? 0)} color="bg-red-500" />
+            <KpiCard icon={MessageCircle} label="Total Feedback" value={String(summary?.total ?? 0)} color="bg-primary" />
+            <KpiCard icon={ThumbsUp} label="Thumbs Up" value={String(summary?.thumbs_up ?? 0)} color="bg-[var(--success)]" />
+            <KpiCard icon={ThumbsDown} label="Thumbs Down" value={String(summary?.thumbs_down ?? 0)} color="bg-destructive" />
           </>
         )}
       </ResponsiveGrid>
