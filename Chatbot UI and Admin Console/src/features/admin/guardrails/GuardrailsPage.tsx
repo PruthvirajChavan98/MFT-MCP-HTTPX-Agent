@@ -228,12 +228,12 @@ export function GuardrailsPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="flex items-center gap-2 border-b border-border/60 px-5 py-4">
-            <BarChart2 className="size-4 text-rose-400" />
-            <span className="text-sm font-semibold text-foreground">Decision Trend</span>
-            <span className="ml-auto rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-              Peak {peakTrendValue(trendsQuery.data ?? [])}
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <BarChart2 className="size-4 text-destructive" />
+            <span className="text-sm font-medium text-foreground">Decision Trend</span>
+            <span className="ml-auto font-tabular text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Peak <span className="text-foreground">{peakTrendValue(trendsQuery.data ?? [])}</span>
             </span>
           </div>
           <div className="p-5">
@@ -248,13 +248,13 @@ export function GuardrailsPage() {
             ) : trendData.length ? (
               <div className="h-[190px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart accessibilityLayer data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barSize={14} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="bucket" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={6} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip cursor={{ fill: '#f8fafc' }} content={(props) => <TrendTooltip {...props} />} />
-                    <Bar dataKey="denied" name="Denied" fill="#fb7185" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="allowed" name="Allowed" fill="#2dd4bf" radius={[4, 4, 0, 0]} />
+                  <BarChart accessibilityLayer data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barSize={12} barGap={3}>
+                    <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="bucket" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} dy={6} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip cursor={{ fill: 'var(--accent)' }} content={(props) => <TrendTooltip {...props} />} />
+                    <Bar dataKey="denied" name="Denied" fill="var(--destructive)" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="allowed" name="Allowed" fill="var(--success)" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -264,24 +264,24 @@ export function GuardrailsPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="flex items-center gap-2 border-b border-border/60 px-5 py-4">
-            <AlertTriangle className="size-4 text-amber-400" />
-            <span className="text-sm font-semibold text-foreground">Recent Shadow Judge Failures</span>
-            <span className="ml-auto rounded-full border border-amber-100 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <AlertTriangle className="size-4 text-[var(--warning)]" />
+            <span className="text-sm font-medium text-foreground">Recent Shadow Judge Failures</span>
+            <span className="ml-auto rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[10px] font-tabular uppercase tracking-[0.15em] text-[var(--warning)]">
               {(judgeQuery.data?.recent_failures ?? []).length} failures
             </span>
           </div>
           <div className="space-y-3 p-4">
             {judgeQuery.isLoading ? (
-              Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-20 rounded-xl" />)
+              Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-20 rounded-lg" />)
             ) : judgeQuery.data?.recent_failures?.length ? (
               judgeQuery.data.recent_failures.slice(0, 5).map((failure) => (
                 <FailureCard key={`${failure.trace_id}-${failure.evaluated_at}`} failure={failure} />
               ))
             ) : (
-              <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 p-4">
-                <CheckCircle2 className="size-4 text-emerald-400" />
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-4">
+                <CheckCircle2 className="size-4 text-[var(--success)]" />
                 <p className="text-xs text-muted-foreground">No additional failures detected.</p>
               </div>
             )}
@@ -289,12 +289,12 @@ export function GuardrailsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="flex items-center gap-2 border-b border-border/60 px-6 py-4">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="flex items-center gap-2 border-b border-border px-6 py-3">
           <ShieldAlert className="size-4 text-muted-foreground" />
-          <span className="text-sm font-semibold text-foreground">Events Log</span>
-          <span className="ml-auto rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-            {events.length} events
+          <span className="text-sm font-medium text-foreground">Events Log</span>
+          <span className="ml-auto font-tabular text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="text-foreground">{events.length}</span> events
           </span>
         </div>
 
@@ -351,11 +351,11 @@ export function GuardrailsPage() {
                             <ChevronRight className={`size-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                           </button>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-xs text-muted-foreground">
+                        <td className="whitespace-nowrap px-4 py-3.5 font-tabular text-xs text-muted-foreground">
                           {formatDateTime(event.event_time)}
                         </td>
                         <td className="px-4 py-3.5">
-                          <code className="rounded border border-sky-100 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-600 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+                          <code className="font-tabular rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
                             {event.session_id}
                           </code>
                         </td>
