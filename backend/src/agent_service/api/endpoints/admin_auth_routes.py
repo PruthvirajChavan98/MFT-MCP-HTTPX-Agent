@@ -23,7 +23,6 @@ import hmac
 import logging
 import secrets
 import time
-from typing import Any
 from uuid import UUID
 
 from cryptography.fernet import InvalidToken
@@ -31,6 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from src.agent_service.api.admin_users.repo import AdminUserRow, admin_users_repo
+from src.agent_service.api.admin_utils import get_admin_pool, parse_sub_as_uuid
 from src.agent_service.core.config import (
     ADMIN_AUTH_COOKIE_NAME_ACCESS,
     ADMIN_AUTH_COOKIE_NAME_REFRESH,
@@ -141,42 +141,18 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(_CSRF_COOKIE_NAME, path="/")
 
 
-# ─────────── DB pool + user lookup helpers ───────────
-
-
-def _get_pool(request: Request) -> Any:
-    """Return the Postgres pool attached by app_factory, or 503 if missing."""
-    pool = getattr(request.app.state, "pool", None)
-    if pool is None:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "admin_auth_not_configured",
-                "operation": "admin_auth",
-                "message": "admin auth database unavailable",
-            },
-        )
-    return pool
-
-
-def _parse_sub_as_uuid(sub: str, *, operation: str) -> UUID:
-    """JWT sub is the admin's UUID (stringified). Anything else is an invalid
-    session (e.g., a pre-migration token with sub=\"super_admin\")."""
-    try:
-        return UUID(sub)
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "invalid_token",
-                "operation": operation,
-                "message": "session predates DB migration; please log in again",
-            },
-        ) from exc
+# ─────────── role helper + backwards-compat aliases ───────────
 
 
 def _roles_for(user: AdminUserRow) -> list[str]:
     return ["admin", "super_admin"] if user.is_super_admin else ["admin"]
+
+
+# Backwards-compat aliases for code (or tests) that imported the
+# underscore-prefixed forms directly from this module. Prefer
+# ``admin_utils.get_admin_pool`` / ``admin_utils.parse_sub_as_uuid``.
+_get_pool = get_admin_pool
+_parse_sub_as_uuid = parse_sub_as_uuid
 
 
 # ─────────── CSRF dependency ───────────
@@ -210,8 +186,11 @@ async def login(body: LoginRequest, request: Request, response: Response) -> dic
         request, limiter, f"admin_auth_login:{_client_ip_from_request(request)}"
     )
 
-    pool = _get_pool(request)
-    user = await admin_users_repo.find_by_email_active(pool, body.email)
+    pool = get_admin_pool(request)
+    # Normalize at the route so the caller does not depend on the repo's
+    # internal normalization — defense-in-depth if the repo is ever refactored.
+    email = body.email.strip().lower()
+    user = await admin_users_repo.find_by_email_active(pool, email)
 
     # Constant-time password verification regardless of whether the user
     # exists — prevents user-enumeration via response timing.
@@ -288,8 +267,8 @@ async def mfa_verify(
             },
         ) from e
 
-    pool = _get_pool(request)
-    user_id = _parse_sub_as_uuid(claims.sub, operation="mfa_verify")
+    pool = get_admin_pool(request)
+    user_id = parse_sub_as_uuid(claims.sub, operation="mfa_verify")
     user = await admin_users_repo.find_by_id(pool, user_id)
     if user is None or user.revoked_at is not None:
         raise HTTPException(
@@ -400,8 +379,8 @@ async def refresh(request: Request, response: Response) -> dict[str, object]:
     # Re-fetch user on every refresh so revoked accounts can no longer mint
     # fresh access tokens — the old access token still works until its 15 min
     # TTL expires, which is an acceptable window for a soft-delete model.
-    pool = _get_pool(request)
-    user_id = _parse_sub_as_uuid(new_handle.sub, operation="refresh")
+    pool = get_admin_pool(request)
+    user_id = parse_sub_as_uuid(new_handle.sub, operation="refresh")
     user = await admin_users_repo.find_by_id(pool, user_id)
     if user is None or user.revoked_at is not None:
         raise HTTPException(

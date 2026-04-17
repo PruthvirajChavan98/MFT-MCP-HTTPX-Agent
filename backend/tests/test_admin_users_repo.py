@@ -165,6 +165,41 @@ async def test_seed_super_admin_is_idempotent_when_super_exists():
 
 
 @pytest.mark.asyncio
+async def test_detect_super_admin_rotation_drift_true_when_hash_differs():
+    """S-M2: env password hash rotation without DB update is surfaced."""
+    repo = AdminUsersRepo()
+    pool = FakePool()
+    pool.fetchrow_queue.append({"password_hash": "$argon2id$old-hash"})
+    drifted = await repo.detect_super_admin_rotation_drift(
+        pool, env_email="super@example.com", env_password_hash="$argon2id$new-hash"
+    )
+    assert drifted is True
+
+
+@pytest.mark.asyncio
+async def test_detect_super_admin_rotation_drift_false_when_hash_matches():
+    repo = AdminUsersRepo()
+    pool = FakePool()
+    pool.fetchrow_queue.append({"password_hash": "$argon2id$same-hash"})
+    drifted = await repo.detect_super_admin_rotation_drift(
+        pool, env_email="super@example.com", env_password_hash="$argon2id$same-hash"
+    )
+    assert drifted is False
+
+
+@pytest.mark.asyncio
+async def test_detect_super_admin_rotation_drift_false_when_no_row():
+    """No active super-admin row (e.g., fresh DB) → nothing to drift from."""
+    repo = AdminUsersRepo()
+    pool = FakePool()
+    # fetchrow_queue empty → returns None
+    drifted = await repo.detect_super_admin_rotation_drift(
+        pool, env_email="super@example.com", env_password_hash="$argon2id$hash"
+    )
+    assert drifted is False
+
+
+@pytest.mark.asyncio
 async def test_seed_super_admin_creates_when_none_exist():
     repo = AdminUsersRepo()
     pool = FakePool()

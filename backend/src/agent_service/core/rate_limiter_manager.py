@@ -23,6 +23,7 @@ from src.agent_service.core.config import (
     RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS,
     RATE_LIMIT_ADMIN_AUTH_MFA_RPS,
     RATE_LIMIT_ADMIN_TIER_RPS,
+    RATE_LIMIT_ADMIN_USERS_MUTATE_RPS,
     RATE_LIMIT_AGENT_QUERY_RPS,
     RATE_LIMIT_AGENT_STREAM_RPS,
     RATE_LIMIT_ALGORITHM,
@@ -169,6 +170,17 @@ class RateLimiterManager:
         Per-IP, ~5 requests/minute default (0.083 rps). Plan §4d.
         """
         return await self._get_limiter("endpoint:admin_auth_mfa", RATE_LIMIT_ADMIN_AUTH_MFA_RPS)
+
+    async def get_admin_users_mutate_limiter(self) -> RedisRateLimiter:
+        """Rate limiter for POST / DELETE /agent/admin/admins.
+
+        Each create performs an Argon2 hash (~100 ms) + Fernet encrypt — an
+        expensive mutation that is worth throttling even behind require_mfa_fresh.
+        Per-caller-admin, ~10 requests/minute default (0.166 rps).
+        """
+        return await self._get_limiter(
+            "endpoint:admin_users_mutate", RATE_LIMIT_ADMIN_USERS_MUTATE_RPS
+        )
 
     async def get_default_limiter(self) -> RedisRateLimiter:
         """Default rate limiter for unspecified endpoints."""

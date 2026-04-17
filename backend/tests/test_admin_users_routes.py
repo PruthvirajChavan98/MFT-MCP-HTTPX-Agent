@@ -101,6 +101,18 @@ class _FakeRepo:
         )
         return True
 
+    async def revoke_if_not_last_super(self, pool: object, user_id: UUID) -> str:
+        """Mirror of the production implementation — in-memory guard only."""
+        row = self.rows.get(user_id)
+        if row is None or row.revoked_at is not None:
+            return "not_found"
+        if row.is_super_admin:
+            active = sum(1 for r in self.rows.values() if r.is_super_admin and r.revoked_at is None)
+            if active <= 1:
+                return "last_super"
+        await self.revoke(pool, user_id)
+        return "ok"
+
 
 @pytest_asyncio.fixture
 async def env(
@@ -135,6 +147,7 @@ async def env(
         "count_active_super_admins",
         "create",
         "revoke",
+        "revoke_if_not_last_super",
     ):
         monkeypatch.setattr(admin_users_repo, method_name, getattr(repo, method_name))
 
@@ -158,11 +171,17 @@ async def env(
         async def get_admin_auth_mfa_limiter(self) -> _L:
             return _L()
 
+        async def get_admin_users_mutate_limiter(self) -> _L:
+            return _L()
+
     async def _noop_enforce(*a: object, **kw: object) -> None:
         return None
 
     monkeypatch.setattr(admin_auth_routes, "get_rate_limiter_manager", lambda: _M())
     monkeypatch.setattr(admin_auth_routes, "enforce_rate_limit", _noop_enforce)
+    # admin_users_routes has its own imports of the same symbols.
+    monkeypatch.setattr(admin_users_routes, "get_rate_limiter_manager", lambda: _M())
+    monkeypatch.setattr(admin_users_routes, "enforce_rate_limit", _noop_enforce)
 
     app = FastAPI()
     app.include_router(admin_auth_routes.router, tags=["admin-auth"])
@@ -507,6 +526,52 @@ async def test_revoke_admin_returns_404_on_missing(
     )
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_revoke_admin_returns_400_last_super(
+    env: tuple[AsyncClient, _FakeRepo, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-H1: the atomic repo method returns "last_super" → handler surfaces 400."""
+    client, _, csrf = env
+
+    async def _always_last_super(pool: object, user_id: UUID) -> str:
+        return "last_super"
+
+    monkeypatch.setattr(admin_users_repo, "revoke_if_not_last_super", _always_last_super)
+    response = await client.delete(
+        f"/agent/admin/admins/{uuid4()}",
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "last_super_admin"
+
+
+@pytest.mark.asyncio
+async def test_mutate_endpoints_rate_limited(
+    env: tuple[AsyncClient, _FakeRepo, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-M3: POST /admins calls the admin_users_mutate limiter."""
+    from src.agent_service.api.admin_users import routes as admin_users_routes
+
+    calls: list[str] = []
+
+    async def _spy_enforce(request: object, limiter: object, key: str) -> None:
+        calls.append(key)
+
+    monkeypatch.setattr(admin_users_routes, "enforce_rate_limit", _spy_enforce)
+
+    _, _, csrf = env
+    client = env[0]
+    await client.post(
+        "/agent/admin/admins",
+        json={"email": "rate@example.com", "password": "some-long-password-12+"},
+        headers={"X-CSRF-Token": csrf},
+    )
+    # Spy saw the admin_users_mutate key — proves the limiter is wired.
+    assert any(k.startswith("admin_users_mutate:") for k in calls)
 
 
 @pytest.mark.asyncio

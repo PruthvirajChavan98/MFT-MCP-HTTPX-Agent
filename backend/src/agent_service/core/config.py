@@ -167,6 +167,9 @@ RATE_LIMIT_HEALTH_RPS = float(os.getenv("RATE_LIMIT_HEALTH_RPS", "1000.0"))
 # 5 requests per minute ≈ 0.083 rps per-IP. Plan 2026-04-10 §D17/D18.
 RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS = float(os.getenv("RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS", "0.083"))
 RATE_LIMIT_ADMIN_AUTH_MFA_RPS = float(os.getenv("RATE_LIMIT_ADMIN_AUTH_MFA_RPS", "0.083"))
+# Mutations on /agent/admin/admins (create/revoke). Argon2 + Fernet cost on
+# create justifies an explicit throttle; defaults to 10 req/min per admin.
+RATE_LIMIT_ADMIN_USERS_MUTATE_RPS = float(os.getenv("RATE_LIMIT_ADMIN_USERS_MUTATE_RPS", "0.166"))
 
 # --- Per-User/Tenant Rate Limits ---
 # Free tier users

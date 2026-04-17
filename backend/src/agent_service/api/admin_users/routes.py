@@ -27,10 +27,11 @@ from pydantic import BaseModel, Field
 
 from src.agent_service.api.admin_auth import require_mfa_fresh, require_super_admin
 from src.agent_service.api.admin_users.repo import admin_users_repo
-from src.agent_service.api.endpoints.admin_auth_routes import (
-    _get_pool,
-    _parse_sub_as_uuid,
-    require_csrf_token,
+from src.agent_service.api.admin_utils import get_admin_pool, parse_sub_as_uuid
+from src.agent_service.api.endpoints.admin_auth_routes import require_csrf_token
+from src.agent_service.core.rate_limiter_manager import (
+    enforce_rate_limit,
+    get_rate_limiter_manager,
 )
 from src.agent_service.security.admin_crypto import encrypt_secret
 from src.agent_service.security.admin_jwt import AccessClaims
@@ -43,6 +44,14 @@ _MIN_PASSWORD_LENGTH = 12
 _TOTP_ISSUER = "mft-agent-admin"
 
 router = APIRouter(prefix="/agent/admin/admins", tags=["admin-users"])
+
+
+async def _enforce_mutate_rate_limit(request: Request, caller_id: UUID) -> None:
+    """Throttle POST/DELETE /admins per-caller so a compromised super-admin
+    session cannot pin the worker pool by spamming the Argon2 hash on create."""
+    manager = get_rate_limiter_manager()
+    limiter = await manager.get_admin_users_mutate_limiter()
+    await enforce_rate_limit(request, limiter, f"admin_users_mutate:{caller_id}")
 
 
 # ─────────── request / response models ───────────
@@ -114,7 +123,7 @@ async def list_admins(
     request: Request,
     claims: AccessClaims = Depends(require_super_admin),
 ) -> ListAdminsResponse:
-    pool = _get_pool(request)
+    pool = get_admin_pool(request)
     rows = await admin_users_repo.list_active(pool)
     return ListAdminsResponse(items=[_to_response(r) for r in rows])
 
@@ -131,8 +140,11 @@ async def create_admin(
     request: Request,
     claims: AccessClaims = Depends(require_mfa_fresh),
 ) -> CreateAdminResponse:
+    creator_id = parse_sub_as_uuid(claims.sub, operation="create_admin")
+    await _enforce_mutate_rate_limit(request, creator_id)
+
     email = _validate_email(body.email)
-    pool = _get_pool(request)
+    pool = get_admin_pool(request)
 
     # Reject if an active row already exists — the partial unique index would
     # also raise, but this keeps the response shape consistent.
@@ -149,7 +161,6 @@ async def create_admin(
     totp_secret_base32 = pyotp.random_base32()
     totp_secret_enc = encrypt_secret(totp_secret_base32)
     password_hashed = hash_password(body.password)
-    creator_id = _parse_sub_as_uuid(claims.sub, operation="create_admin")
 
     created = await admin_users_repo.create(
         pool,
@@ -187,17 +198,9 @@ async def create_admin(
 # ─────────── DELETE /{id} ───────────
 
 
-@router.delete(
-    "/{admin_id}",
-    dependencies=[Depends(require_csrf_token)],
-)
-async def revoke_admin(
-    admin_id: UUID,
-    request: Request,
-    claims: AccessClaims = Depends(require_mfa_fresh),
-) -> dict[str, object]:
-    caller_id = _parse_sub_as_uuid(claims.sub, operation="revoke_admin")
-
+def _reject_self_revoke(caller_id: UUID, admin_id: UUID) -> None:
+    """Prevent an admin from locking themselves out by revoking their own
+    account. Raises 400 cannot_revoke_self."""
     if admin_id == caller_id:
         raise HTTPException(
             status_code=400,
@@ -208,9 +211,29 @@ async def revoke_admin(
             },
         )
 
-    pool = _get_pool(request)
-    target = await admin_users_repo.find_by_id(pool, admin_id)
-    if target is None or target.revoked_at is not None:
+
+@router.delete(
+    "/{admin_id}",
+    dependencies=[Depends(require_csrf_token)],
+)
+async def revoke_admin(
+    admin_id: UUID,
+    request: Request,
+    claims: AccessClaims = Depends(require_mfa_fresh),
+) -> dict[str, object]:
+    caller_id = parse_sub_as_uuid(claims.sub, operation="revoke_admin")
+    _reject_self_revoke(caller_id, admin_id)
+
+    await _enforce_mutate_rate_limit(request, caller_id)
+
+    pool = get_admin_pool(request)
+    # Atomic: the repo wraps lookup + last-super count + UPDATE in one
+    # transaction with SELECT ... FOR UPDATE on the target row. Two
+    # concurrent revokes of different super-admins serialize on the count
+    # query inside the transaction, so the "last super" invariant holds.
+    outcome = await admin_users_repo.revoke_if_not_last_super(pool, admin_id)
+
+    if outcome == "not_found":
         raise HTTPException(
             status_code=404,
             detail={
@@ -219,31 +242,13 @@ async def revoke_admin(
                 "message": "admin not found",
             },
         )
-
-    # Last-super-admin guard: revoking the sole active super-admin would lock
-    # everyone out. Block it at the app layer (the DB cannot enforce this
-    # without a CHECK over an aggregate, which Postgres does not support).
-    if target.is_super_admin:
-        active_supers = await admin_users_repo.count_active_super_admins(pool)
-        if active_supers <= 1:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "code": "last_super_admin",
-                    "operation": "revoke_admin",
-                    "message": "cannot revoke the last active super_admin",
-                },
-            )
-
-    revoked = await admin_users_repo.revoke(pool, admin_id)
-    if not revoked:
-        # Race: another request revoked it between find and revoke.
+    if outcome == "last_super":
         raise HTTPException(
-            status_code=404,
+            status_code=400,
             detail={
-                "code": "not_found",
+                "code": "last_super_admin",
                 "operation": "revoke_admin",
-                "message": "admin not found",
+                "message": "cannot revoke the last active super_admin",
             },
         )
 

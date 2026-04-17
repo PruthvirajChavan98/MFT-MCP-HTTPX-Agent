@@ -146,6 +146,21 @@ class AppFactory:
                                 "✅ Seeded super-admin %s into admin_users",
                                 seeded.email,
                             )
+                        else:
+                            drifted = await admin_users_repo.detect_super_admin_rotation_drift(
+                                postgres_pool.pool,
+                                env_email=SUPER_ADMIN_EMAIL,
+                                env_password_hash=SUPER_ADMIN_PASSWORD_HASH,
+                            )
+                            if drifted:
+                                log.warning(
+                                    "SUPER_ADMIN_PASSWORD_HASH in env differs "
+                                    "from the active DB row for %s — rotation "
+                                    "was applied to .env but NOT the DB. "
+                                    "Login still uses the DB row's hash. "
+                                    "See docs/runbooks/admin-enrollment.md.",
+                                    SUPER_ADMIN_EMAIL,
+                                )
 
                 if SECURITY_ENABLED:
                     redis = await get_redis()
@@ -228,14 +243,32 @@ class AppFactory:
 
     @staticmethod
     def _configure_cors(app: FastAPI) -> None:
-        """Configure CORS middleware from CORS_ALLOWED_ORIGINS env var."""
+        """Configure CORS middleware from CORS_ALLOWED_ORIGINS env var.
+
+        Fail-closed: an empty origins list is rejected at startup. Wildcard
+        (``*``) combined with ``allow_credentials=True`` is unsafe (the
+        browser ignores the credentialed response), so we refuse to boot
+        rather than silently ship a broken CORS config.
+        """
         _cors_origins: list[str] = [
             o.strip()
             for o in os.getenv(
                 "CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4173"
             ).split(",")
             if o.strip()
-        ] or ["*"]
+        ]
+
+        if not _cors_origins:
+            raise RuntimeError(
+                "CORS_ALLOWED_ORIGINS resolved to an empty list. Set a comma-"
+                "separated list of allowed origins in the environment; wildcard "
+                "with credentials is not supported."
+            )
+        if "*" in _cors_origins:
+            raise RuntimeError(
+                "CORS_ALLOWED_ORIGINS contains '*' which is incompatible with "
+                "allow_credentials=True. Enumerate explicit origins instead."
+            )
 
         app.add_middleware(
             CORSMiddleware,

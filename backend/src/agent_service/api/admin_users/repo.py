@@ -52,6 +52,9 @@ def _row_to_admin(row: Any) -> AdminUserRow:
 
 
 def _row_to_public(row: Any) -> AdminUserPublic:
+    # Intentional subset of _row_to_admin — omits password_hash and
+    # totp_secret_enc. When adding new fields to AdminUserRow, decide here
+    # whether the public projection needs them (default: no).
     return AdminUserPublic(
         id=row["id"],
         email=row["email"],
@@ -160,6 +163,62 @@ class AdminUsersRepo:
         except (ValueError, AttributeError):
             return False
 
+    async def revoke_if_not_last_super(self, pool: Any, user_id: UUID) -> str:
+        """Atomically revoke an admin, rejecting the revoke if it would
+        leave zero active super-admins.
+
+        Wraps the lookup + count + update in a single transaction with
+        ``SELECT ... FOR UPDATE`` on the target row, closing the TOCTOU
+        window that two concurrent revokes could otherwise exploit to
+        zero out the super-admin set.
+
+        Returns one of:
+        - ``"ok"``         — row revoked
+        - ``"not_found"``  — row missing or already revoked
+        - ``"last_super"`` — target is super-admin and is the last active
+                            one; no write performed
+        """
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                target_row = await conn.fetchrow(
+                    """
+                    SELECT is_super_admin
+                    FROM admin_users
+                    WHERE id = $1 AND revoked_at IS NULL
+                    FOR UPDATE
+                    """,
+                    user_id,
+                )
+                if target_row is None:
+                    return "not_found"
+
+                if target_row["is_super_admin"]:
+                    # Count all currently-active super-admins under the same
+                    # transaction so the target row's state is part of the
+                    # snapshot. Any concurrent revoke against another super
+                    # blocks on its own FOR UPDATE lock, serializing the
+                    # "last super" decision.
+                    count_row = await conn.fetchrow(
+                        """
+                        SELECT COUNT(*)::int AS n
+                        FROM admin_users
+                        WHERE revoked_at IS NULL AND is_super_admin = TRUE
+                        """,
+                    )
+                    active_supers = int(count_row["n"]) if count_row else 0
+                    if active_supers <= 1:
+                        return "last_super"
+
+                await conn.execute(
+                    """
+                    UPDATE admin_users
+                    SET revoked_at = now()
+                    WHERE id = $1 AND revoked_at IS NULL
+                    """,
+                    user_id,
+                )
+                return "ok"
+
     async def seed_super_admin_if_absent(
         self,
         pool: Any,
@@ -186,6 +245,31 @@ class AdminUsersRepo:
             is_super_admin=True,
             created_by_admin_id=None,
         )
+
+    async def detect_super_admin_rotation_drift(
+        self, pool: Any, *, env_email: str, env_password_hash: str
+    ) -> bool:
+        """Return True when the env-backed super-admin matches an existing
+        active row by email but the stored password hash differs from the env.
+
+        Indicates the operator rotated ``SUPER_ADMIN_PASSWORD_HASH`` in
+        ``.env`` without updating the DB. The seed skips silently in that
+        case (guarded on count > 0), so login would continue to use the
+        *old* hash from the DB. Surfacing this as a startup warning keeps
+        the footgun visible to operators.
+        """
+        row = await pool.fetchrow(
+            """
+            SELECT password_hash
+            FROM admin_users
+            WHERE email = $1 AND revoked_at IS NULL AND is_super_admin = TRUE
+            LIMIT 1
+            """,
+            env_email.strip().lower(),
+        )
+        if row is None:
+            return False
+        return row["password_hash"] != env_password_hash
 
 
 # Module-level singleton — same convention as AdminAnalyticsRepo callers.
