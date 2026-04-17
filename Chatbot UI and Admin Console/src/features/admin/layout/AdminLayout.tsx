@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AdminProvider, useAdminContext } from "@features/admin/context/AdminContext";
 import { AdminAuthProvider, useAdminAuth } from "@features/admin/auth/AdminAuthProvider";
+import { MfaPromptProvider } from "@features/admin/auth/MfaPromptProvider";
 // `useAdminContext` is kept for the BYOK provider keys (openrouter/nvidia/groq)
 // used by the model-config page. The legacy X-Admin-Key field was retired in
 // Phase 6g of the admin auth plan.
@@ -235,7 +236,9 @@ export function AdminLayout() {
     <AdminAuthProvider>
       <AdminProvider>
         <AuthGuard>
-          <AdminShell />
+          <MfaPromptProvider>
+            <AdminShell />
+          </MfaPromptProvider>
         </AuthGuard>
       </AdminProvider>
     </AdminAuthProvider>

@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+// Paths updated after Phase-5 frontend restructure moved admin/*
+// into feature-sliced `src/features/admin/…`.
 const files = [
-  'src/app/components/admin/KnowledgeBaseEnterprise.tsx',
-  'src/app/components/admin/viewmodels/knowledgeBase.ts',
-  'src/app/components/admin/viewmodels/queryOptions.ts',
+  'src/features/admin/knowledge-base/KnowledgeBasePage.tsx',
+  'src/features/admin/knowledge-base/viewmodel.ts',
+  'src/features/admin/query/queryOptions.ts',
 ]
 
 const anyPattern = /\bany\b/

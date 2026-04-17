@@ -17,6 +17,8 @@ import {
 import { toast } from 'sonner'
 
 import { clearAllFaqs, deleteFaq, ingestFaqBatch, ingestFaqPdf, updateFaq } from '@features/admin/api/admin'
+import { MfaCancelled } from '@features/admin/auth/MfaPromptProvider'
+import { useMfaPrompt } from '@features/admin/auth/useMfaPrompt'
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { Skeleton } from '@components/ui/skeleton'
 import { MobileHeader } from '@components/ui/mobile-header'
@@ -42,6 +44,7 @@ import { AddEditFaqModal } from './components/AddEditFaqModal'
 
 export function KnowledgeBasePage() {
   const queryClient = useQueryClient()
+  const { withMfa } = useMfaPrompt()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
@@ -90,21 +93,29 @@ export function KnowledgeBasePage() {
 
   const deleteMut = useMutation({
     mutationFn: (row: KnowledgeBaseFaqRow) =>
-      deleteFaq(row.serverId ? { id: row.serverId } : { question: row.question }),
+      withMfa('delete this FAQ', () =>
+        deleteFaq(row.serverId ? { id: row.serverId } : { question: row.question }),
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['faqs'] })
       toast.success('FAQ deleted')
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => {
+      if (error instanceof MfaCancelled) return // user cancelled the TOTP prompt — silent
+      toast.error(getErrorMessage(error))
+    },
   })
 
   const deleteAllMut = useMutation({
-    mutationFn: () => clearAllFaqs(),
+    mutationFn: () => withMfa('delete all FAQs', () => clearAllFaqs()),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['faqs'] })
       toast.success('All FAQs deleted')
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => {
+      if (error instanceof MfaCancelled) return
+      toast.error(getErrorMessage(error))
+    },
   })
 
   const handleDeleteAll = () => {
@@ -154,16 +165,22 @@ export function KnowledgeBasePage() {
     setModalSaving(true)
     try {
       if (editTarget) {
-        await updateFaq({
-          ...(editTarget.serverId ? { id: editTarget.serverId } : { original_question: editTarget.question }),
-          new_question: entries[0].question,
-          new_answer: entries[0].answer,
-          new_category: entries[0].category,
-          new_tags: entries[0].tags,
-        })
+        await withMfa('save this FAQ', () =>
+          updateFaq({
+            ...(editTarget.serverId
+              ? { id: editTarget.serverId }
+              : { original_question: editTarget.question }),
+            new_question: entries[0].question,
+            new_answer: entries[0].answer,
+            new_category: entries[0].category,
+            new_tags: entries[0].tags,
+          }),
+        )
         toast.success('FAQ updated')
       } else {
-        await ingestFaqBatch(entries)
+        await withMfa(entries.length === 1 ? 'add this FAQ' : 'add these FAQs', () =>
+          ingestFaqBatch(entries),
+        )
         toast.success(
           entries.length === 1
             ? 'FAQ added and queued for vectorization'
@@ -174,6 +191,7 @@ export function KnowledgeBasePage() {
       await queryClient.invalidateQueries({ queryKey: ['faqs'] })
       closeModal()
     } catch (error) {
+      if (error instanceof MfaCancelled) return // silent cancel
       toast.error(getErrorMessage(error))
     } finally {
       setModalSaving(false)
@@ -184,12 +202,13 @@ export function KnowledgeBasePage() {
     if (!pdfFile) return
     setPdfLoading(true)
     try {
-      await ingestFaqPdf(pdfFile)
+      await withMfa('ingest PDF', () => ingestFaqPdf(pdfFile))
       toast.success(`PDF parsed and ingested successfully`)
       setPdfFile(null)
       if (fileRef.current) fileRef.current.value = ''
       await queryClient.invalidateQueries({ queryKey: ['faqs'] })
     } catch (err) {
+      if (err instanceof MfaCancelled) return // silent cancel
       toast.error(getErrorMessage(err))
     } finally {
       setPdfLoading(false)

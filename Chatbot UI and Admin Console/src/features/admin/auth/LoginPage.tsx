@@ -1,14 +1,18 @@
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router'
 
+import { ADMIN_MFA_REQUIRED_EVENT } from '@/shared/api/http'
+
 import { useAdminAuth } from './AdminAuthProvider'
 
 /**
  * LoginPage — email/password form that POSTs to /admin/auth/login.
  *
- * On success, navigates to /admin (or /admin/mfa-required if the response
- * indicates MFA is required — the MfaChallenge component on the next screen
- * collects the TOTP code).
+ * On success, navigates to /admin. If the backend response includes
+ * `mfa_required: true`, fires `ADMIN_MFA_REQUIRED_EVENT` after navigate so
+ * that `MfaPromptProvider` (mounted inside `AdminLayout`'s AuthGuard) opens
+ * the TOTP modal immediately. This avoids a separate /admin/mfa-required
+ * route and reuses the same modal surface used by mutation-level MFA prompts.
  *
  * This page is NOT gated by the admin route guard — it's the entry point.
  * The guard in AdminLayout (Phase 5b) redirects to this page when the session
@@ -29,10 +33,11 @@ export function LoginPage() {
     setLocalError(null)
     try {
       const { mfa_required } = await login(email, password)
+      navigate('/admin', { replace: true })
       if (mfa_required) {
-        navigate('/admin', { replace: true })
-      } else {
-        navigate('/admin', { replace: true })
+        // Fire after navigate so MfaPromptProvider (inside the AdminLayout
+        // subtree) is mounted and can receive the event on the next tick.
+        window.dispatchEvent(new CustomEvent(ADMIN_MFA_REQUIRED_EVENT))
       }
     } catch (err: unknown) {
       setLocalError(err instanceof Error ? err.message : 'Login failed')

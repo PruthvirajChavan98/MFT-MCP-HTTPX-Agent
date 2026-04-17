@@ -137,6 +137,14 @@ function readCookie(name: string): string | null {
  */
 export const ADMIN_SESSION_EXPIRED_EVENT = 'admin:session-expired'
 
+/**
+ * Dispatched on any 403 response whose body is `{detail: {code: "mfa_required"}}`
+ * so `MfaPromptProvider` can auto-open the TOTP modal for requests that weren't
+ * wrapped in `withMfa()`. Preferred per-mutation path is the hook; this fallback
+ * exists for ambient queries that drift past the 5-min MFA-fresh window.
+ */
+export const ADMIN_MFA_REQUIRED_EVENT = 'admin:mfa-required'
+
 export async function requestJson<T>(config: RequestConfig): Promise<T> {
   const csrfHeader: Record<string, string> = {}
   if (STATE_CHANGING_METHODS.has(config.method)) {
@@ -170,6 +178,21 @@ export async function requestJson<T>(config: RequestConfig): Promise<T> {
       !config.path.startsWith('/admin/auth/')
     ) {
       window.dispatchEvent(new CustomEvent(ADMIN_SESSION_EXPIRED_EVENT))
+    }
+    // 403 with `detail.code === "mfa_required"` → surface to the MFA prompt
+    // provider. Same /admin/auth/* carve-out as the 401 path (the verify
+    // endpoint itself may 403 on a bad TOTP; that's the MfaChallenge's own
+    // error handler to deal with, not a reason to open a new modal).
+    if (
+      response.status === 403 &&
+      typeof window !== 'undefined' &&
+      !config.path.startsWith('/admin/auth/') &&
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof (parsed as { detail?: unknown }).detail === 'object' &&
+      (parsed as { detail?: { code?: unknown } }).detail?.code === 'mfa_required'
+    ) {
+      window.dispatchEvent(new CustomEvent(ADMIN_MFA_REQUIRED_EVENT))
     }
     throw new ApiError(message, response.status, parsed)
   }
