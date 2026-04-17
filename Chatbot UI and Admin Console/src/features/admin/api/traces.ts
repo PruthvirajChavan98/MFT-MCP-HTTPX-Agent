@@ -62,6 +62,13 @@ export interface TraceQuery {
   search?: string
   status?: string
   model?: string
+  /**
+   * Canonical category slug (e.g. `loan_products_and_eligibility`, `other`).
+   * When set, the backend filters to traces whose `question_category` matches
+   * directly or whose `router_reason` maps to this slug via the shared CASE
+   * expression. Used by the QuestionCategories "View Traces" deep-link.
+   */
+  category?: string
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -182,6 +189,7 @@ export async function fetchTracesPage(
       search: params.search?.trim() || undefined,
       status: params.status?.trim() || undefined,
       model: params.model?.trim() || undefined,
+      category: params.category?.trim() || undefined,
     },
   })
   return {

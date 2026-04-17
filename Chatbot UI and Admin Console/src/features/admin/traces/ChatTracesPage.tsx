@@ -41,6 +41,11 @@ export function ChatTracesPage() {
   const normalizedSearch = search.trim()
   const currentSearchParam = searchParams.get('search') || ''
 
+  // Canonical category slug — deep-link from /admin/categories. Read-only;
+  // the active category is surfaced as a pill that can be cleared by the
+  // user. Not tied to any input box.
+  const categoryFilter = searchParams.get('category') || ''
+
   useEffect(() => {
     if (currentSearchParam === normalizedSearch) return
 
@@ -58,9 +63,21 @@ export function ChatTracesPage() {
   const tracesQuery = useInfiniteQuery(
     tracesPageInfiniteQueryOptions({
       search: deferredSearch,
+      category: categoryFilter || undefined,
       limit: PAGE_SIZE,
     }),
   )
+
+  const clearCategoryFilter = () => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('category')
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const traces = useMemo(
     () => tracesQuery.data?.pages.flatMap((page) => page.items ?? []) ?? [],
@@ -86,8 +103,8 @@ export function ChatTracesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-sky-50 p-2 dark:bg-sky-500/10">
-            <Activity className="size-5 text-sky-500" />
+          <div className="rounded-md bg-primary/10 p-2 ring-1 ring-primary/20">
+            <Activity className="size-5 text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-foreground">Evaluation & Traces</h1>
@@ -105,6 +122,25 @@ export function ChatTracesPage() {
           />
         </div>
       </div>
+
+      {categoryFilter ? (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="font-tabular uppercase tracking-[0.18em] text-muted-foreground">
+            category
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 font-tabular text-primary">
+            {categoryFilter}
+            <button
+              type="button"
+              onClick={clearCategoryFilter}
+              aria-label="Clear category filter"
+              className="text-primary/70 hover:text-primary"
+            >
+              <XCircle className="size-3.5" />
+            </button>
+          </span>
+        </div>
+      ) : null}
 
       <Tabs defaultValue="traces" className="w-full">
         <TabsList className="mb-4">

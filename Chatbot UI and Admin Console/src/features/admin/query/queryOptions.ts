@@ -27,6 +27,11 @@ type GuardrailEventsParams = {
 type TracesQueryParams = {
   search: string
   limit: number
+  /**
+   * Optional canonical category slug. Bypassed when empty.
+   * Deep-link from /admin/categories → /admin/traces?category=<slug>.
+   */
+  category?: string
 }
 
 type FaqSemanticParams = {
@@ -44,12 +49,13 @@ export function sessionCostSummaryQueryOptions() {
 
 export function tracesPageInfiniteQueryOptions(params: TracesQueryParams) {
   return infiniteQueryOptions({
-    queryKey: ['traces-page', params.search, params.limit] as const,
+    queryKey: ['traces-page', params.search, params.category ?? '', params.limit] as const,
     queryFn: ({ pageParam }) =>
       fetchTracesPage({
         limit: params.limit,
         cursor: pageParam,
         search: params.search,
+        category: params.category,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
