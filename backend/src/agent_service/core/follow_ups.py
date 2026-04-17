@@ -24,8 +24,8 @@ def extract_follow_ups(text: str, *, limit: int = 5) -> tuple[str, list[str]]:
 
 
 def normalize_follow_up_content(
-    content: Any,
-    follow_ups: Any = None,
+    content: str | None,
+    follow_ups: list[Any] | None = None,
     *,
     limit: int = 8,
 ) -> tuple[str, list[str]]:
