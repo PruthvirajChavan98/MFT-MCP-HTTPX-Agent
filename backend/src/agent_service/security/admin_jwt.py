@@ -27,6 +27,7 @@ from jwt.exceptions import (
     InvalidIssuerError,
     PyJWTError,
 )
+from redis.exceptions import WatchError
 
 from src.agent_service.core.config import (
     JWT_ACCESS_TTL_SECONDS,
@@ -173,8 +174,19 @@ def verify_access_token(token: str) -> AccessClaims:
     if "roles" not in decoded:
         raise InvalidAccessToken("missing required claim: roles")
 
+    # Fix #4: guard int() coercion — decoded JWT claims can be any JSON type.
+    # Prior code raised uncaught ValueError on e.g. mfa_verified_at="never",
+    # leaking a 500 stack trace. bool is a subclass of int in Python so reject
+    # explicitly (True/False should never have been a valid claim value).
     mva_raw = decoded.get("mfa_verified_at")
-    mfa_verified_at = int(mva_raw) if mva_raw is not None else None
+    if mva_raw is None:
+        mfa_verified_at = None
+    elif isinstance(mva_raw, bool) or not isinstance(mva_raw, (int, float)):
+        raise InvalidAccessToken(
+            f"mfa_verified_at claim must be a number, got {type(mva_raw).__name__}"
+        )
+    else:
+        mfa_verified_at = int(mva_raw)
 
     return AccessClaims(
         sub=str(decoded["sub"]),
@@ -201,7 +213,16 @@ def mfa_fresh(claims: AccessClaims, now: int | None = None) -> bool:
 
 
 def _sign_refresh(family_id: str, token_id: str) -> str:
-    """Returns '<family_id>.<token_id>.<hmac_sha256_hex>'."""
+    """Returns '<family_id>.<token_id>.<hmac_sha256_hex>'.
+
+    family_id and token_id MUST NOT contain '.' — the parse side uses '.' as a
+    delimiter. uuid4().hex (the only current caller) is safe by construction, but
+    assert defensively so a future generation-source change that introduces dots
+    (e.g. base64 or UUID-with-hyphens) fails here rather than silently corrupting
+    the parse on verify.
+    """
+    if "." in family_id or "." in token_id:
+        raise ValueError("refresh token family_id / token_id must not contain '.'")
     validate_jwt_secret(JWT_SECRET)
     assert JWT_SECRET is not None
     msg = f"{family_id}.{token_id}".encode("utf-8")
@@ -210,10 +231,16 @@ def _sign_refresh(family_id: str, token_id: str) -> str:
 
 
 def _parse_refresh(token: str) -> tuple[str, str, str]:
-    """Returns (family_id, token_id, hmac). Raises InvalidRefreshToken on malformed input."""
+    """Returns (family_id, token_id, hmac). Raises InvalidRefreshToken on malformed input.
+
+    Uses split('.', 2) — maxsplit=2 yields at most 3 parts. Together with the
+    no-dot assertion in _sign_refresh, this guarantees deterministic parsing even
+    if the token format is ever extended (e.g. if the HMAC field is replaced with
+    a base64url value that could incidentally contain a '.').
+    """
     if not token:
         raise InvalidRefreshToken("refresh token is empty")
-    parts = token.split(".")
+    parts = token.split(".", 2)
     if len(parts) != 3 or not all(parts):
         raise InvalidRefreshToken("malformed refresh token")
     return parts[0], parts[1], parts[2]
@@ -303,19 +330,80 @@ async def verify_refresh_token(redis: Redis, token: str) -> RefreshHandle:
 
 
 async def rotate_refresh_token(redis: Redis, old_token: str) -> tuple[str, RefreshHandle]:
-    """Verify the old token, mint a new token_id in the same family, preserve family TTL."""
-    old_handle = await verify_refresh_token(redis, old_token)
+    """Verify the old token, mint a new token_id in the same family, preserve family TTL.
+
+    Uses a WATCH/MULTI/EXEC transaction on the family key so the current_token_id
+    check-and-swap is atomic against concurrent rotates with the same old_token.
+
+    Race-and-replay contract: if two concurrent requests present the same valid
+    old_token, exactly one succeeds and the other observes WatchError (someone
+    else wrote the key between WATCH and EXEC). The loser is, by the
+    refresh-rotation threat model, a replay — possibly an attacker who intercepted
+    the token — so the family is revoked and RefreshTokenReplayDetected is raised.
+    """
+    family_id, token_id, provided_mac = _parse_refresh(old_token)
+    _verify_refresh_hmac(family_id, token_id, provided_mac)
+
+    key = f"{_REFRESH_REDIS_PREFIX}{family_id}"
     new_token_id = uuid.uuid4().hex
-    key = f"{_REFRESH_REDIS_PREFIX}{old_handle.family_id}"
-    # Fixed-window: do NOT reset EXPIRE — preserve original expires_at
-    await redis.hset(key, "current_token_id", new_token_id)  # type: ignore[misc]
-    new_token = _sign_refresh(old_handle.family_id, new_token_id)
+
+    async with redis.pipeline(transaction=True) as pipe:
+        try:
+            await pipe.watch(key)
+            data = await pipe.hgetall(key)  # type: ignore[misc]
+            if not data:
+                await pipe.unwatch()
+                raise InvalidRefreshToken("refresh token family not found or expired")
+            if data.get("revoked") == "1":
+                await pipe.unwatch()
+                raise InvalidRefreshToken("refresh token family is revoked")
+
+            current_token_id = data.get("current_token_id")
+            if current_token_id != token_id:
+                # Stale token_id while family is still live == classic replay.
+                # Revoke atomically inside the transaction.
+                pipe.multi()
+                pipe.hset(key, "revoked", "1")
+                await pipe.execute()
+                log.warning(
+                    "Refresh token replay detected — family=%s revoked "
+                    "(provided=%s, current=%s)",
+                    family_id,
+                    token_id,
+                    current_token_id,
+                )
+                raise RefreshTokenReplayDetected("refresh token replay detected; family revoked")
+
+            ttl = await pipe.ttl(key)
+
+            # Atomic CAS: if anyone else writes `key` between WATCH and EXEC, the
+            # EXEC raises WatchError and we fall into the concurrent-rotate branch.
+            pipe.multi()
+            pipe.hset(key, "current_token_id", new_token_id)
+            await pipe.execute()
+        except WatchError:
+            # Lost the race against another concurrent rotate on the same old_token
+            # → by contract this is a replay; revoke the family and raise.
+            # The revocation happens outside the (failed) transaction but is
+            # idempotent (SET of "revoked" to "1").
+            await redis.hset(key, "revoked", "1")  # type: ignore[misc]
+            log.warning(
+                "Refresh token replay detected via WATCH conflict — family=%s revoked",
+                family_id,
+            )
+            raise RefreshTokenReplayDetected(
+                "refresh token replay detected; family revoked"
+            ) from None
+
+    new_token = _sign_refresh(family_id, new_token_id)
+    now_ts = int(time.time())
+    expires_at = now_ts + max(0, int(ttl))
     return new_token, RefreshHandle(
-        family_id=old_handle.family_id,
+        family_id=family_id,
         token_id=new_token_id,
-        sub=old_handle.sub,
-        issued_at=int(time.time()),
-        expires_at=old_handle.expires_at,
+        sub=str(data.get("sub", "")),
+        issued_at=now_ts,
+        expires_at=expires_at,
     )
 
 

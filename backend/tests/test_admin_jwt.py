@@ -408,3 +408,172 @@ def _sign_test_token(family_id: str, token_id: str) -> str:
     msg = f"{family_id}.{token_id}".encode("utf-8")
     mac = _hmac.new(_TEST_JWT_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
     return f"{family_id}.{token_id}.{mac}"
+
+
+# ───────────────── review remediation — P2 regression guards ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_rotate_refresh_token_concurrent_rotates_exactly_one_succeeds(
+    redis: FakeRedis,
+) -> None:
+    """HIGH #2 — TOCTOU fix.
+
+    Two concurrent rotates with the SAME old_token should resolve to:
+      - exactly one mints a new token
+      - the other sees RefreshTokenReplayDetected (WATCH/EXEC conflict)
+      - the family ends up revoked (replay-detection contract)
+
+    Prior code was not atomic — it did verify→hset in two trips, letting both
+    callers pass verify and both mint tokens. Now WATCH/MULTI/EXEC serializes
+    them at the Redis layer.
+    """
+    import asyncio
+
+    old_token, _ = await issue_refresh_token(redis, sub="super_admin")
+
+    results = await asyncio.gather(
+        rotate_refresh_token(redis, old_token),
+        rotate_refresh_token(redis, old_token),
+        return_exceptions=True,
+    )
+
+    successes = [r for r in results if not isinstance(r, BaseException)]
+    replays = [r for r in results if isinstance(r, RefreshTokenReplayDetected)]
+
+    assert len(successes) == 1, f"exactly 1 should succeed, got {len(successes)}: {results}"
+    assert len(replays) == 1, f"exactly 1 should be replay, got {len(replays)}: {results}"
+
+    # Family must be revoked after the replay detection
+    family_id = _parse_old_family(old_token)
+    revoked_flag = await redis.hget(  # type: ignore[misc]
+        f"{_REFRESH_REDIS_PREFIX}{family_id}", "revoked"
+    )
+    assert revoked_flag == "1"
+
+
+@pytest.mark.asyncio
+async def test_rotate_refresh_token_preserves_family_ttl_after_cas(
+    redis: FakeRedis,
+) -> None:
+    """Regression: switching to WATCH/MULTI/EXEC must still preserve the fixed-window TTL."""
+    old_token, _ = await issue_refresh_token(redis, sub="super_admin")
+
+    family_id = _parse_old_family(old_token)
+    key = f"{_REFRESH_REDIS_PREFIX}{family_id}"
+    ttl_before = await redis.ttl(key)
+
+    _, _ = await rotate_refresh_token(redis, old_token)
+    ttl_after = await redis.ttl(key)
+
+    # TTL should NOT have been reset (fixed-window policy preserved).
+    assert ttl_after <= ttl_before  # allowed to decrement by the test's elapsed ms
+    assert ttl_after > 0
+
+
+def test_parse_refresh_rejects_token_with_no_dots() -> None:
+    """HIGH #3 — maxsplit=2 defensive parse. 'no-dots' has 1 part → rejected."""
+    with pytest.raises(InvalidRefreshToken, match="malformed"):
+        admin_jwt._parse_refresh("just-one-chunk")
+
+
+def test_parse_refresh_rejects_token_with_one_dot() -> None:
+    """Two parts → rejected."""
+    with pytest.raises(InvalidRefreshToken, match="malformed"):
+        admin_jwt._parse_refresh("family.token")
+
+
+def test_parse_refresh_rejects_token_with_empty_segment() -> None:
+    """Empty middle segment → rejected by `not all(parts)`."""
+    with pytest.raises(InvalidRefreshToken, match="malformed"):
+        admin_jwt._parse_refresh("family..hmac")
+
+
+def test_parse_refresh_accepts_extra_dots_in_hmac_segment() -> None:
+    """HIGH #3 — with maxsplit=2, even if the HMAC ever becomes a value containing
+    dots (e.g. base64url), parsing stays deterministic — family/token_id are the
+    first two parts, everything else is the hmac.
+    """
+    family, token_id, hmac_part = admin_jwt._parse_refresh("fam.tok.mac.with.dots")
+    assert family == "fam"
+    assert token_id == "tok"
+    assert hmac_part == "mac.with.dots"
+
+
+def test_sign_refresh_rejects_family_id_with_dot() -> None:
+    """HIGH #3 — no-dot assertion in _sign_refresh, so a generation-source change
+    that introduces '.' (e.g. switching to base64 IDs) fails loudly.
+    """
+    with pytest.raises(ValueError, match="must not contain"):
+        admin_jwt._sign_refresh("family.with.dot", "token_id")
+
+
+def test_sign_refresh_rejects_token_id_with_dot() -> None:
+    with pytest.raises(ValueError, match="must not contain"):
+        admin_jwt._sign_refresh("family", "token.with.dot")
+
+
+def test_verify_access_token_rejects_non_numeric_mfa_verified_at() -> None:
+    """HIGH #4 — a forged token with mfa_verified_at='never' must raise
+    InvalidAccessToken cleanly, not leak a 500 with a ValueError stack trace.
+    """
+    # Mint a token with a string mfa_verified_at by building it manually (bypasses
+    # the dataclass path which enforces int | None)
+    now_ts = int(time.time())
+    claims = {
+        "sub": "super_admin",
+        "iss": _TEST_ISSUER,
+        "aud": _TEST_AUDIENCE,
+        "iat": now_ts,
+        "exp": now_ts + 900,
+        "jti": "forged-jti",
+        "roles": ["admin"],
+        "mfa_verified_at": "never",  # wrong type
+    }
+    token = jwt.encode(claims, _TEST_JWT_SECRET, algorithm="HS256")
+
+    with pytest.raises(InvalidAccessToken, match="mfa_verified_at claim must be a number"):
+        verify_access_token(token)
+
+
+def test_verify_access_token_rejects_bool_mfa_verified_at() -> None:
+    """bool is a subclass of int in Python — explicitly reject True/False."""
+    now_ts = int(time.time())
+    claims = {
+        "sub": "super_admin",
+        "iss": _TEST_ISSUER,
+        "aud": _TEST_AUDIENCE,
+        "iat": now_ts,
+        "exp": now_ts + 900,
+        "jti": "forged-jti",
+        "roles": ["admin"],
+        "mfa_verified_at": True,
+    }
+    token = jwt.encode(claims, _TEST_JWT_SECRET, algorithm="HS256")
+
+    with pytest.raises(InvalidAccessToken, match="mfa_verified_at claim must be a number"):
+        verify_access_token(token)
+
+
+def test_verify_access_token_accepts_float_mfa_verified_at() -> None:
+    """A float timestamp (e.g. PyJWT sometimes round-trips as float) must coerce cleanly."""
+    now_ts = int(time.time())
+    claims = {
+        "sub": "super_admin",
+        "iss": _TEST_ISSUER,
+        "aud": _TEST_AUDIENCE,
+        "iat": now_ts,
+        "exp": now_ts + 900,
+        "jti": "j",
+        "roles": ["admin"],
+        "mfa_verified_at": float(now_ts - 60),
+    }
+    token = jwt.encode(claims, _TEST_JWT_SECRET, algorithm="HS256")
+
+    result = verify_access_token(token)
+    assert result.mfa_verified_at == now_ts - 60
+
+
+def _parse_old_family(old_token: str) -> str:
+    """Test helper — extract the family_id from a refresh token string."""
+    return old_token.split(".", 2)[0]
