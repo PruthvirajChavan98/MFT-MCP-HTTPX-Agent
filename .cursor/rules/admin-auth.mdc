@@ -1,0 +1,136 @@
+---
+description: Admin authentication conventions — JWT cookies, CSRF, MFA freshness, frontend withMfa pattern
+alwaysApply: true
+---
+
+# Admin Authentication
+
+The admin console is gated by JWT session cookies with CSRF double-submit and a
+5-minute MFA freshness window for super-admin mutations. **Legacy `X-Admin-Key`
+and the `ADMIN_AUTH_ENABLED` feature flag were retired** in Phase 6g/6h; they no
+longer exist in code. Any new admin endpoint or admin UI that sneaks them back
+in is wrong.
+
+## Backend dependency chain
+
+Declared in `backend/src/agent_service/api/admin_auth.py`:
+
+- `require_admin` — valid JWT access cookie + `admin` role. 401 on missing/invalid token, 403 on role mismatch.
+- `require_super_admin` — chains on `require_admin` + `super_admin` role.
+- `require_mfa_fresh` — chains on `require_super_admin` + `mfa_verified_at` within `JWT_MFA_FRESHNESS_SECONDS` (default 300 s).
+
+Every admin endpoint must `Depends(require_admin)` at minimum. Super-admin
+mutations (KB writes, settings changes) must `Depends(require_mfa_fresh)` so the
+5-min MFA window is enforced server-side — never at the frontend only.
+
+Error payload shape (matches RFC 7807 Problem Details partially):
+
+```json
+{"detail": {"code": "<snake_case_code>", "operation": "<endpoint_name>", "message": "<human_readable>"}}
+```
+
+Codes: `no_session`, `token_expired`, `invalid_token`, `not_admin`, `not_super_admin`, `mfa_required`, `invalid_credentials`, `csrf_missing`, `csrf_invalid`.
+
+## CSRF double-submit
+
+State-changing admin endpoints (POST/PUT/PATCH/DELETE under `/admin/auth/mfa/verify`,
+`/admin/auth/refresh`, `/admin/auth/logout`, and anything wrapped by the super-admin
+deps above) declare `dependencies=[Depends(require_csrf_token)]`.
+
+- Cookie name: `mft_admin_csrf` (non-httpOnly so JS can read)
+- Header name: `X-CSRF-Token` (frontend echoes the cookie into this header)
+- Comparison: `hmac.compare_digest` (constant-time)
+
+Frontend handling lives in `shared/api/http.ts` — `STATE_CHANGING_METHODS` set
+must include every method that can mutate (`POST`, `PUT`, `PATCH`, `DELETE`).
+Missing methods silently drop CSRF and break the endpoint.
+
+## Cookie flags
+
+- `mft_admin_at` (access token) — `httpOnly` + `Secure` + `SameSite=Strict` + path `/`
+- `mft_admin_rt` (refresh token) — same flags, path scoped to `/admin/auth/refresh`
+- `mft_admin_csrf` — non-httpOnly (JS reads), `Secure` + `SameSite=Strict`
+
+The `Secure` flag is controlled by `ADMIN_AUTH_COOKIE_SECURE` (default `true`);
+set `false` only for local HTTP dev. Never in production.
+
+## Frontend convention — mutations MUST use `withMfa`
+
+Any frontend call that hits an endpoint protected by `require_mfa_fresh` must
+route through `useMfaPrompt().withMfa(label, () => apiCall())`. This wraps the
+call in an `ApiError(403, detail.code='mfa_required')` catch, opens the TOTP
+modal, and retries on success. Skipping this wrapper means the user gets a
+plain error toast with no way to proceed.
+
+```ts
+// ✅ Correct
+const { withMfa } = useMfaPrompt()
+const deleteMut = useMutation({
+  mutationFn: (row) => withMfa('delete this FAQ', () => deleteFaq(row.id)),
+  onError: (err) => {
+    if (err instanceof MfaCancelled) return // silent cancel
+    toast.error(getErrorMessage(err))
+  },
+})
+
+// ❌ Wrong — 403 mfa_required shows as a plain toast, user is stuck
+const deleteMut = useMutation({
+  mutationFn: (row) => deleteFaq(row.id),
+  onError: (err) => toast.error(getErrorMessage(err)),
+})
+```
+
+`MfaCancelled` (exported from `MfaPromptProvider`) is thrown when the user
+dismisses the TOTP modal. Error handlers should branch on it to suppress the
+toast (silent cancel) — the user deliberately backed out, no error to show.
+
+## Enrollment
+
+Single super-admin setup via `backend/scripts/enroll_super_admin.py`. See
+`docs/runbooks/super-admin-enrollment.md` for the step-by-step runbook
+including the **`$$`-escape trap** in docker-compose env_files (argon2 hashes
+contain `$` characters that compose will silently consume unless escaped).
+
+For lockout recovery, see `docs/runbooks/admin_auth_mfa_recovery.md`.
+
+## Required env vars
+
+All five are required for the backend to boot (fail-closed validation in
+`core/config.py::_validate_admin_auth_config`):
+
+- `JWT_SECRET` — ≥32 bytes (RFC 7518 §3.2); HS256 only
+- `FERNET_MASTER_KEY` — Fernet-generated key for TOTP-secret at-rest encryption
+- `SUPER_ADMIN_EMAIL` — the `sub` claim; typed at login
+- `SUPER_ADMIN_PASSWORD_HASH` — argon2id; `$`-characters must be `$$`-escaped in .env
+- `SUPER_ADMIN_TOTP_SECRET_ENC` — Fernet-encrypted base32 TOTP secret
+
+Optional overrides (documented in `.env.example` under Admin Authentication):
+`JWT_ALGORITHM` (HS256/HS384/HS512 only — allowlisted at module load),
+`JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_ACCESS_TTL_SECONDS`,
+`JWT_REFRESH_TTL_SECONDS`, `JWT_MFA_FRESHNESS_SECONDS`,
+`ADMIN_AUTH_COOKIE_SECURE`, `ADMIN_AUTH_COOKIE_NAME_ACCESS`,
+`ADMIN_AUTH_COOKIE_NAME_REFRESH`.
+
+## Rate limits
+
+Enforced by `RedisRateLimiter` (fail_closed default):
+
+- `POST /admin/auth/login` — 5 req/min per IP
+- `POST /admin/auth/mfa/verify` — 5 req/min per IP
+
+Login path is also subject to the 5-strike TOTP lockout (`admin_totp.py`): 5
+consecutive failed TOTP attempts across any time window triggers a 15-min
+absolute lockout via a Redis marker at `admin_auth:locked:<sub>`. Recovery via
+`docs/runbooks/admin_auth_mfa_recovery.md` Option B.
+
+## Testing
+
+Backend endpoint tests use `httpx.ASGITransport` + `AsyncClient` +
+`fakeredis.aioredis.FakeRedis(decode_responses=True)` — see
+`backend/tests/test_admin_auth_endpoints.py` for the pattern. Frontend
+`MfaPromptProvider` tests use `vi.hoisted()` for mock classes (see lesson L6 in
+`tasks/lessons.md`) and mock `@/shared/api/http` at module level.
+
+When adding a new admin endpoint that chains `require_mfa_fresh`, add a paired
+test case that asserts 403 with `detail.code === "mfa_required"` when the JWT
+is MFA-stale. This is the contract frontend `withMfa` depends on.

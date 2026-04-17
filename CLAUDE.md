@@ -203,7 +203,9 @@ These are the traps that keep biting. Read before editing.
 7. **Rate limiter default is fail_closed.** Do not flip to fail_open without explicit justification.
 8. **`get_redis()` takes no parameters.** One `REDIS_URL`, one pool.
 9. **SSE event contract** is fixed: `reasoning`, `tool_call`, `token`, `cost`, `done`. Do not leak internal LangGraph lifecycle events unless `AGENT_STREAM_EXPOSE_INTERNAL_EVENTS` is set.
-10. **`.env` is the source of truth** for Compose interpolation; runtime `env_file` is `backend/.env`. Run `make local-env-audit` and `make backend-env-audit` to detect duplicate keys.
+10. **`.env` is the source of truth** for Compose interpolation; runtime `env_file` is the repo-root `./.env`. Run `make local-env-audit` and `make backend-env-audit` to detect duplicate keys.
+11. **Admin auth is JWT-cookie + 5-min MFA freshness window.** Super-admin mutations (KB writes, settings changes) return `403 detail.code="mfa_required"` when the JWT's `mfa_verified_at` is stale. Frontend catches this via `MfaPromptProvider` + `useMfaPrompt().withMfa(label, fn)` (in `src/features/admin/auth/`). Any new admin mutation endpoint chained to `require_mfa_fresh` MUST be called via `withMfa()` on the frontend — otherwise users get a plain toast and are stuck. See `.cursor/rules/admin-auth.mdc` for the full conventions.
+12. **Docker Compose `$$`-escape trap for admin env-file.** Argon2 password hashes contain `$` (e.g. `$argon2id$v=19$…`). Compose interpolates `$` in `env_file` values as variable substitutions, silently stripping them. In `.env`, every `$` in `SUPER_ADMIN_PASSWORD_HASH` must be doubled to `$$`. Failure symptom: login always returns `invalid_credentials`. See `docs/runbooks/super-admin-enrollment.md` Step 2.
 11. **Chat widget hydration:** server checkpointer first, `localStorage` is cache. Never the reverse.
 12. **Test mocking:** Redis → `fakeredis.aioredis.FakeRedis(decode_responses=True)`; HTTP → `httpx.MockTransport`; PostgreSQL → stubs. No live network in unit tests.
 13. **Float assertions** use `pytest.approx()`.
