@@ -23,20 +23,20 @@ import hmac
 import logging
 import secrets
 import time
+from typing import Any
+from uuid import UUID
 
 from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from src.agent_service.api.admin_users.repo import AdminUserRow, admin_users_repo
 from src.agent_service.core.config import (
     ADMIN_AUTH_COOKIE_NAME_ACCESS,
     ADMIN_AUTH_COOKIE_NAME_REFRESH,
     ADMIN_AUTH_COOKIE_SECURE,
     JWT_ACCESS_TTL_SECONDS,
     JWT_REFRESH_TTL_SECONDS,
-    SUPER_ADMIN_EMAIL,
-    SUPER_ADMIN_PASSWORD_HASH,
-    SUPER_ADMIN_TOTP_SECRET_ENC,
 )
 from src.agent_service.core.rate_limiter_manager import (
     enforce_rate_limit,
@@ -60,7 +60,13 @@ from src.agent_service.security.admin_totp import (
     TOTPLockedOut,
     verify_totp_code,
 )
-from src.agent_service.security.password_hash import verify_password
+from src.agent_service.security.password_hash import hash_password, verify_password
+
+# Dummy password hash used for constant-time "email not found" branches in
+# /login. Computing an Argon2 verify against this preserves the timing shape
+# of a real verify_password call, preventing user-enumeration timing attacks.
+# Generated once at import time because Argon2 hashing is intentionally slow.
+_DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-equivalence")
 
 log = logging.getLogger(__name__)
 
@@ -135,6 +141,44 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(_CSRF_COOKIE_NAME, path="/")
 
 
+# ─────────── DB pool + user lookup helpers ───────────
+
+
+def _get_pool(request: Request) -> Any:
+    """Return the Postgres pool attached by app_factory, or 503 if missing."""
+    pool = getattr(request.app.state, "pool", None)
+    if pool is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "admin_auth_not_configured",
+                "operation": "admin_auth",
+                "message": "admin auth database unavailable",
+            },
+        )
+    return pool
+
+
+def _parse_sub_as_uuid(sub: str, *, operation: str) -> UUID:
+    """JWT sub is the admin's UUID (stringified). Anything else is an invalid
+    session (e.g., a pre-migration token with sub=\"super_admin\")."""
+    try:
+        return UUID(sub)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "invalid_token",
+                "operation": operation,
+                "message": "session predates DB migration; please log in again",
+            },
+        ) from exc
+
+
+def _roles_for(user: AdminUserRow) -> list[str]:
+    return ["admin", "super_admin"] if user.is_super_admin else ["admin"]
+
+
 # ─────────── CSRF dependency ───────────
 
 
@@ -166,24 +210,15 @@ async def login(body: LoginRequest, request: Request, response: Response) -> dic
         request, limiter, f"admin_auth_login:{_client_ip_from_request(request)}"
     )
 
-    if not SUPER_ADMIN_EMAIL or not SUPER_ADMIN_PASSWORD_HASH:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "admin_auth_not_configured",
-                "operation": "login",
-                "message": "admin auth is not configured",
-            },
-        )
+    pool = _get_pool(request)
+    user = await admin_users_repo.find_by_email_active(pool, body.email)
 
-    # Constant-time email + password verification. Always run both checks to
-    # avoid leaking "email exists" via timing.
-    email_matches = hmac.compare_digest(
-        body.email.strip().lower(), SUPER_ADMIN_EMAIL.strip().lower()
-    )
-    password_valid = verify_password(body.password, SUPER_ADMIN_PASSWORD_HASH)
+    # Constant-time password verification regardless of whether the user
+    # exists — prevents user-enumeration via response timing.
+    hash_to_check = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_valid = verify_password(body.password, hash_to_check)
 
-    if not (email_matches and password_valid):
+    if user is None or not password_valid:
         raise HTTPException(
             status_code=401,
             detail={
@@ -194,13 +229,14 @@ async def login(body: LoginRequest, request: Request, response: Response) -> dic
         )
 
     redis = await get_redis()
+    sub = str(user.id)
 
     access_token, _ = issue_access_token(
-        sub="super_admin",
-        roles=["admin", "super_admin"],
+        sub=sub,
+        roles=_roles_for(user),
         mfa_verified_at=None,
     )
-    refresh_token, _ = await issue_refresh_token(redis, sub="super_admin")
+    refresh_token, _ = await issue_refresh_token(redis, sub=sub)
     csrf_token = secrets.token_urlsafe(32)
 
     _set_auth_cookies(response, access_token, refresh_token, csrf_token)
@@ -252,13 +288,16 @@ async def mfa_verify(
             },
         ) from e
 
-    if not SUPER_ADMIN_TOTP_SECRET_ENC:
+    pool = _get_pool(request)
+    user_id = _parse_sub_as_uuid(claims.sub, operation="mfa_verify")
+    user = await admin_users_repo.find_by_id(pool, user_id)
+    if user is None or user.revoked_at is not None:
         raise HTTPException(
-            status_code=503,
+            status_code=401,
             detail={
-                "code": "admin_auth_not_configured",
+                "code": "invalid_token",
                 "operation": "mfa_verify",
-                "message": "TOTP secret is not configured",
+                "message": "account not found or revoked",
             },
         )
 
@@ -266,8 +305,8 @@ async def mfa_verify(
     try:
         await verify_totp_code(
             redis,
-            sub=claims.sub,
-            encrypted_secret=SUPER_ADMIN_TOTP_SECRET_ENC,
+            sub=str(user.id),
+            encrypted_secret=user.totp_secret_enc,
             code=body.code,
         )
     except TOTPLockedOut as e:
@@ -303,8 +342,8 @@ async def mfa_verify(
 
     now_ts = int(time.time())
     new_access, _ = issue_access_token(
-        sub=claims.sub,
-        roles=list(claims.roles),
+        sub=str(user.id),
+        roles=_roles_for(user),
         mfa_verified_at=now_ts,
     )
     response.set_cookie(
@@ -358,12 +397,27 @@ async def refresh(request: Request, response: Response) -> dict[str, object]:
             },
         ) from e
 
+    # Re-fetch user on every refresh so revoked accounts can no longer mint
+    # fresh access tokens — the old access token still works until its 15 min
+    # TTL expires, which is an acceptable window for a soft-delete model.
+    pool = _get_pool(request)
+    user_id = _parse_sub_as_uuid(new_handle.sub, operation="refresh")
+    user = await admin_users_repo.find_by_id(pool, user_id)
+    if user is None or user.revoked_at is not None:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "invalid_refresh",
+                "operation": "refresh",
+                "message": "account not found or revoked",
+            },
+        )
+
     # Per D7: refresh always resets mfa_verified_at to None — forces re-MFA
     # before the next mutation even if the previous access token was MFA-fresh.
-    roles = ["admin", "super_admin"] if new_handle.sub == "super_admin" else ["admin"]
     new_access, _ = issue_access_token(
-        sub=new_handle.sub,
-        roles=roles,
+        sub=str(user.id),
+        roles=_roles_for(user),
         mfa_verified_at=None,
     )
     csrf_token = secrets.token_urlsafe(32)
@@ -421,8 +475,24 @@ async def me(request: Request) -> dict[str, object]:
             },
         ) from e
 
+    # Resolve email from DB when possible — tolerate pre-migration tokens
+    # (sub="super_admin") and pool absence by returning email=None rather
+    # than tearing down an otherwise valid session.
+    email: str | None = None
+    try:
+        user_id = UUID(claims.sub)
+    except (ValueError, TypeError):
+        user_id = None
+    if user_id is not None:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            user = await admin_users_repo.find_by_id(pool, user_id)
+            if user is not None:
+                email = user.email
+
     return {
         "sub": claims.sub,
+        "email": email,
         "roles": list(claims.roles),
         "mfa_fresh": mfa_fresh(claims),
         "exp": claims.exp,
