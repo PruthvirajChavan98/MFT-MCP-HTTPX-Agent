@@ -98,17 +98,21 @@ export function AddEditFaqModal({
   const readyCount = entries.filter((entry) => entry.question.trim() && entry.answer.trim()).length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-gray-100 bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">{isEdit ? 'Edit FAQ' : 'Add FAQs'}</h2>
-            {!isEdit && entries.length > 1 && <p className="mt-0.5 text-xs text-gray-400">{entries.length} entries</p>}
+            <h2 className="text-base font-semibold text-foreground">{isEdit ? 'Edit FAQ' : 'Add FAQs'}</h2>
+            {!isEdit && entries.length > 1 && (
+              <p className="mt-0.5 text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">
+                {entries.length} entries
+              </p>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Close dialog"
           >
             <X size={18} />
@@ -132,7 +136,7 @@ export function AddEditFaqModal({
             <button
               type="button"
               onClick={handleAddAnother}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-3 text-sm text-gray-500 transition-all hover:border-teal-300 hover:bg-teal-50/30 hover:text-teal-600"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-3 text-sm text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
             >
               <Plus size={15} />
               Add another FAQ
@@ -140,9 +144,9 @@ export function AddEditFaqModal({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-t border-border bg-muted/30 px-6 py-4">
           {!isEdit && entries.length > 1 ? (
-            <p className="text-xs text-gray-400">
+            <p className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">
               {readyCount} of {entries.length} ready to save
             </p>
           ) : (
@@ -153,7 +157,7 @@ export function AddEditFaqModal({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-lg px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50"
+              className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               Cancel
             </button>
@@ -161,7 +165,7 @@ export function AddEditFaqModal({
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-xl bg-teal-500 px-5 py-2 text-sm text-white shadow-sm transition-colors hover:bg-teal-600 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {isEdit ? 'Save changes' : entries.length > 1 ? `Add ${entries.length} FAQs` : 'Add FAQ'}

@@ -236,21 +236,21 @@ export function KnowledgeBasePage() {
               <button
                 onClick={handleDeleteAll}
                 disabled={deleteAllMut.isPending || model.stats.total === 0}
-                className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2.5 border border-destructive/30 text-destructive hover:bg-destructive/10 rounded-xl text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {deleteAllMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                 Delete All
               </button>
               <button
                 onClick={openAddModal}
-                className="flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm transition-all shadow-sm shadow-teal-200 active:scale-95"
+                className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-medium transition-all shadow-sm active:scale-95"
               >
                 <Plus size={16} />
                 Add FAQ
               </button>
               <button
                 onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-sm transition-all md:hidden"
+                className="flex items-center gap-2 px-4 py-2.5 border border-border text-foreground hover:bg-accent rounded-xl text-sm transition-all md:hidden"
               >
                 <Upload size={16} />
                 Upload PDF
@@ -262,38 +262,38 @@ export function KnowledgeBasePage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+          <div className="bg-card rounded-xl border border-border px-5 py-4">
             {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <p className="text-2xl font-semibold text-gray-800">{model.stats.total}</p>
+              <p className="text-2xl font-semibold font-tabular text-foreground">{model.stats.total}</p>
             )}
-            <p className="text-xs text-gray-400 mt-0.5">Total FAQs</p>
+            <p className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground mt-1">Total FAQs</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+          <div className="bg-card rounded-xl border border-border px-5 py-4">
             {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <p className="text-2xl font-semibold text-teal-600">{model.stats.vectorized}</p>
+              <p className="text-2xl font-semibold font-tabular text-[var(--success)]">{model.stats.vectorized}</p>
             )}
-            <p className="text-xs text-gray-400 mt-0.5">Vectorized</p>
+            <p className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground mt-1">Vectorized</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+          <div className="bg-card rounded-xl border border-border px-5 py-4">
             {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
               <span className="flex items-center gap-1.5">
-                <p className="text-2xl font-semibold text-amber-600">
+                <p className="text-2xl font-semibold font-tabular text-[var(--warning)]">
                   {model.stats.pending + model.stats.syncing}
                 </p>
                 {model.stats.syncing > 0 && (
-                  <Loader2 size={14} className="animate-spin text-amber-500 mt-1" />
+                  <Loader2 size={14} className="animate-spin text-[var(--warning)] mt-1" />
                 )}
               </span>
             )}
-            <p className="text-xs text-gray-400 mt-0.5">Pending sync</p>
+            <p className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground mt-1">Pending sync</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+          <div className="bg-card rounded-xl border border-border px-5 py-4">
             {faqsQuery.isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <p className={`text-2xl font-semibold ${model.stats.failed > 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+              <p className={`text-2xl font-semibold font-tabular ${model.stats.failed > 0 ? 'text-destructive' : 'text-muted-foreground/60'}`}>
                 {model.stats.failed}
               </p>
             )}
-            <p className="text-xs text-gray-400 mt-0.5">Failed</p>
+            <p className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground mt-1">Failed</p>
           </div>
         </div>
 
@@ -302,7 +302,7 @@ export function KnowledgeBasePage() {
           <div className="relative flex-1">
             <Search
               size={16}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
             <input
               value={searchQuery}
@@ -311,14 +311,14 @@ export function KnowledgeBasePage() {
                 if (e.key === 'Enter') void runSemanticSearch()
               }}
               placeholder="Describe what you're looking for…"
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all shadow-sm"
+              className="w-full pl-10 pr-4 py-2.5 border border-border rounded-xl text-sm bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all"
             />
           </div>
           <button
             type="button"
             onClick={() => void runSemanticSearch()}
             disabled={semanticQuery.isFetching}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border transition-all shadow-sm whitespace-nowrap bg-teal-500 border-teal-500 text-white shadow-teal-200 hover:bg-teal-600 disabled:opacity-60"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {semanticQuery.isFetching
               ? <Loader2 size={15} className="animate-spin" />
@@ -329,7 +329,7 @@ export function KnowledgeBasePage() {
         </div>
 
         {categoriesQuery.error && (
-          <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-700">
+          <Alert className="mb-4 border-[var(--warning)]/30 bg-[var(--warning-soft)] text-[var(--warning)]">
             <AlertDescription>
               Category catalog unavailable: {getErrorMessage(categoriesQuery.error)}. Falling back to FAQ-derived categories.
             </AlertDescription>
@@ -347,20 +347,20 @@ export function KnowledgeBasePage() {
                 className={[
                   "px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all border",
                   selectedCategory === category.label
-                    ? "bg-teal-500 text-white border-teal-500 shadow-sm"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-teal-200 hover:text-teal-600",
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-muted-foreground border-border hover:border-primary/30 hover:text-primary",
                 ].join(" ")}
               >
                 {category.label}
                 {category.label !== "All" && (
-                  <span className="ml-1.5 opacity-60">{category.count}</span>
+                  <span className="ml-1.5 opacity-60 font-tabular">{category.count}</span>
                 )}
               </button>
             ))}
           </div>
           {/* Row 2: sort controls — always fully visible, right-aligned */}
           <div className="flex items-center justify-end gap-2">
-            <span className="text-xs text-gray-400">Sort by:</span>
+            <span className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">Sort by:</span>
             {(["question", "category", "createdAt"] as KnowledgeBaseSortField[]).map((f) => (
               <button
                 key={f}
@@ -368,8 +368,8 @@ export function KnowledgeBasePage() {
                 className={[
                   "px-2.5 py-1.5 rounded-lg text-xs border transition-all",
                   sortField === f
-                    ? "bg-gray-800 text-white border-gray-800"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-300",
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-card text-muted-foreground border-border hover:border-border/80 hover:text-foreground",
                 ].join(" ")}
               >
                 {f === "createdAt" ? "Date" : f.charAt(0).toUpperCase() + f.slice(1)}
@@ -380,8 +380,8 @@ export function KnowledgeBasePage() {
         </div>
 
         {(semanticQuery.isFetching || semanticMatches.length > 0) && (
-          <div className="mb-5 rounded-2xl border border-violet-100 bg-violet-50/50 p-5">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-violet-900">
+          <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary">
               <Sparkles className="size-4" />
               Semantic Matches
             </h3>
@@ -393,12 +393,12 @@ export function KnowledgeBasePage() {
             ) : (
               <div className="space-y-3">
                 {semanticMatches.map((match, index) => (
-                  <div key={`${match.question}:${index}`} className="flex items-start gap-4 rounded-lg border border-violet-100 bg-white p-4 shadow-sm">
+                  <div key={`${match.question}:${index}`} className="flex items-start gap-4 rounded-lg border border-border bg-card p-4">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-gray-900">{match.question}</p>
-                      <p className="mt-1 line-clamp-2 text-sm text-gray-600">{match.answer}</p>
+                      <p className="text-sm font-medium text-foreground">{match.question}</p>
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{match.answer}</p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                    <span className="shrink-0 rounded-full border border-[var(--success)]/30 bg-[var(--success-soft)] px-2.5 py-1 text-xs font-tabular font-semibold text-[var(--success)]">
                       {(match.score * 100).toFixed(1)}% Match
                     </span>
                     <div className="relative shrink-0">
@@ -406,14 +406,14 @@ export function KnowledgeBasePage() {
                         type="button"
                         onClick={() => setSemanticMenuOpen(semanticMenuOpen === index ? null : index)}
                         aria-label="Open row actions"
-                        className="rounded-lg p-1.5 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-700"
+                        className="rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground"
                       >
                         <MoreHorizontal size={16} />
                       </button>
                       {semanticMenuOpen === index && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setSemanticMenuOpen(null)} aria-hidden />
-                          <div className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-xl">
+                          <div className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-xl border border-border bg-popover py-1 shadow-xl">
                             <button
                               type="button"
                               onClick={() => {
@@ -421,7 +421,7 @@ export function KnowledgeBasePage() {
                                 if (faq) openEditModal(faq)
                                 setSemanticMenuOpen(null)
                               }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
                             >
                               <Pencil size={13} />
                               Edit
@@ -433,12 +433,12 @@ export function KnowledgeBasePage() {
                                 toast.success('Copied to clipboard')
                                 setSemanticMenuOpen(null)
                               }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
                             >
                               <Copy size={13} />
                               Copy
                             </button>
-                            <div className="my-1 border-t border-gray-100" />
+                            <div className="my-1 border-t border-border" />
                             <button
                               type="button"
                               onClick={() => {
@@ -446,7 +446,7 @@ export function KnowledgeBasePage() {
                                 if (faq) deleteMut.mutate(faq)
                                 setSemanticMenuOpen(null)
                               }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
                             >
                               <Trash2 size={13} />
                               Delete
@@ -472,15 +472,15 @@ export function KnowledgeBasePage() {
             </div>
           ) : model.rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-                <Database size={28} className="text-gray-300" />
+              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                <Database size={28} className="text-muted-foreground/60" />
               </div>
-              <p className="text-gray-500 font-medium">
+              <p className="text-foreground font-medium">
                 {searchQuery || selectedCategory !== "All"
                   ? "No FAQs match your filters"
                   : "No FAQs yet"}
               </p>
-              <p className="text-sm text-gray-400 mt-1 max-w-xs">
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs">
                 {searchQuery
                   ? "Try a different search term or clear filters"
                   : "Click \u201cAdd FAQ\u201d to create your first entry."}
@@ -488,7 +488,7 @@ export function KnowledgeBasePage() {
               {(searchQuery || selectedCategory !== "All") && (
                 <button
                   onClick={() => { setSearchQuery(""); setSelectedCategory("All"); }}
-                  className="mt-4 px-4 py-2 text-sm text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-colors"
+                  className="mt-4 px-4 py-2 text-sm text-primary border border-primary/20 bg-primary/5 rounded-lg hover:bg-primary/10 transition-colors"
                 >
                   Clear filters
                 </button>
@@ -496,7 +496,7 @@ export function KnowledgeBasePage() {
             </div>
           ) : (
             <>
-              <p className="text-xs text-gray-400 mb-3">
+              <p className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground mb-3">
                 Showing {model.rows.length} of {model.stats.total} entries
               </p>
               {model.rows.map((faq) => (
@@ -511,20 +511,20 @@ export function KnowledgeBasePage() {
       <CollapsiblePanel
         title="PDF Upload"
         collapseBelow="md"
-        className="md:w-75 shrink-0 md:border-l border-gray-200 bg-white md:overflow-auto"
+        className="md:w-75 shrink-0 md:border-l border-border bg-card md:overflow-auto"
       >
         <div className="px-6 py-6 space-y-8">
 
           {/* PDF FAQ Upload */}
           <section>
             <div className="flex items-center gap-2 mb-1">
-              <FileText size={16} className="text-gray-700" />
-              <h3 className="text-sm font-semibold text-gray-900">PDF FAQ Upload</h3>
+              <FileText size={16} className="text-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">PDF FAQ Upload</h3>
             </div>
-            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
               Upload a PDF containing{" "}
-              <code className="text-pink-600 bg-pink-50 px-1 rounded">Question:</code> /{" "}
-              <code className="text-teal-600 bg-teal-50 px-1 rounded">Answer:</code> blocks.
+              <code className="text-[var(--info)] bg-[var(--info-soft)] px-1 rounded font-tabular">Question:</code> /{" "}
+              <code className="text-primary bg-primary/10 px-1 rounded font-tabular">Answer:</code> blocks.
               Q&A pairs are extracted automatically.
             </p>
 
@@ -532,8 +532,8 @@ export function KnowledgeBasePage() {
               className={[
                 "border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all",
                 pdfFile
-                  ? "border-teal-300 bg-teal-50"
-                  : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/30",
+                  ? "border-primary/40 bg-primary/5"
+                  : "border-border hover:border-primary/30 hover:bg-primary/5",
               ].join(" ")}
               onClick={() => fileRef.current?.click()}
             >
@@ -554,8 +554,8 @@ export function KnowledgeBasePage() {
                 }}
               />
               {pdfFile ? (
-                <div className="flex items-center gap-2 justify-center text-teal-700">
-                  <FileText size={18} className="text-teal-500" />
+                <div className="flex items-center gap-2 justify-center text-primary">
+                  <FileText size={18} className="text-primary" />
                   <span className="text-sm truncate max-w-40">{pdfFile.name}</span>
                   <button
                     onClick={(e) => {
@@ -563,16 +563,16 @@ export function KnowledgeBasePage() {
                       setPdfFile(null);
                       if (fileRef.current) fileRef.current.value = "";
                     }}
-                    className="ml-1 text-gray-400 hover:text-gray-600"
+                    className="ml-1 text-muted-foreground hover:text-foreground"
                   >
                     <X size={14} />
                   </button>
                 </div>
               ) : (
                 <div>
-                  <Upload size={22} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-xs text-gray-500">Click to choose a PDF, or drag & drop</p>
-                  <p className="text-xs text-gray-400 mt-0.5">PDF up to 25 MB</p>
+                  <Upload size={22} className="mx-auto text-muted-foreground/60 mb-2" />
+                  <p className="text-xs text-muted-foreground">Click to choose a PDF, or drag & drop</p>
+                  <p className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground/70 mt-1">PDF up to 25 MB</p>
                 </div>
               )}
             </div>
@@ -580,7 +580,7 @@ export function KnowledgeBasePage() {
             <button
               onClick={handlePdfIngest}
               disabled={!pdfFile || pdfLoading}
-              className="mt-3 w-full py-2.5 rounded-xl text-sm font-medium bg-teal-500 hover:bg-teal-600 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm shadow-teal-200"
+              className="mt-3 w-full py-2.5 rounded-xl text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
             >
               {pdfLoading ? (
                 <>
@@ -597,11 +597,11 @@ export function KnowledgeBasePage() {
           </section>
 
           {/* Divider */}
-          <div className="border-t border-gray-100" />
+          <div className="border-t border-border" />
 
           {/* Tips */}
           <section>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            <h3 className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground mb-3">
               Tips
             </h3>
             <div className="space-y-2.5">
@@ -610,8 +610,8 @@ export function KnowledgeBasePage() {
                 "Vectorization runs async after ingest — check Status column",
                 "Semantic search requires at least 1 vectorized FAQ",
               ].map((tip, i) => (
-                <div key={i} className="flex gap-2 text-xs text-gray-500">
-                  <span className="shrink-0 w-4 h-4 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center text-[10px] font-semibold mt-0.5">
+                <div key={tip} className="flex gap-2 text-xs text-muted-foreground">
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-tabular font-semibold mt-0.5">
                     {i + 1}
                   </span>
                   {tip}
