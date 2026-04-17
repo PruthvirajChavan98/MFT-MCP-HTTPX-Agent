@@ -39,8 +39,8 @@ mft-mcp-httpx-agent/
 │   ├── src/{app,features,shared,components}/
 │   ├── nginx.conf                        # Production edge (L7 DoS defense, SSE-safe proxy)
 │   └── package.json                      # Node >= 22.12
-├── compose.yaml                          # SINGLE compose file, profiles: local|deployed|uat|prod|monitoring|edge
-├── .env / .env.local / .env.uat / .env.prod   # Env overlays — .env is source of truth
+├── compose.yaml                          # SINGLE compose file — all services run without profiles (prod-only deployment)
+├── .env / .env.local                     # Env overlays — .env is source of truth; prod uses the same .env
 ├── .cursor/rules/*.mdc                   # Project-specific rules (ALSO apply to Claude)
 ├── tasks/todo.md                         # Active plan (checkable items)
 ├── tasks/lessons.md                      # Append corrections here after every user rebuke
@@ -86,8 +86,7 @@ make localsetup        # validate + start core local stack + run setup checks
 make localsetup-full   # + router + monitoring + geoip + edge profiles
 make local-up          # just the core: redis postgres mcp-local agent-local
 make local-down
-make uat-up / make uat-down
-make prod-up / make prod-down
+make prod-up / make prod-down   # only deployed environment (Cloudflare tunnel → mft-agent.pruthvirajchavan.codes)
 make local-validate    # validate compose config before starting
 make local-env-audit   # detect duplicate keys in root .env
 ```

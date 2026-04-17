@@ -2,9 +2,9 @@
 
 - `backend/`: Python/FastAPI/MCP backend project.
 - `Chatbot UI and Admin Console/`: React 19 + Vite frontend (prod build).
-- `compose.yaml`: Single compose file for all environments (profiles: local, deployed, uat, prod, monitoring).
-- `.env`: Base env vars — source of truth.
-- `.env.local` / `.env.uat` / `.env.prod`: Environment overlays.
+- `compose.yaml`: Single compose file. All services run without profiles — there is one deployed environment (prod).
+- `.env`: Base env vars — source of truth; shared by local and prod.
+- `.env.local`: Local-dev-only overrides.
 
 ## Backend
 
@@ -15,8 +15,8 @@ Compose orchestration is centralized at repo root — use `backend/Makefile` tar
 ```bash
 make local-up          # start local core stack
 make localsetup        # validate + start + run setup checks
-make uat-up            # start UAT stack
-make prod-up           # start prod stack
+make prod-up           # start prod stack (the only deployed environment)
+make deploy-prod       # rebuild + force-recreate prod
 ```
 
 ## Frontend
@@ -33,17 +33,14 @@ npm run dev
 
 ## Root Compose
 
-Single `compose.yaml` with environment profiles. Use `backend/Makefile` targets or run directly:
+Single `compose.yaml`. All services run without profiles — one deployed environment (prod). Use `backend/Makefile` targets or run directly:
 
 ```bash
-# Local
+# Local (core services only)
 docker compose --env-file .env --env-file .env.local -f compose.yaml --profile local up -d
 
-# UAT
-docker compose --env-file .env --env-file .env.uat -f compose.yaml --profile deployed --profile uat --profile monitoring up -d
-
-# Prod
-docker compose --env-file .env --env-file .env.prod -f compose.yaml --profile deployed --profile prod --profile monitoring up -d
+# Prod (the only deployed environment)
+docker compose --env-file .env -f compose.yaml up -d
 ```
 
 Frontend calls backend through `/api` proxy:
@@ -53,4 +50,7 @@ Frontend calls backend through `/api` proxy:
 
 ## Cloudflare Tunnel
 
-The tunnel config (`cloudflared/config.yml`) routes public hostnames to the agent. `cloudflared-prod` (profile: prod) handles production traffic via `cloudflared-local` (profile: edge) for local tunnelling.
+The tunnel config (`cloudflared/config.yml`) routes public hostnames to the stack:
+
+- `mft-agent.pruthvirajchavan.codes` → `frontend-prod:80`
+- `mft-api.pruthvirajchavan.codes` → `agent:8000`

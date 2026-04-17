@@ -1,7 +1,7 @@
 .PHONY: \
 	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard \
-	docker-build docker-up docker-down docker-logs docker-restart deploy deploy-uat deploy-prod uat-up uat-down prod-up prod-down \
-	local-validate uat-validate prod-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
+	docker-build docker-up docker-down docker-logs docker-restart deploy deploy-prod prod-up prod-down \
+	local-validate prod-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
 	begin down-up
 
@@ -16,11 +16,14 @@ COMPOSE_BASE = docker compose --project-directory $(REPO_ROOT) \
     --env-file $(ROOT_ENV_FILE) -f $(COMPOSE_FILE)
 
 LOCAL_COMPOSE  = $(COMPOSE_BASE) --profile local
-UAT_COMPOSE    = $(COMPOSE_BASE) --profile deployed --profile uat --profile monitoring
-PROD_COMPOSE   = $(COMPOSE_BASE) --profile deployed --profile prod --profile monitoring
+# compose.yaml defines no profiles — all services run unconditionally.
+# PROD_COMPOSE is the single deployed surface (Cloudflare tunnel routes
+# mft-agent.pruthvirajchavan.codes and mft-api.pruthvirajchavan.codes to
+# the frontend-prod + agent containers).
+PROD_COMPOSE   = $(COMPOSE_BASE)
 
-# Keep MAIN_COMPOSE pointing at UAT by default for legacy targets
-MAIN_COMPOSE   = $(UAT_COMPOSE)
+# Legacy alias — older helper targets reference MAIN_COMPOSE.
+MAIN_COMPOSE   = $(PROD_COMPOSE)
 
 LOCAL_CORE_SERVICES = redis postgres mcp-local agent-local
 
@@ -46,21 +49,18 @@ help:
 	@echo "  backfill-question-categories - Backfill canonical business categories on EvalTrace nodes"
 	@echo "  backfill-inline-guard - Backfill canonical inline guard fields on EvalTrace nodes"
 	@echo ""
-	@echo "Docker / Deployed (ENV=local|uat|prod, default=local):"
-	@echo "  docker-build        - Build images (UAT profiles)"
-	@echo "  docker-up           - Start UAT stack"
-	@echo "  docker-down         - Stop UAT stack"
-	@echo "  docker-logs         - View UAT logs"
-	@echo "  docker-restart      - Restart UAT stack"
-	@echo "  deploy              - Force-recreate UAT deployment"
-	@echo "  deploy-uat          - Build + force-recreate UAT stack"
+	@echo "Docker / Deployed (prod only — single environment behind Cloudflare tunnel):"
+	@echo "  docker-build        - Build images"
+	@echo "  docker-up           - Start stack"
+	@echo "  docker-down         - Stop stack"
+	@echo "  docker-logs         - View logs"
+	@echo "  docker-restart      - Restart stack"
+	@echo "  deploy              - Force-recreate deployment"
 	@echo "  deploy-prod         - Build + force-recreate prod stack"
-	@echo "  uat-up / uat-down   - Start / stop UAT stack"
 	@echo "  prod-up / prod-down - Start / stop prod stack"
 	@echo ""
 	@echo "Local Stack:"
 	@echo "  local-validate      - Validate local compose config"
-	@echo "  uat-validate        - Validate UAT compose config"
 	@echo "  prod-validate       - Validate prod compose config"
 	@echo "  local-env-audit     - Detect duplicate keys in root .env (compose interpolation)"
 	@echo "  backend-env-audit   - Detect duplicate keys in backend/.env (runtime env_file)"
@@ -182,19 +182,9 @@ docker-restart:
 deploy: docker-build
 	$(MAIN_COMPOSE) up -d --force-recreate
 
-deploy-uat:
-	$(UAT_COMPOSE) build --no-cache
-	$(UAT_COMPOSE) up -d --force-recreate
-
 deploy-prod:
 	$(PROD_COMPOSE) build --no-cache
 	$(PROD_COMPOSE) up -d --force-recreate
-
-uat-up:
-	$(UAT_COMPOSE) up -d
-
-uat-down:
-	$(UAT_COMPOSE) down
 
 prod-up:
 	$(PROD_COMPOSE) up -d
@@ -207,10 +197,6 @@ prod-down:
 local-validate:
 	$(LOCAL_COMPOSE) config >/tmp/compose.local.rendered.yml
 	@echo "Local compose config is valid"
-
-uat-validate:
-	$(UAT_COMPOSE) config >/tmp/compose.uat.rendered.yml
-	@echo "UAT compose config is valid"
 
 prod-validate:
 	$(PROD_COMPOSE) config >/tmp/compose.prod.rendered.yml
@@ -274,6 +260,6 @@ begin:
 
 down-up:
 	rm -f uv.lock && uv sync
-	$(UAT_COMPOSE) down
-	$(UAT_COMPOSE) build
-	$(UAT_COMPOSE) up -d
+	$(PROD_COMPOSE) down
+	$(PROD_COMPOSE) build
+	$(PROD_COMPOSE) up -d
