@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, Tuple
+from collections.abc import Mapping
+from typing import Any
 
 from src.agent_service.llm.catalog import model_service
 
@@ -7,16 +10,32 @@ log = logging.getLogger("cost_tracker")
 
 
 async def calculate_run_cost_detailed(
-    model_id: str, usage: Dict[str, int], provider: str
-) -> Tuple[float, Dict[str, Any]]:
-    """
-    Calculates detailed cost breakdown with per-category pricing.
+    model_id: str, usage: Mapping[str, int | None], provider: str
+) -> tuple[float, dict[str, Any]]:
+    """Calculate detailed cost breakdown with per-category pricing.
 
-    Groq and Nvidia are FREE in BYOK mode.
-    OpenRouter has per-model pricing.
+    Groq and Nvidia are FREE in BYOK mode. OpenRouter has per-model pricing.
+
+    Billing semantics (fixed 2026-04-13 — previously had two double-count bugs):
+
+    - Cached prompt tokens (``cache_read_input_tokens`` / ``cached_tokens``) are a
+      SUBSET of ``prompt_tokens``. Vendor APIs report them as the portion of the
+      prompt served from cache. The correct bill is:
+      ``(prompt - cached) * full_rate + cached * half_rate``. The prior code
+      was ``prompt * full_rate + cached * half_rate``, charging cached tokens at
+      1.5x instead of 0.5x — a ~3x over-charge on the cached portion.
+
+    - Reasoning tokens (``reasoning_tokens`` for o1/o3/gpt-oss reasoning models)
+      are a SUBSET of ``completion_tokens`` per the OpenAI usage spec
+      (``completion_tokens_details.reasoning_tokens``). None of the providers
+      we support bill reasoning tokens separately. The prior code added
+      ``reasoning_tokens * c_rate`` on top of ``completion_tokens * c_rate``,
+      doubling the bill on reasoning runs. Fix: no separate reasoning cost.
+      Reasoning-token counts stay in the ``usage`` breakdown for observability.
 
     Returns:
-        (total_cost, breakdown_dict)
+        ``(total_cost, breakdown_dict)``. Total is USD; breakdown contains
+        per-category costs rounded to 8 decimal places plus raw token counts.
     """
     if not usage or not model_id:
         return 0.0, {}
@@ -24,20 +43,22 @@ async def calculate_run_cost_detailed(
     try:
         target = model_id.strip()
 
-        # Extract token counts (support multiple formats)
-        prompt_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens)
+        prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or (prompt_tokens + completion_tokens)
 
-        # ✅ Reasoning tokens (o1/o3/gpt-oss models)
-        reasoning_tokens = usage.get("reasoning_tokens", 0)
+        # Reasoning tokens (o1/o3/gpt-oss reasoning models) — subset of completion_tokens
+        reasoning_tokens = usage.get("reasoning_tokens") or 0
+
+        # Cached prompt tokens — subset of prompt_tokens
+        cached_tokens = usage.get("cache_read_input_tokens") or usage.get("cached_tokens") or 0
 
         # FREE TIER: Groq and Nvidia
         if provider in ("groq", "nvidia"):
             breakdown = {
                 "prompt_cost": 0.0,
                 "completion_cost": 0.0,
-                "reasoning_cost": 0.0 if reasoning_tokens > 0 else None,
+                "reasoning_cost": None,  # billed as part of completion
                 "cached_cost": None,
                 "total_cost": 0.0,
                 "model": model_id,
@@ -48,10 +69,8 @@ async def calculate_run_cost_detailed(
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
-                    "reasoning_tokens": (
-                        reasoning_tokens if reasoning_tokens > 0 else None
-                    ),  # ✅ Include
-                    "cached_tokens": None,
+                    "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,
+                    "cached_tokens": cached_tokens if cached_tokens > 0 else None,
                 },
                 "pricing_rates": {
                     "prompt_per_token": 0.0,
@@ -66,7 +85,7 @@ async def calculate_run_cost_detailed(
         pricing = await model_service.get_price(target)
 
         if not pricing:
-            log.warning(f"No pricing found for {target}, assuming free")
+            log.warning("No pricing found for %s, assuming free", target)
             return 0.0, {
                 "prompt_cost": 0.0,
                 "completion_cost": 0.0,
@@ -80,9 +99,8 @@ async def calculate_run_cost_detailed(
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
-                    "reasoning_tokens": (
-                        reasoning_tokens if reasoning_tokens > 0 else None
-                    ),  # ✅ Include
+                    "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,
+                    "cached_tokens": cached_tokens if cached_tokens > 0 else None,
                 },
             }
 
@@ -90,28 +108,25 @@ async def calculate_run_cost_detailed(
         p_rate = float(pricing.get("prompt", 0))
         c_rate = float(pricing.get("completion", 0))
 
-        # Calculate costs
-        prompt_cost = prompt_tokens * p_rate
+        # Calculate costs — cached tokens are subtracted from billable prompt before
+        # applying full rate, then added back at half rate.
+        billable_prompt_tokens = max(0, prompt_tokens - cached_tokens)
+        prompt_cost = billable_prompt_tokens * p_rate
         completion_cost = completion_tokens * c_rate
-
-        # Reasoning cost (same as completion for most models)
-        reasoning_cost = reasoning_tokens * c_rate if reasoning_tokens > 0 else None
-
-        # Cached tokens
-        cached_tokens = usage.get("cache_read_input_tokens", 0) or usage.get("cached_tokens", 0)
         cached_cost = cached_tokens * (p_rate * 0.5) if cached_tokens > 0 else None
 
+        # reasoning_tokens are ALREADY in completion_tokens; no separate line item.
+        reasoning_cost = None
+
         total_cost = prompt_cost + completion_cost
-        if reasoning_cost:
-            total_cost += reasoning_cost
-        if cached_cost:
+        if cached_cost is not None:
             total_cost += cached_cost
 
         breakdown = {
             "prompt_cost": round(prompt_cost, 8),
             "completion_cost": round(completion_cost, 8),
-            "reasoning_cost": round(reasoning_cost, 8) if reasoning_cost else None,
-            "cached_cost": round(cached_cost, 8) if cached_cost else None,
+            "reasoning_cost": reasoning_cost,
+            "cached_cost": round(cached_cost, 8) if cached_cost is not None else None,
             "total_cost": round(total_cost, 8),
             "model": model_id,
             "provider": provider,
@@ -121,9 +136,7 @@ async def calculate_run_cost_detailed(
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
                 "total_tokens": total_tokens,
-                "reasoning_tokens": (
-                    reasoning_tokens if reasoning_tokens > 0 else None
-                ),  # ✅ Include
+                "reasoning_tokens": reasoning_tokens if reasoning_tokens > 0 else None,
                 "cached_tokens": cached_tokens if cached_tokens > 0 else None,
             },
             "pricing_rates": {
@@ -136,6 +149,6 @@ async def calculate_run_cost_detailed(
 
         return total_cost, breakdown
 
-    except Exception as e:
-        log.error(f"Failed to calculate detailed cost for {model_id}: {e}")
+    except Exception:
+        log.error("Failed to calculate detailed cost for %s", model_id, exc_info=True)
         return 0.0, {}
