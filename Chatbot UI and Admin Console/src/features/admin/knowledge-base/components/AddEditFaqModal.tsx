@@ -3,7 +3,7 @@ import { Check, Loader2, Plus, X } from 'lucide-react'
 
 import type { KnowledgeBaseFaqRow } from '../viewmodel'
 import type { EntryErrors, FaqEntryDraft } from './kb-types'
-import { blankEntry, DEFAULT_CATEGORY } from './kb-types'
+import { blankEntry, DEFAULT_CATEGORY, entryFromExisting } from './kb-types'
 import { EntryForm } from './EntryForm'
 
 export function AddEditFaqModal({
@@ -24,13 +24,15 @@ export function AddEditFaqModal({
   const [entries, setEntries] = useState<FaqEntryDraft[]>(() =>
     initial
       ? [
-          {
-            question: initial.question,
-            answer: initial.answer,
-            category: initial.category,
-            tags: initial.tags.join(', '),
-            errors: {},
-          },
+          entryFromExisting(
+            {
+              question: initial.question,
+              answer: initial.answer,
+              category: initial.category,
+              tags: initial.tags,
+            },
+            initial.serverId ?? initial.id,
+          ),
         ]
       : [blankEntry(categories[0] || DEFAULT_CATEGORY)],
   )
@@ -122,7 +124,7 @@ export function AddEditFaqModal({
         <div id="modal-scroll-area" className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {entries.map((entry, index) => (
             <EntryForm
-              key={`${entry.question}:${index}`}
+              key={entry.uid}
               entry={entry}
               index={index}
               total={entries.length}

@@ -10,6 +10,7 @@ export type EntryErrors = {
 }
 
 export type FaqEntryDraft = {
+  uid: string
   question: string
   answer: string
   category: string
@@ -25,12 +26,34 @@ export function getErrorMessage(error: unknown): string {
   return 'Request failed'
 }
 
+function newUid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `faq-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export function blankEntry(category = DEFAULT_CATEGORY): FaqEntryDraft {
   return {
+    uid: newUid(),
     question: '',
     answer: '',
     category,
     tags: '',
+    errors: {},
+  }
+}
+
+export function entryFromExisting(
+  initial: { question: string; answer: string; category: string; tags: string[] },
+  stableId?: string,
+): FaqEntryDraft {
+  return {
+    uid: stableId ?? newUid(),
+    question: initial.question,
+    answer: initial.answer,
+    category: initial.category,
+    tags: initial.tags.join(', '),
     errors: {},
   }
 }

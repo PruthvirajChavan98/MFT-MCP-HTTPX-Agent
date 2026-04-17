@@ -393,7 +393,7 @@ export function KnowledgeBasePage() {
             ) : (
               <div className="space-y-3">
                 {semanticMatches.map((match, index) => (
-                  <div key={`${match.question}:${index}`} className="flex items-start gap-4 rounded-lg border border-border bg-card p-4">
+                  <div key={`${match.question}:${match.score.toFixed(4)}`} className="flex items-start gap-4 rounded-lg border border-border bg-card p-4">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground">{match.question}</p>
                       <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{match.answer}</p>
