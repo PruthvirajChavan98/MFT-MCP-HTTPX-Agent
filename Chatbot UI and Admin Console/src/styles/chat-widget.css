@@ -12,15 +12,26 @@
 }
 
 @layer components {
+  /*
+   * The chat widget is a customer-facing floating surface on the public site.
+   * It must NOT inherit admin-console theme preferences — when the admin has
+   * `.dark` active on <html> (ThemeProvider default), the widget's white card
+   * stays white but `var(--foreground)` resolves to near-white, rendering
+   * list items invisible. Lock the widget's color scope to light-mode literals
+   * so it's readable regardless of the root theme class.
+   *
+   * If you ever want a dark-mode widget, build a widget-specific toggle —
+   * don't re-couple these tokens to the admin console's theme state.
+   */
   .tf-chat-markdown {
     overflow-wrap: anywhere;
     word-break: break-word;
-    --tf-chat-border: var(--border);
-    --tf-chat-muted: var(--muted);
-    --tf-chat-muted-foreground: var(--muted-foreground);
-    --tf-chat-foreground: var(--foreground);
-    --tf-chat-primary: var(--primary);
-    --tf-chat-bg: var(--background);
+    --tf-chat-border: #e4e4e7;
+    --tf-chat-muted: #f4f4f5;
+    --tf-chat-muted-foreground: #52525b;
+    --tf-chat-foreground: #0a0a0a;
+    --tf-chat-primary: #0ea5e9;
+    --tf-chat-bg: #ffffff;
   }
 
   .tf-chat-streamdown {
@@ -67,10 +78,16 @@
   .tf-chat-streamdown ol {
     margin: 0.35rem 0;
     padding-left: 1.3rem;
+    color: var(--tf-chat-foreground);
   }
 
   .tf-chat-streamdown li {
     margin: 0.15rem 0;
+    color: var(--tf-chat-foreground);
+  }
+
+  .tf-chat-streamdown li::marker {
+    color: var(--tf-chat-foreground);
   }
 
   .tf-chat-streamdown blockquote {
