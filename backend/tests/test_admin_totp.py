@@ -160,3 +160,42 @@ async def test_reset_lockout_clears_both_keys(redis: FakeRedis) -> None:
     await reset_lockout(redis, _TEST_SUB)
     assert await redis.exists(f"{_LOCKOUT_PREFIX}{_TEST_SUB}") == 0
     assert await redis.exists(f"{_LOCKED_PREFIX}{_TEST_SUB}") == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_bad_attempts_respect_lockout_ceiling(
+    redis: FakeRedis, encrypted_totp_secret: str
+) -> None:
+    """Review finding #6 — TOTP lockout race.
+
+    If an attacker sends N parallel bad-TOTP requests before any single one
+    completes, the pre-fix code could INCR failures past _MAX_FAILURES before
+    the locked_key was set. With WATCH/MULTI/EXEC guarding the increment,
+    outcomes should collapse to: at most _MAX_FAILURES successful increments,
+    after which every further attempt (including any still in-flight) raises
+    TOTPLockedOut.
+
+    We fire 20 concurrent bad-code attempts at a fresh sub and count outcomes.
+    The total number of TOTPInvalidCode results must be <= _MAX_FAILURES.
+    (With _MAX_FAILURES=5 and 20 concurrent requests, pre-fix code averaged
+    10-15 InvalidCode outcomes; post-fix should be <= 5.)
+    """
+    import asyncio
+
+    from src.agent_service.security.admin_totp import _MAX_FAILURES
+
+    results = await asyncio.gather(
+        *(verify_totp_code(redis, _TEST_SUB, encrypted_totp_secret, "000000") for _ in range(20)),
+        return_exceptions=True,
+    )
+
+    invalid_count = sum(1 for r in results if isinstance(r, TOTPInvalidCode))
+    locked_count = sum(1 for r in results if isinstance(r, TOTPLockedOut))
+
+    assert invalid_count <= _MAX_FAILURES, (
+        f"Expected at most {_MAX_FAILURES} bad-code outcomes before lockout; got "
+        f"{invalid_count}. Pre-fix race allowed far more."
+    )
+    assert invalid_count + locked_count == 20
+    # Lockout MUST be in effect after the burst
+    assert await redis.exists(f"{_LOCKED_PREFIX}{_TEST_SUB}") == 1

@@ -348,13 +348,17 @@ SUPER_ADMIN_TOTP_SECRET_ENC: str | None = (
 def _validate_admin_auth_config() -> None:
     """Fail-closed validation — admin auth env vars are mandatory for app boot.
 
-    Test contexts (pytest loaded in sys.modules) skip validation to allow fixtures
-    to monkeypatch values after import. Production imports fail fast if any
-    required value is missing, with a pointer at the enrollment script.
-    """
-    import sys
+    Tests opt out of the validation by setting ``ADMIN_AUTH_SKIP_STARTUP_VALIDATION=true``
+    in ``backend/tests/conftest.py`` (which runs before any config import). Production
+    imports fail fast if any required value is missing, with a pointer at the
+    enrollment script.
 
-    if "pytest" in sys.modules:
+    The previous approach keyed off ``"pytest" in sys.modules`` which silently skipped
+    validation whenever pytest was loaded anywhere in the process — including tests
+    that specifically wanted to cover the validation logic itself. The explicit env
+    var keeps the skip opt-in and discoverable (review finding #7).
+    """
+    if os.getenv("ADMIN_AUTH_SKIP_STARTUP_VALIDATION", "").lower() == "true":
         return
     missing: list[str] = []
     if not JWT_SECRET:

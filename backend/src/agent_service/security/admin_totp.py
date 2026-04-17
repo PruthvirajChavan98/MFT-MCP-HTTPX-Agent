@@ -21,6 +21,7 @@ import logging
 from typing import TYPE_CHECKING, Final
 
 import pyotp
+from redis.exceptions import WatchError
 
 from src.agent_service.security.admin_crypto import decrypt_secret
 
@@ -73,8 +74,35 @@ async def verify_totp_code(
         return
 
     counter_key = f"{_LOCKOUT_PREFIX}{sub}"
-    failures = await redis.hincrby(counter_key, "failures", 1)  # type: ignore[misc]
-    await redis.expire(counter_key, _COUNTER_TTL_SECONDS)
+
+    # Atomic check-and-increment (review finding #6 — TOTP lockout race).
+    #
+    # The increment must be guarded against a burst of concurrent failed attempts
+    # landing between the EXISTS check above and the SET below. Without a guard, an
+    # attacker sending N parallel requests before any one completes can pile up N
+    # failures before the locked_key is written, defeating the 5-strike policy.
+    #
+    # WATCH locked_key: if ANY coroutine writes locked_key between WATCH and EXEC,
+    # our pipeline aborts with WatchError and we fall into the "already locked"
+    # branch. HINCRBY itself is atomic; this WATCH adds the additional guarantee
+    # that we never INCR past the lock-transition boundary.
+    try:
+        async with redis.pipeline(transaction=True) as pipe:
+            await pipe.watch(locked_key)
+            # Re-check under WATCH — EXISTS above was before WATCH, so a concurrent
+            # SET could have landed in-between.
+            if await pipe.exists(locked_key):  # type: ignore[misc]
+                await pipe.unwatch()
+                raise TOTPLockedOut("account locked due to failed MFA attempts")
+
+            pipe.multi()
+            pipe.hincrby(counter_key, "failures", 1)
+            pipe.expire(counter_key, _COUNTER_TTL_SECONDS)
+            results = await pipe.execute()  # raises WatchError if locked_key changed
+            failures = int(results[0])
+    except WatchError as e:
+        # A concurrent failed attempt triggered lockout between our WATCH and EXEC.
+        raise TOTPLockedOut("account locked due to failed MFA attempts") from e
 
     if failures >= _MAX_FAILURES:
         await redis.set(locked_key, "1", ex=_LOCKOUT_TTL_SECONDS)
