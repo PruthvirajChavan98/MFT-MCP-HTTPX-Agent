@@ -63,11 +63,21 @@ export function QuestionCategories() {
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={sorted.slice(0, 12)} layout="vertical" margin={{ left: 10, right: 20, top: 6, bottom: 6 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="reason" tickFormatter={humanizeCategory} tick={{ fontSize: 11 }} width={120} />
-                <Tooltip formatter={(value: number, _name, payload) => [value, humanizeCategory(String(payload?.payload?.reason || ''))]} />
-                <Bar dataKey="count" fill="#06b6d4" radius={[0, 6, 6, 0]} />
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
+                <YAxis type="category" dataKey="reason" tickFormatter={humanizeCategory} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} width={180} />
+                <Tooltip
+                  cursor={{ fill: 'var(--accent)' }}
+                  contentStyle={{
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card)',
+                    color: 'var(--foreground)',
+                    fontSize: 12,
+                  }}
+                  formatter={(value: number, _name, payload) => [value, humanizeCategory(String(payload?.payload?.reason || ''))]}
+                />
+                <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -78,7 +88,7 @@ export function QuestionCategories() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b">
+              <thead className="bg-muted/40 border-b border-border">
                 <tr>
                   {['Category', 'Count', 'Share %', 'Coverage Bar', 'Action'].map((heading) => (
                     <th key={heading} className={`px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide${heading === 'Coverage Bar' ? ' hidden md:table-cell' : ''}`}>{heading}</th>
@@ -91,13 +101,13 @@ export function QuestionCategories() {
                       <tr key={i}><td colSpan={5} className="px-4 py-2"><Skeleton className="h-8 rounded" /></td></tr>
                     ))
                   : sorted.map((category) => (
-                      <tr key={category.reason} className="border-b last:border-0 hover:bg-slate-50/50">
-                        <td className="px-4 py-2.5 font-medium">{humanizeCategory(category.reason)}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground">{category.count}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground">{(category.pct * 100).toFixed(1)}%</td>
+                      <tr key={category.reason} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-foreground">{humanizeCategory(category.reason)}</td>
+                        <td className="px-4 py-2.5 font-tabular text-muted-foreground">{category.count}</td>
+                        <td className="px-4 py-2.5 font-tabular text-muted-foreground">{(category.pct * 100).toFixed(1)}%</td>
                         <td className="hidden md:table-cell px-4 py-2.5 min-w-[220px]">
-                          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div className="h-full bg-cyan-500" style={{ width: `${Math.max(2, category.pct * 100)}%` }} />
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full bg-primary" style={{ width: `${Math.max(2, category.pct * 100)}%` }} />
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-xs">

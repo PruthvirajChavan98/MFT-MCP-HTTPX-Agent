@@ -122,22 +122,22 @@ export function ModelConfig() {
       />
 
       {/* Target Session */}
-      <Card className="border-gray-200 shadow-sm">
-        <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
+      <Card className="border-border">
+        <CardHeader className="bg-muted/40 border-b border-border pb-4">
           <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <Server size={16} className="text-cyan-600" /> Target Session Context
+            <Server size={16} className="text-primary" /> Target Session Context
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={sessionId}
                 onChange={(e) => setSessionId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !!sessionId.trim() && (setFetchedSession(sessionId), refetch())}
                 placeholder="Enter Session ID to override..."
-                className="pl-9 text-sm font-mono bg-gray-50 h-10"
+                className="pl-9 text-sm font-mono bg-muted h-10"
               />
             </div>
             <Button
@@ -154,15 +154,15 @@ export function ModelConfig() {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Engine Config */}
-        <Card className="border-gray-200 shadow-sm">
-          <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
+        <Card className="border-border">
+          <CardHeader className="bg-muted/40 border-b border-border pb-4">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Cpu size={16} className="text-indigo-500" /> Inference Engine
+              <Cpu size={16} className="text-primary" /> Inference Engine
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Provider Vendor</Label>
+              <Label className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">Provider Vendor</Label>
               <Select value={config.provider} onValueChange={(v) => setConfig((p) => ({ ...p, provider: v }))}>
                 <SelectTrigger className="h-10 text-sm font-medium">
                   <SelectValue />
@@ -173,7 +173,7 @@ export function ModelConfig() {
                   <SelectItem value="nvidia">NVIDIA NIM</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-gray-400 mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 {providerKeyHelp(config.provider, savedProviderKey, adminProviderKey)}
               </p>
               {config.provider === 'openrouter' && (
@@ -203,7 +203,7 @@ export function ModelConfig() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Model Selection</Label>
+              <Label className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">Model Selection</Label>
               {mLoading ? <Skeleton className="h-10 rounded-md w-full" /> : (
                 <Select value={config.model_name} onValueChange={(v) => setConfig((p) => ({ ...p, model_name: v }))}>
                   <SelectTrigger className="h-10 text-sm font-medium">
@@ -216,12 +216,12 @@ export function ModelConfig() {
                           <span>{m.display_name || m.name || m.id}</span>
                           <div className="ml-2 flex items-center gap-1">
                             {m.is_reasoning_model && (
-                              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                              <span className="text-[10px] font-tabular bg-[var(--info-soft)] text-[var(--info)] px-1.5 py-0.5 rounded uppercase tracking-[0.15em]">
                                 Reasoning
                               </span>
                             )}
                             {m.supports_tools && (
-                              <span className="text-[10px] bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                              <span className="text-[10px] font-tabular bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase tracking-[0.15em]">
                                 Tools
                               </span>
                             )}
@@ -232,7 +232,7 @@ export function ModelConfig() {
                   </SelectContent>
                 </Select>
               )}
-              <p className="text-[10px] text-gray-400 mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 {selectedModel?.supports_reasoning_effort
                   ? 'This model accepts reasoning effort controls when you save the session.'
                   : 'This model ignores the saved reasoning effort setting.'}
@@ -241,8 +241,8 @@ export function ModelConfig() {
 
             <div className="space-y-4 pt-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Temperature</Label>
-                <span className="text-xs font-mono font-bold bg-gray-100 px-2 py-0.5 rounded text-gray-700">{temperature[0].toFixed(2)}</span>
+                <Label className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">Temperature</Label>
+                <span className="text-xs font-tabular bg-muted px-2 py-0.5 rounded text-foreground">{temperature[0].toFixed(2)}</span>
               </div>
               <Slider min={0} max={2} step={0.01} value={temperature} onValueChange={setTemperature} className="w-full cursor-grab" />
             </div>
@@ -250,15 +250,15 @@ export function ModelConfig() {
         </Card>
 
         {/* Reasoning & Behavior */}
-        <Card className="border-gray-200 shadow-sm flex flex-col">
-          <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
+        <Card className="border-border flex flex-col">
+          <CardHeader className="bg-muted/40 border-b border-border pb-4">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Sparkles size={16} className="text-amber-500" /> Behavior & Reasoning
+              <Sparkles size={16} className="text-[var(--warning)]" /> Behavior & Reasoning
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6 flex-1 flex flex-col">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Reasoning Effort</Label>
+              <Label className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">Reasoning Effort</Label>
               <Select value={config.reasoning_effort} onValueChange={(v) => setConfig((p) => ({ ...p, reasoning_effort: v }))}>
                 <SelectTrigger className="h-10 text-sm font-medium">
                   <SelectValue />
@@ -269,7 +269,7 @@ export function ModelConfig() {
                   <SelectItem value="high">High (Deep Thinking)</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-gray-400 mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 {selectedModel?.supports_reasoning_effort
                   ? 'Applied to models that expose reasoning effort controls.'
                   : 'Visible for all models; unsupported models ignore the saved setting.'}
@@ -278,13 +278,13 @@ export function ModelConfig() {
 
             <div className="space-y-2 flex-1 flex flex-col">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">System Prompt</Label>
-                <span className="text-[10px] font-mono text-gray-400">{config.system_prompt.length} chars</span>
+                <Label className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">System Prompt</Label>
+                <span className="text-[10px] font-tabular text-muted-foreground">{config.system_prompt.length} chars</span>
               </div>
               <Textarea
                 value={config.system_prompt}
                 onChange={(e) => setConfig((p) => ({ ...p, system_prompt: e.target.value }))}
-                className="flex-1 min-h-[140px] text-sm font-mono resize-none bg-gray-50 border-gray-200 focus:border-cyan-500 focus:ring-cyan-500/20"
+                className="flex-1 min-h-[140px] text-sm font-tabular resize-none bg-muted border-border"
                 placeholder="You are an expert AI assistant..."
               />
             </div>
@@ -297,7 +297,7 @@ export function ModelConfig() {
           size="lg"
           onClick={() => saveMut.mutate()}
           disabled={saveMut.isPending || !canCommit}
-          className="w-full sm:w-auto font-bold text-white shadow-lg disabled:opacity-50 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 border-0"
+          className="w-full sm:w-auto font-medium disabled:opacity-50"
         >
           {saveMut.isPending ? 'Committing Changes...' : <><Save className="w-4 h-4 mr-2" /> Commit to Session</>}
         </Button>
