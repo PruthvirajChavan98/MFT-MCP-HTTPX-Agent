@@ -11,8 +11,8 @@ export function StatusBadge({
 }) {
   if (vectorStatus === 'synced') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--success-soft)] px-2 py-0.5 text-[10px] font-tabular uppercase tracking-[0.15em] text-[var(--success)]">
+        <span className="size-1.5 rounded-full bg-[var(--success)]" />
         Vectorized
       </span>
     )
@@ -22,18 +22,21 @@ export function StatusBadge({
     const label = vectorError ? vectorError.slice(0, 60) : 'Vectorization failed'
     return (
       <span
-        className="inline-flex max-w-xs items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700"
+        className="inline-flex max-w-xs items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-tabular uppercase tracking-[0.15em] text-destructive"
         title={vectorError ?? undefined}
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
-        <span className="truncate">{label}{vectorError && vectorError.length > 60 ? '…' : ''}</span>
+        <span className="size-1.5 shrink-0 rounded-full bg-destructive" />
+        <span className="truncate normal-case tracking-normal">
+          {label}
+          {vectorError && vectorError.length > 60 ? '…' : ''}
+        </span>
       </span>
     )
   }
 
   if (vectorStatus === 'syncing') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--info-soft)] px-2 py-0.5 text-[10px] font-tabular uppercase tracking-[0.15em] text-[var(--info)]">
         <Loader2 className="size-3 animate-spin" />
         Syncing
       </span>
@@ -41,8 +44,8 @@ export function StatusBadge({
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[10px] font-tabular uppercase tracking-[0.15em] text-[var(--warning)]">
+      <span className="size-1.5 rounded-full bg-[var(--warning)]" />
       Pending
     </span>
   )

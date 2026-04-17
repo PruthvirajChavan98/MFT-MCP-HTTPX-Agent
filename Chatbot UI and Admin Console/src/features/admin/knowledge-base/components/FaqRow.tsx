@@ -30,7 +30,7 @@ export function FAQRow({
   const toggleExpanded = () => setExpanded((prev) => !prev)
 
   return (
-    <div className="mb-2 rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md">
+    <div className="mb-2 rounded-md border border-border bg-card transition-colors hover:bg-accent/30">
       <div
         role="button"
         tabIndex={0}
@@ -46,7 +46,7 @@ export function FAQRow({
       >
         <button
           type="button"
-          className="mt-0.5 shrink-0 text-gray-400 transition-colors hover:text-gray-600"
+          className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
           aria-label={expanded ? 'Collapse FAQ row' : 'Expand FAQ row'}
           onClick={(event) => {
             event.stopPropagation()
@@ -57,8 +57,8 @@ export function FAQRow({
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-800">{faq.question}</p>
-          {!expanded && <p className="mt-0.5 truncate text-xs text-gray-400">{faq.answer}</p>}
+          <p className="truncate text-sm font-medium text-foreground">{faq.question}</p>
+          {!expanded && <p className="mt-0.5 truncate text-xs text-muted-foreground">{faq.answer}</p>}
         </div>
 
         <div
@@ -74,21 +74,21 @@ export function FAQRow({
               onClick={() => setMenuOpen((prev) => !prev)}
               aria-expanded={menuOpen}
               aria-label="Open row actions"
-              className="rounded-lg p-1.5 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <MoreHorizontal size={16} />
             </button>
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-                <div className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-xl">
+                <div className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-md border border-border bg-popover py-1 shadow-xl">
                   <button
                     type="button"
                     onClick={() => {
                       onEdit(faq)
                       setMenuOpen(false)
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
                   >
                     <Pencil size={13} />
                     Edit
@@ -100,19 +100,19 @@ export function FAQRow({
                       toast.success('Copied to clipboard')
                       setMenuOpen(false)
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
                   >
                     <Copy size={13} />
                     Copy
                   </button>
-                  <div className="my-1 border-t border-gray-100" />
+                  <div className="my-1 border-t border-border" />
                   <button
                     type="button"
                     onClick={() => {
                       onDelete(faq)
                       setMenuOpen(false)
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
                   >
                     <Trash2 size={13} />
                     Delete
@@ -125,16 +125,16 @@ export function FAQRow({
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-50 bg-gray-50/50 px-3 sm:px-5 py-3 sm:py-4">
-          <p className="mb-3 text-sm leading-relaxed text-gray-600">{faq.answer}</p>
+        <div className="border-t border-border bg-muted/30 px-3 sm:px-5 py-3 sm:py-4">
+          <p className="mb-3 text-sm leading-relaxed text-foreground/90">{faq.answer}</p>
           <div className="flex flex-wrap items-center gap-2">
             {faq.tags.map((tag) => (
-              <span key={tag} className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+              <span key={tag} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 <Tag size={10} />
                 {tag}
               </span>
             ))}
-            <span className="ml-auto text-xs text-gray-400">
+            <span className="ml-auto text-xs font-tabular text-muted-foreground">
               Added {faq.createdAt ? formatDateTime(faq.createdAt) : '—'}
             </span>
           </div>
