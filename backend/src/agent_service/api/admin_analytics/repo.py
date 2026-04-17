@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from .category_map import ROUTER_REASON_TO_CATEGORY_CASE
 from .utils import _pg_rows
 
 # ---------------------------------------------------------------------------
@@ -109,39 +110,50 @@ class AdminAnalyticsRepo:
         status: str | None,
         model: str | None,
         search_pat: str | None,
+        category: str | None,
         cursor_started_at: str | None,
         cursor_trace_id: str,
         limit: int,
     ) -> list[dict[str, Any]]:
+        # NOTE: the f-string interpolates the shared CASE expression as a
+        # literal SQL fragment (not a parameter). It is a constant defined
+        # in our own module — no user input reaches the interpolation.
+        sql = f"""
+        SELECT
+            trace_id, case_id, session_id, provider, model, endpoint,
+            started_at, ended_at, latency_ms, status, error,
+            inputs_json, final_output, meta_json
+        FROM eval_traces
+        WHERE started_at IS NOT NULL
+          AND ($1::text IS NULL OR LOWER(COALESCE(status, '')) = $1)
+          AND ($2::text IS NULL OR COALESCE(model, '') = $2)
+          AND (
+            $3::text IS NULL
+            OR LOWER(trace_id) LIKE $3
+            OR LOWER(COALESCE(session_id, '')) LIKE $3
+            OR LOWER(COALESCE(inputs_json::text, '')) LIKE $3
+            OR LOWER(COALESCE(final_output, '')) LIKE $3
+          )
+          AND (
+            $4::text IS NULL
+            OR question_category = $4
+            OR COALESCE({ROUTER_REASON_TO_CATEGORY_CASE}, 'other') = $4
+          )
+          AND (
+            $5::timestamptz IS NULL
+            OR started_at < $5
+            OR (started_at = $5 AND trace_id < $6)
+          )
+        ORDER BY started_at DESC, trace_id DESC
+        LIMIT $7
+        """
         return await _pg_rows(
             pool,
-            """
-            SELECT
-                trace_id, case_id, session_id, provider, model, endpoint,
-                started_at, ended_at, latency_ms, status, error,
-                inputs_json, final_output, meta_json
-            FROM eval_traces
-            WHERE started_at IS NOT NULL
-              AND ($1::text IS NULL OR LOWER(COALESCE(status, '')) = $1)
-              AND ($2::text IS NULL OR COALESCE(model, '') = $2)
-              AND (
-                $3::text IS NULL
-                OR LOWER(trace_id) LIKE $3
-                OR LOWER(COALESCE(session_id, '')) LIKE $3
-                OR LOWER(COALESCE(inputs_json::text, '')) LIKE $3
-                OR LOWER(COALESCE(final_output, '')) LIKE $3
-              )
-              AND (
-                $4::timestamptz IS NULL
-                OR started_at < $4
-                OR (started_at = $4 AND trace_id < $5)
-              )
-            ORDER BY started_at DESC, trace_id DESC
-            LIMIT $6
-            """,
+            sql,
             status,
             model,
             search_pat,
+            category,
             cursor_started_at,
             cursor_trace_id,
             limit,

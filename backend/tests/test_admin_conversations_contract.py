@@ -119,10 +119,11 @@ async def test_traces_cursor_contract_returns_next_cursor(monkeypatch):
     ]
 
     async def _fake_pg_rows(_pool, _query: str, *args):
-        # args: normalized_status, normalized_model, search_pat,
-        #       cursor_started_at, cursor_trace_id, limit+1
+        # args (post-category-filter addition): normalized_status, normalized_model,
+        # search_pat, category, cursor_started_at, cursor_trace_id, limit+1
         assert args[2] == "%q%"  # search_pat
-        assert args[5] == 3  # limit_plus_one
+        assert args[3] is None  # category (not passed in this test)
+        assert args[6] == 3  # limit_plus_one
         return rows
 
     monkeypatch.setattr(repo_mod, "_pg_rows", _fake_pg_rows)
@@ -130,7 +131,13 @@ async def test_traces_cursor_contract_returns_next_cursor(monkeypatch):
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pool=fake_pool)))
 
     response = await traces_mod.traces(
-        request=request, limit=2, cursor=None, search="q", status=None, model=None
+        request=request,
+        limit=2,
+        cursor=None,
+        search="q",
+        status=None,
+        model=None,
+        category=None,
     )
 
     assert response["count"] == 2

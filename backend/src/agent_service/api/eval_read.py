@@ -6,6 +6,9 @@ from typing import Any, Literal, NoReturn, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from src.agent_service.api.admin_analytics.category_map import (
+    ROUTER_REASON_TO_CATEGORY_CASE,
+)
 from src.agent_service.api.admin_auth import require_admin
 from src.agent_service.eval_store.status import (
     SHADOW_TIMED_OUT_SECONDS,
@@ -751,46 +754,28 @@ async def eval_metrics_failures(
 @router.get("/question-types")
 async def question_types(request: Request, limit: int = 200):
     pool = _get_pool(request)
+    # The router_reason → slug CASE mapping is shared with the traces category
+    # filter in admin_analytics/repo.py — see category_map.py for the source.
+    sql = f"""
+    SELECT
+        COALESCE(
+            question_category,
+            {ROUTER_REASON_TO_CATEGORY_CASE},
+            'Unknown'
+        ) AS reason,
+        COUNT(*) AS n
+    FROM (
+        SELECT question_category, router_reason
+        FROM eval_traces
+        WHERE started_at IS NOT NULL
+        ORDER BY started_at DESC
+        LIMIT $1
+    ) sub
+    GROUP BY reason
+    ORDER BY n DESC
+    """
     try:
-        rows = await pool.fetch(
-            """
-            SELECT
-                COALESCE(
-                    question_category,
-                    CASE router_reason
-                        WHEN 'lead_intent_new_loan'         THEN 'loan_products_and_eligibility'
-                        WHEN 'eligibility_offer'            THEN 'loan_products_and_eligibility'
-                        WHEN 'loan_terms_rates'             THEN 'loan_products_and_eligibility'
-                        WHEN 'application_status_approval'  THEN 'application_status_and_approval'
-                        WHEN 'disbursal'                    THEN 'disbursal_and_bank_credit'
-                        WHEN 'kyc_verification'             THEN 'profile_kyc_and_access'
-                        WHEN 'otp_login_app_tech'           THEN 'profile_kyc_and_access'
-                        WHEN 'emi_payment_reflecting'       THEN 'emi_payments_and_charges'
-                        WHEN 'nach_autodebit_bounce'        THEN 'emi_payments_and_charges'
-                        WHEN 'charges_fees_penalty'         THEN 'emi_payments_and_charges'
-                        WHEN 'statement_receipt'            THEN 'emi_payments_and_charges'
-                        WHEN 'foreclosure_partpayment'      THEN 'foreclosure_and_closure'
-                        WHEN 'collections_harassment'       THEN 'collections_and_recovery'
-                        WHEN 'fraud_security'               THEN 'fraud_and_security'
-                        WHEN 'customer_support'             THEN 'customer_support_channels'
-                        WHEN 'unknown'                      THEN 'other'
-                        ELSE NULL
-                    END,
-                    'Unknown'
-                ) AS reason,
-                COUNT(*) AS n
-            FROM (
-                SELECT question_category, router_reason
-                FROM eval_traces
-                WHERE started_at IS NOT NULL
-                ORDER BY started_at DESC
-                LIMIT $1
-            ) sub
-            GROUP BY reason
-            ORDER BY n DESC
-            """,
-            limit,
-        )
+        rows = await pool.fetch(sql, limit)
     except Exception as exc:
         _raise_db_error(exc, "eval_question_types")
 

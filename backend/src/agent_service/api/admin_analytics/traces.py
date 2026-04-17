@@ -484,8 +484,16 @@ async def traces(
     search: str | None = Query(default=None, max_length=200),
     status: str | None = Query(default=None),
     model: str | None = Query(default=None),
+    category: str | None = Query(default=None, max_length=100),
 ):
-    """Canonical flat list of traces from Eval store for /admin/traces."""
+    """Canonical flat list of traces from Eval store for /admin/traces.
+
+    ``category`` filters by a canonical category slug (e.g.
+    ``loan_products_and_eligibility``, ``other``). Matches either
+    ``eval_traces.question_category`` directly or a mapped value derived from
+    ``router_reason`` via the SQL CASE expression in ``category_map.py``.
+    Used by the QuestionCategories "View Traces" link.
+    """
     started = time.perf_counter()
     try:
         parsed_cursor = _decode_cursor(cursor, operation="admin_traces")
@@ -502,6 +510,7 @@ async def traces(
         normalized_search = search.strip().lower() if search and search.strip() else None
         normalized_status = status.strip().lower() if status and status.strip() else None
         normalized_model = model.strip() if model and model.strip() else None
+        normalized_category = category.strip() if category and category.strip() else None
 
         pool = request.app.state.pool
         search_pat = f"%{normalized_search}%" if normalized_search else None
@@ -510,6 +519,7 @@ async def traces(
             status=normalized_status,
             model=normalized_model,
             search_pat=search_pat,
+            category=normalized_category,
             cursor_started_at=cursor_started_at,
             cursor_trace_id=cursor_trace_id or "",
             limit=limit + 1,
