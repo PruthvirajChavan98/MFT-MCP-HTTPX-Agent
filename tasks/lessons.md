@@ -156,3 +156,14 @@ Diagnose cookie-not-sent issues with a standalone `python -c "..."` script that 
 ### 21. pytest-asyncio strict mode requires @pytest_asyncio.fixture for async fixtures
 **Trigger:** Rewrote test_session_store.py with `@pytest.fixture async def` — all 7 tests errored with `PytestRemovedIn9Warning` about async fixtures not being handled.
 **Rule:** When `asyncio_mode = "strict"` in pyproject.toml, async fixtures MUST use `@pytest_asyncio.fixture`, not `@pytest.fixture`.
+
+
+## 2026-04-17
+
+### 22. Lua-script atomicity and fakeredis don't mix cleanly — prefer WATCH/MULTI/EXEC
+**Trigger:** Planning the TOCTOU fix for `rotate_refresh_token` and TOTP lockout, initial design used redis Lua scripts for atomic check-and-swap. fakeredis' Lua support is a lupa-backed subset: basic `redis.call('HGET'/'HSET'/'DEL')` works, but anything using `cjson`, `tonumber` edge cases, or non-trivial control flow is half-supported and only discovered mid-implementation. Tests would have needed a live-Redis integration marker.
+**Rule:** For a CAS that can be expressed as WATCH(key) + (EXISTS/HGET read) + MULTI(HSET/HINCRBY) + EXEC, prefer the WATCH/MULTI/EXEC form over Lua. Verbosity cost: ~10 extra Python lines per site. Benefits: runs natively under fakeredis 2.33.0, no separate scripts module, familiar to any Python dev.
+
+### 23. Module-level config validation must use an explicit env-var skip, not sys.modules sniffing
+**Trigger:** `_validate_admin_auth_config()` originally guarded its body with `if "pytest" in sys.modules: return`. This silently skipped validation in every test run — including CI runs of tests that specifically wanted to exercise the validator's failure modes. Review finding #7 flagged this; the test would have silently passed whatever the validator did.
+**Rule:** For validation that you want to SKIP in tests, use an explicit env var (e.g. `ADMIN_AUTH_SKIP_STARTUP_VALIDATION=true`) set by a `conftest.py` at the tests root. Never use `"pytest" in sys.modules` as a skip-gate for anything security-critical — a future test that wants to exercise the gated code has no obvious way to opt back in.

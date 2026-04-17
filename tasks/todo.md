@@ -1,5 +1,35 @@
 # Task Plan
 
+## ✅ AUDIT REMEDIATION — COMPLETE (2026-04-17)
+
+All 11 findings from the 2026-04-13 code review (security-reviewer + python-reviewer agents) are closed. The cutover is unblocked; `pre-phase-6-cutover` tag re-points to the post-remediation HEAD.
+
+| # | Severity | Finding | Closed in |
+|---|---|---|---|
+| 1 | CRITICAL | JWT_ALGORITHM env-overridable (alg=none bypass) | `78862ae` |
+| 2 | HIGH | rotate_refresh_token TOCTOU (WATCH/MULTI/EXEC) | `3ffce6c` |
+| 3 | HIGH | _parse_refresh split('.') maxsplit=2 | `3ffce6c` |
+| 4 | HIGH | mfa_verified_at int() coercion guard | `3ffce6c` |
+| 5 | HIGH | Frontend CSRF STATE_CHANGING_METHODS missing PATCH | `c83a0d6` |
+| 6 | MEDIUM | TOTP lockout counter race (WATCH/MULTI/EXEC) | `e1a20f9` |
+| 7 | MEDIUM | Pytest startup-validation skip too blunt (env-var pivot) | `e1a20f9` |
+| 8 | MEDIUM | MFA recovery runbook (endpoint deferred) | docs/runbooks/admin_auth_mfa_recovery.md |
+| 10 | HIGH | pricing.py cached-token double-count (~3x overcharge) | `1026a6f` |
+| 11 | HIGH | pricing.py reasoning-token double-count (2x on reasoning runs) | `1026a6f` |
+| 17/18/19 | LOW | Convention cleanup on event_bus, http_client, follow_ups | `3660bd2` |
+
+**Deferred (out of scope this cycle):**
+- #9 (LOW) — `issued_at` storage in Redis hash: imprecise metadata, no security impact. Follow-up sprint.
+- #8 (MFA reset endpoint) — needs its own threat model + RBAC. Runbook ships now; endpoint later.
+
+**Baseline → post-remediation test counts:**
+- Backend: 253 → 290 (+37 new tests across JWT alg, pricing, refresh TOCTOU, parse hardening, claim guards, TOTP race)
+- Frontend: 129 → 130 (+1 PATCH CSRF test)
+
+**Rollback:** `git reset --hard pre-phase-6-cutover` reverts to the post-remediation HEAD (not the pre-remediation state). If a hard rollback is needed back to the pre-review state, use `git reset --hard e3bc64e` (the `fix: recover 4 core modules previously hidden by .gitignore bug` commit).
+
+---
+
 ## 📌 TOMORROW — PICKUP PLAN (2026-04-12)
 
 **Read this section first.** Everything below in this file is historical context. Use `CLAUDE.md` for project structure, `tasks/lessons.md` for accumulated gotchas, and the Phase 6 + M1 sections below for execution history.
