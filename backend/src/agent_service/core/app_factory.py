@@ -258,6 +258,12 @@ class AppFactory:
         from src.agent_service.api.endpoints.admin_auth_routes import router as admin_auth_router
 
         app.include_router(admin_auth_router, tags=["admin-auth"])
+
+        # Admin user management (Phase 3/5). Enrollment + revocation of
+        # non-super-admin accounts, mounted alongside the auth router.
+        from src.agent_service.api.admin_users.routes import router as admin_users_router
+
+        app.include_router(admin_users_router, tags=["admin-users"])
         app.include_router(feedback_router)
 
         app.include_router(health_router)
