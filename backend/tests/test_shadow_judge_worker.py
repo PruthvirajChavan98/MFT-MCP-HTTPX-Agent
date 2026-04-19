@@ -3,7 +3,13 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from src.agent_service.worker.shadow_judge_worker import ShadowJudgeWorker
+from src.agent_service.worker.shadow_judge_worker import (
+    STATUS_OK,
+    STATUS_PARSE_FALLBACK,
+    STATUS_UPSTREAM_UNAVAILABLE,
+    ShadowJudgeWorker,
+    _default_eval_row,
+)
 
 
 class _FakeQueue:
@@ -137,3 +143,61 @@ async def test_shadow_worker_persists_default_rows_on_non_retryable_4xx(monkeypa
     assert rows[0]["trace_id"] == "trace-4xx"
     assert rows[0]["policy_adherence"] == 0.0
     assert "default evaluation recorded" in rows[0]["summary"]
+    assert rows[0]["status"] == STATUS_UPSTREAM_UNAVAILABLE
+
+
+def test_default_eval_row_defaults_to_parse_fallback_status():
+    row = _default_eval_row({"trace_id": "trace-parse", "session_id": "s"})
+    assert row["status"] == STATUS_PARSE_FALLBACK
+    assert row["helpfulness"] == 0.0
+
+
+def test_default_eval_row_accepts_explicit_status():
+    row = _default_eval_row(
+        {"trace_id": "trace-up", "session_id": "s"},
+        status=STATUS_UPSTREAM_UNAVAILABLE,
+        summary="upstream HTTP 500",
+    )
+    assert row["status"] == STATUS_UPSTREAM_UNAVAILABLE
+    assert row["summary"] == "upstream HTTP 500"
+
+
+@pytest.mark.asyncio
+async def test_call_groq_success_marks_status_ok(monkeypatch):
+    """Rows returned by _call_groq (non-fallback path) must carry status='ok'."""
+    from unittest.mock import AsyncMock
+
+    worker = ShadowJudgeWorker(queue=_FakeQueue([]))
+
+    fake_response = httpx.Response(
+        status_code=200,
+        request=httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions"),
+        json={
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"evaluations": [{"trace_id": "trace-ok", "helpfulness": 0.9, '
+                            '"faithfulness": 0.8, "policy_adherence": 1.0, "summary": "good"}]}'
+                        )
+                    }
+                }
+            ]
+        },
+    )
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+
+    monkeypatch.setattr(
+        "src.agent_service.worker.shadow_judge_worker.get_http_client",
+        AsyncMock(return_value=fake_client),
+    )
+    monkeypatch.setattr("src.agent_service.worker.shadow_judge_worker.GROQ_API_KEYS", ["fake-key"])
+
+    rows = await worker._call_groq(  # noqa: SLF001
+        [{"trace_id": "trace-ok", "session_id": "s", "user_prompt": "q", "agent_response": "a"}],
+        "model-a",
+    )
+    assert len(rows) == 1
+    assert rows[0]["status"] == STATUS_OK
+    assert rows[0]["helpfulness"] == pytest.approx(0.9)

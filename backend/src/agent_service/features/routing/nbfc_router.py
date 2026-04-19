@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
@@ -288,7 +289,11 @@ class EmbeddingsRouter:
 
         # Reason
         need_reason = bool(OPS_INTENT_RE.search(text)) or label_s in ("negative", "mixed")
-        reason_res = None
+        # Always emit a reason dict — never None — so downstream projection
+        # (collector.build_trace_dict + SQL CASE) doesn't have to special-case
+        # the absence. A query that didn't trigger reason computation is
+        # canonically labelled "unknown" with score 0.0.
+        reason_res: Dict[str, Any] = {"label": "unknown", "score": 0.0, "topk": []}
 
         if need_reason:
             scored_r = self._score_vector(self._reason_bank, query_vector)  # type: ignore
@@ -476,12 +481,18 @@ class NBFCClassifierService:
 
         t = _norm(text)
         mode = mode or NBFC_ROUTER_MODE
+        stage_start = time.perf_counter()
+        log.info("nbfc_router.classify.start mode=%s text_len=%d", mode, len(t))
 
         if not openrouter_api_key:
             answerability = await self._safe_answerability(
                 t,
                 tools=tools,
                 openrouter_api_key=None,
+            )
+            log.info(
+                "nbfc_router.classify.early_return reason=no_api_key elapsed_ms=%.0f",
+                (time.perf_counter() - stage_start) * 1000.0,
             )
             return {
                 "error": "OpenRouter Key required for router",
@@ -490,14 +501,27 @@ class NBFCClassifierService:
             }
 
         # Embeddings First
+        emb_start = time.perf_counter()
         e, query_vector = await self.emb.classify_with_query_vector(t, openrouter_api_key)
+        log.info(
+            "nbfc_router.embeddings.done elapsed_ms=%.0f sentiment=%s reason=%s",
+            (time.perf_counter() - emb_start) * 1000.0,
+            e.get("sentiment", {}).get("label"),
+            (e.get("reason") or {}).get("label"),
+        )
 
         if mode == "embeddings":
+            ans_start = time.perf_counter()
             e["answerability"] = await self._safe_answerability(
                 t,
                 tools=tools,
                 openrouter_api_key=openrouter_api_key,
                 query_vector=query_vector,
+            )
+            log.info(
+                "nbfc_router.classify.return mode=embeddings answerability_ms=%.0f total_ms=%.0f",
+                (time.perf_counter() - ans_start) * 1000.0,
+                (time.perf_counter() - stage_start) * 1000.0,
             )
             return e
 
@@ -513,7 +537,12 @@ class NBFCClassifierService:
         )
 
         if mode == "llm" or force_llm or (mode == "hybrid" and low_conf):
+            llm_start = time.perf_counter()
             llm_result = await self.llm.classify(t, openrouter_api_key)
+            log.info(
+                "nbfc_router.llm.done elapsed_ms=%.0f",
+                (time.perf_counter() - llm_start) * 1000.0,
+            )
             llm_result["backend"] = (
                 f"hybrid->{llm_result['backend']}" if mode == "hybrid" else llm_result["backend"]
             )
@@ -521,11 +550,18 @@ class NBFCClassifierService:
         else:
             result = e
 
+        ans_start = time.perf_counter()
         result["answerability"] = await self._safe_answerability(
             t,
             tools=tools,
             openrouter_api_key=openrouter_api_key,
             query_vector=query_vector,
+        )
+        log.info(
+            "nbfc_router.classify.return mode=%s answerability_ms=%.0f total_ms=%.0f",
+            mode,
+            (time.perf_counter() - ans_start) * 1000.0,
+            (time.perf_counter() - stage_start) * 1000.0,
         )
         return result
 

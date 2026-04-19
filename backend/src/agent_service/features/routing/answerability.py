@@ -218,17 +218,20 @@ class QueryAnswerabilityClassifier:
     async def _kb_vector_lookup(
         query_vector: np.ndarray,
     ) -> tuple[Optional[float], Optional[str], Optional[str]]:
-        """Look up the most similar FAQ using Milvus kb_faqs collection."""
-        if milvus_mgr.kb_faqs is None:
-            return None, None, "Milvus not initialized"
+        """Look up the most similar FAQ using Milvus kb_faqs collection.
+
+        Phase F4 (2026-04-18): swapped from langchain-milvus async wrapper
+        (which hung on our 0.3.3 + pymilvus 2.6.11 combo) to
+        ``milvus_mgr.semantic_search_raw`` with the caller's pre-computed
+        vector. Prior code threw the vector away and re-embedded an empty
+        string (a workaround noted in a TODO) — the new helper accepts the
+        vector directly, so the lookup is both correct AND doesn't hang.
+        """
         try:
-            # Convert numpy vector to a query string that Milvus will re-embed,
-            # OR use the pre-computed vector via a raw search.
-            # langchain-milvus doesn't expose pre-vector search directly on the VectorStore
-            # interface, so we use a minimal text query and let Milvus re-embed.
-            # For true pre-vector lookup, use pymilvus directly (out of scope here).
-            results = await milvus_mgr.kb_faqs.asimilarity_search_with_score(
-                "", k=1  # empty query — Milvus will return closest to zero-vector
+            results = await milvus_mgr.semantic_search_raw(
+                collection="kb_faqs",
+                query_vector=query_vector.tolist(),
+                limit=1,
             )
         except Exception as exc:  # noqa: BLE001
             log.debug("KB vector lookup failed: %s", exc)

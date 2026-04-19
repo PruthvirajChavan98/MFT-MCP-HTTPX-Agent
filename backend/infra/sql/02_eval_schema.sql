@@ -151,7 +151,9 @@ CREATE TABLE IF NOT EXISTS shadow_judge_evals (
     policy_adherence REAL,
     summary          TEXT,
     raw_json         JSONB       NOT NULL DEFAULT '{}',
-    evaluated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    evaluated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- status: 'ok' | 'parse_fallback' | 'upstream_unavailable' (see 04_shadow_judge_status.sql)
+    status           TEXT        NOT NULL DEFAULT 'ok'
 );
 
 CREATE INDEX IF NOT EXISTS idx_shadow_judge_evals_trace    ON shadow_judge_evals (trace_id);

@@ -113,15 +113,20 @@ class EvalEmbedder:
             return
 
         try:
+            # Milvus varchar fields reject None (raises MilvusException code=1100).
+            # dict.get(k, default) returns None when the key exists with a None
+            # value — collector.py always inserts `case_id=None` on non-eval
+            # sessions, so the "" default never applies. Use `or ""` to coerce
+            # every field defensively.
             milvus_doc = Document(
                 page_content=doc2,
                 metadata={
                     "trace_id": trace_id,
-                    "provider": trace.get("provider", ""),
-                    "model": trace.get("model", ""),
-                    "status": trace.get("status", ""),
-                    "session_id": trace.get("session_id", ""),
-                    "case_id": trace.get("case_id", ""),
+                    "provider": trace.get("provider") or "",
+                    "model": trace.get("model") or "",
+                    "status": trace.get("status") or "",
+                    "session_id": trace.get("session_id") or "",
+                    "case_id": trace.get("case_id") or "",
                 },
             )
             await milvus_mgr.eval_traces.aadd_documents(  # type: ignore[union-attr]
@@ -182,9 +187,9 @@ class EvalEmbedder:
                 metadata={
                     "eval_id": eval_id,
                     "trace_id": trace_id,
-                    "metric_name": ev.get("metric_name", ""),
-                    "passed": str(ev.get("passed", "")),
-                    "score": str(ev.get("score", "")),
+                    "metric_name": ev.get("metric_name") or "",
+                    "passed": str(ev.get("passed") if ev.get("passed") is not None else ""),
+                    "score": str(ev.get("score") if ev.get("score") is not None else ""),
                 },
             )
             await milvus_mgr.eval_results.aadd_documents(  # type: ignore[union-attr]

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Dict, Mapping, cast
 
 from fastapi import APIRouter, HTTPException, Request
@@ -11,7 +12,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.agent_service.core.config import (
     AGENT_INLINE_ROUTER_ENABLED,
-    AGENT_INLINE_ROUTER_EXPOSE,
     AGENT_STREAM_EXPOSE_INTERNAL_EVENTS,
     AGENT_STREAM_EXPOSE_REASONING,
     SHADOW_JUDGE_ENABLED,
@@ -64,6 +64,70 @@ def _truncate_text(text: str, max_len: int = 400) -> str:
     if len(text) <= max_len:
         return text
     return f"{text[:max_len]}...[truncated:{len(text) - max_len}]"
+
+
+async def _classify_and_update_trace_router(
+    *,
+    pool: Any,
+    trace_id: str,
+    question: str,
+    openrouter_api_key: str | None,
+    tools: Any,
+) -> None:
+    """Fire-and-forget router classifier + direct UPDATE on eval_traces.
+
+    Runs entirely off the request's hot path. The generator's ``finally`` block
+    has already persisted the base trace row via ``persist_runtime_trace``;
+    this task updates the router_* columns once classify returns. Worst case
+    (router fails / never returns): router_reason stays NULL on that row,
+    graceful degradation.
+    """
+    started = time.perf_counter()
+    try:
+        # Small delay so persist_runtime_trace (running on the same generator
+        # finally) is definitely done before we UPDATE. 250 ms is plenty.
+        await asyncio.sleep(0.25)
+        router_out = await nbfc_router_service.classify(
+            question,
+            openrouter_api_key=openrouter_api_key,
+            tools=tools,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("router.background.classify_failed trace_id=%s: %s", trace_id, exc)
+        return
+
+    if not router_out or router_out.get("disabled"):
+        return
+
+    sentiment = (router_out.get("sentiment") or {}) if router_out else {}
+    reason = (router_out.get("reason") or {}) if router_out else {}
+    try:
+        await pool.execute(
+            """
+            UPDATE eval_traces
+            SET router_backend        = $1,
+                router_sentiment      = $2,
+                router_sentiment_score = $3,
+                router_reason         = $4,
+                router_reason_score   = $5
+            WHERE trace_id = $6
+            """,
+            router_out.get("backend"),
+            sentiment.get("label"),
+            sentiment.get("score"),
+            reason.get("label") or "unknown",
+            reason.get("score") or 0.0,
+            trace_id,
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        log.info(
+            "router.background.updated trace_id=%s elapsed_ms=%.0f reason=%s",
+            trace_id,
+            elapsed_ms,
+            reason.get("label"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("router.background.update_failed trace_id=%s: %s", trace_id, exc)
 
 
 def _message_content_to_text(content: Any) -> str:
@@ -441,15 +505,15 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
         resources = await resource_resolver.resolve_agent_resources(sid, request)
 
-        router_task: asyncio.Task | None = None
-        if AGENT_INLINE_ROUTER_ENABLED:
-            router_task = asyncio.create_task(
-                nbfc_router_service.classify(
-                    request.question,
-                    openrouter_api_key=resources.openrouter_api_key,
-                    tools=resources.tools,
-                )
-            )
+        # Router is a TRACING concern, not a runtime decision. Spawning it as
+        # `asyncio.create_task(...)` here (pre-graph, concurrent with the MCP
+        # tool dispatch) caused stream stalls — the router's 4-6s of concurrent
+        # HTTP I/O interfered with langchain_mcp_adapters' SSE consumer, so
+        # tool results never returned. Phase C reproduction (2026-04-18)
+        # confirmed: MCP POST → 202 Accepted → no SSE response → stream hangs
+        # forever. Router now runs SERIALLY after the graph loop exits; see
+        # the post-graph block below.
+        AGENT_INLINE_ROUTER_ENABLED_FLAG = AGENT_INLINE_ROUTER_ENABLED
 
         app_id = await session_utils.get_app_id_for_session(sid)
 
@@ -571,31 +635,19 @@ async def stream_agent(request: AgentRequest, http_request: Request):
 
         async def event_generator():
             state = StreamingState()
-            router_handled = False
             final_output = ""
             metered_run_ids: set[str] = set()
             tool_start_run_ids: set[str] = set()
             saw_chat_model_events = False
 
-            async def maybe_handle_router_outcome():
-                nonlocal router_handled
-                if router_handled or router_task is None or not router_task.done():
-                    return None
-
-                try:
-                    router_out = router_task.result()
-                    if router_out:
-                        collector.set_router_outcome(router_out)
-                        router_handled = True
-                        if AGENT_INLINE_ROUTER_EXPOSE:
-                            return sse_formatter.router_event(router_out)
-                except Exception as e:
-                    log.warning("Router classification failed: %s", e)
-                router_handled = True
-                return None
-
             try:
                 stream_input = initial_recursive_rag_state(request.question)
+                graph_started_at = time.perf_counter()
+                log.info(
+                    "graph.astream_events.start session_id=%s trace_id=%s",
+                    sid,
+                    collector.trace_id,
+                )
 
                 try:
                     event_stream = graph.astream_events(
@@ -621,10 +673,6 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                             collector.trace_id,
                         )
                         break
-
-                    router_evt = await maybe_handle_router_outcome()
-                    if router_evt:
-                        yield router_evt
 
                     if not isinstance(event, dict):
                         continue
@@ -714,23 +762,23 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                                 collector.on_token(text)
                                 yield sse_formatter.token_event(text)
 
-                router_evt = await maybe_handle_router_outcome()
-                if router_evt:
-                    yield router_evt
+                graph_elapsed_ms = (time.perf_counter() - graph_started_at) * 1000.0
+                log.info(
+                    "graph.astream_events.end session_id=%s trace_id=%s elapsed_ms=%.0f",
+                    sid,
+                    collector.trace_id,
+                    graph_elapsed_ms,
+                )
 
-                if router_task is not None and not router_handled:
-                    try:
-                        router_out = await asyncio.wait_for(router_task, timeout=0.25)
-                        if router_out:
-                            collector.set_router_outcome(router_out)
-                            if AGENT_INLINE_ROUTER_EXPOSE:
-                                yield sse_formatter.router_event(router_out)
-                    except asyncio.TimeoutError:
-                        log.debug("Router classification still running after stream completion")
-                    except Exception as e:
-                        log.warning("Router classification failed late: %s", e)
-                    finally:
-                        router_handled = True
+                # Router runs FIRE-AND-FORGET after the stream closes. It
+                # classifies the user's query (embeddings + optional LLM +
+                # answerability) and UPDATEs router_* columns on the already-
+                # persisted trace row. Zero user-visible latency — the stream
+                # has already emitted its final token by the time this fires.
+                # Previous iterations tried to wait inline with 3-10s caps;
+                # both were too tight for cold-cache embeddings and left
+                # router_reason NULL. See spawn in the `finally:` block below.
+                pass
 
                 if not final_output:
                     try:
@@ -866,6 +914,21 @@ async def stream_agent(request: AgentRequest, http_request: Request):
                     )
                 )
                 schedule_shadow_trace_enqueue(final_output)
+
+                # Fire-and-forget router classification. Runs after persist
+                # completes; updates the trace row directly with router_reason
+                # and friends. Survives past the generator close — caller sees
+                # no extra latency.
+                if AGENT_INLINE_ROUTER_ENABLED_FLAG:
+                    asyncio.create_task(
+                        _classify_and_update_trace_router(
+                            pool=http_request.app.state.pool,
+                            trace_id=collector.trace_id,
+                            question=request.question,
+                            openrouter_api_key=resources.openrouter_api_key,
+                            tools=resources.tools,
+                        )
+                    )
 
         return EventSourceResponse(event_generator(), headers={"Cache-Control": "no-cache"})
 

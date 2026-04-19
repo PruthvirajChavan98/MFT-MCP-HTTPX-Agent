@@ -290,8 +290,12 @@ class ShadowEvalCollector:
             trace_data["router_override"] = s.get("overridden")
 
             # Reason
+            # Defensive: when a router backend forgets the convention and
+            # returns `reason: None`, the raw projection stored NULL in the DB,
+            # which the dashboard's SQL CASE then misclassified as "other".
+            # Fall back to "unknown" so the slug round-trips through the filter.
             rs = r.get("reason") or {}
-            trace_data["router_reason"] = rs.get("label")
-            trace_data["router_reason_score"] = rs.get("score")
+            trace_data["router_reason"] = rs.get("label") or "unknown"
+            trace_data["router_reason_score"] = rs.get("score") or 0.0
 
         return trace_data

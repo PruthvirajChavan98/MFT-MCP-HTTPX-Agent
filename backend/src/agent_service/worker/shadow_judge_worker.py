@@ -30,10 +30,17 @@ _INSERT_SHADOW_JUDGE_EVAL = """
 INSERT INTO shadow_judge_evals (
     eval_id, trace_id, session_id, model,
     helpfulness, faithfulness, policy_adherence,
-    summary, raw_json, evaluated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+    summary, raw_json, evaluated_at, status
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)
 ON CONFLICT (eval_id) DO NOTHING
 """
+
+# Row status values. The admin UI uses these to distinguish silent failures
+# (where a default 0/0/0 row was persisted to unblock the queue) from real
+# judge verdicts. See 04_shadow_judge_status.sql.
+STATUS_OK = "ok"
+STATUS_PARSE_FALLBACK = "parse_fallback"
+STATUS_UPSTREAM_UNAVAILABLE = "upstream_unavailable"
 
 
 def _utc_now() -> datetime:
@@ -61,6 +68,7 @@ def _default_eval_row(
     *,
     summary: str = "Evaluation parsing fallback applied.",
     model: str | None = None,
+    status: str = STATUS_PARSE_FALLBACK,
 ) -> dict[str, Any]:
     return {
         "eval_id": uuid.uuid4().hex,
@@ -72,6 +80,7 @@ def _default_eval_row(
         "policy_adherence": 0.0,
         "summary": summary,
         "model": model or SHADOW_JUDGE_MODEL,
+        "status": status,
     }
 
 
@@ -166,6 +175,7 @@ class ShadowJudgeWorker:
                     "policy_adherence": _coerce_score(row.get("policy_adherence")),
                     "summary": str(row.get("summary") or ""),
                     "model": model,
+                    "status": STATUS_OK,
                 }
             )
         return rows
@@ -194,6 +204,7 @@ class ShadowJudgeWorker:
                             item,
                             summary=summary,
                             model=SHADOW_JUDGE_MODEL_FALLBACK,
+                            status=STATUS_UPSTREAM_UNAVAILABLE,
                         )
                         for item in batch
                     ]
@@ -214,6 +225,7 @@ class ShadowJudgeWorker:
                 r.get("summary", ""),
                 json.dumps(r, ensure_ascii=False, default=str),
                 r.get("evaluated_at"),
+                r.get("status", STATUS_OK),
             )
             for r in rows
         ]
