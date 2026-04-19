@@ -145,6 +145,38 @@ area.
   Labels: `tool` (any authenticated tool name) × `reason` ∈
   `{missing_loan_number, loan_not_owned, no_active_loan,
   app_id_not_owned}`.
+- `agent_pii_leak_suspicions_total{tool}` — Counter. Incremented once
+  per *unique* foreign 10-digit sequence found in an authenticated
+  tool's response (see §7). A sustained spike means either the CRM
+  is leaking another customer's data or the tool legitimately returns
+  phone-shaped non-PII strings — both worth knowing.
+
+---
+
+## 7. Output-side PII leak detector (TA4)
+
+After the decorator lets a tool response through, the same wrapper
+calls `scan_tool_response_for_pii` from
+`backend/src/mcp_service/output_pii_scanner.py` on the returned
+string. The scanner:
+
+- Canonicalises the caller's phone to its last-10-digits form.
+- Uses regex `(?<!\d)(\d{10})(?!\d)` to find all 10-digit runs
+  bounded by non-digits (excludes longer sequences like timestamps,
+  order numbers, loan amounts with no separators).
+- For every digit run that is NOT the caller's own phone, logs a
+  warning and increments `agent_pii_leak_suspicions_total{tool}`.
+- **Never blocks the response.** This layer is detection-only.
+  Operators review warnings and decide whether to (a) fix the
+  upstream CRM leak, or (b) allow-list the tool if the false positive
+  is structural (e.g., always returns a tracking number that happens
+  to be 10 digits).
+
+Adding a new authenticated tool does not require touching this
+scanner — it runs unconditionally on every decorated tool's
+response. If the tool legitimately exposes 10-digit strings that are
+NOT PII (unlikely but possible), add an allow-list entry in
+`output_pii_scanner.py` and document the reasoning in this runbook.
 
 ---
 

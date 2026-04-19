@@ -7,6 +7,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
+from .output_pii_scanner import scan_tool_response_for_pii
 from .session_context import SessionContext, SessionContextError
 from .session_store import RedisSessionStore, valid_session_id
 
@@ -119,7 +120,17 @@ def requires_authenticated_session(
         # Call the inner fn by keyword so the ctx we just injected isn't
         # dropped: bound.args/kwargs derives from the PUBLIC signature,
         # which no longer contains `ctx` by construction.
-        return await fn(**bound.arguments)
+        result = await fn(**bound.arguments)
+
+        # Output-side PII detection (GD6 TA4). Detection-only — any
+        # exception from the scanner is caught so a bug in the scanner
+        # never affects the tool's response path.
+        try:
+            scan_tool_response_for_pii(result, ctx, tool_name)
+        except Exception as exc:  # pragma: no cover — defence-in-depth
+            log.warning("pii_scan: scanner crashed tool=%s err=%s", tool_name, exc)
+
+        return result
 
     wrapper.__signature__ = public_sig  # type: ignore[attr-defined]
     new_annotations: dict[str, Any] = {}
