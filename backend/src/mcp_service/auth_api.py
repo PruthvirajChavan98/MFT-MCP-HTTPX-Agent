@@ -163,6 +163,28 @@ class MockFinTechAuthAPIs:
             # checks can assert customer_id directly without dict-digging.
             customer_id = str(user.get("id") or user.get("customer_id") or "").strip()
 
+            # Refuse to mark the session authenticated without a customer_id.
+            # Otherwise SessionContext.from_session_dict raises on every
+            # subsequent tool call and the user is stuck in a perpetual
+            # "Please log in first" loop that can only be broken by Redis
+            # intervention or session TTL. (code-review HIGH-1)
+            if not customer_id:
+                self.logger.error(
+                    "OTP validated but CRM returned no user.id/customer_id "
+                    "for %s — refusing to mark authenticated.",
+                    phone_number,
+                )
+                return self._to_vsc(
+                    {
+                        "status": "failed",
+                        "error": (
+                            "Login succeeded at the bank but your customer "
+                            "identity could not be resolved. Please try again "
+                            "or contact support."
+                        ),
+                    }
+                )
+
             updates: Dict[str, Any] = {
                 "access_token": access_token,
                 "phone_number": phone_number,

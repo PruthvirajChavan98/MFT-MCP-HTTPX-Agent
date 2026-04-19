@@ -130,6 +130,50 @@ async def test_validate_otp_customer_id_falls_back_to_customer_id_key(
 
 
 @pytest.mark.asyncio
+async def test_validate_otp_refuses_auth_when_crm_returns_no_customer_id(
+    fake_redis: RedisSessionStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the CRM returns a 200 OTP validation but the user object is
+    missing ``id``/``customer_id``, the session MUST NOT be marked
+    authenticated. Otherwise ``SessionContext.from_session_dict``
+    raises on every subsequent tool call and the user gets stuck in a
+    perpetual "Please log in first" loop with no recovery path short
+    of Redis intervention. (code-review HIGH-1)"""
+    monkeypatch.setenv("BASIC_AUTH_USERNAME", "test")
+    monkeypatch.setenv("BASIC_AUTH_PASSWORD", "test")
+
+    async def _mock_get_client() -> httpx.AsyncClient:
+        return _build_mock_client(
+            {
+                "/mockfin-service/otp/validate_new/": httpx.Response(
+                    200,
+                    json={
+                        "access_token": "tok_empty",
+                        # Degraded user object — no id, no customer_id.
+                        "user": {"name": "Nameless"},
+                        "loans": [],
+                    },
+                )
+            }
+        )
+
+    monkeypatch.setattr(auth_api_mod, "_get_http_client", _mock_get_client)
+
+    await fake_redis.set("sess_no_cid", {"phone_number": "6666655555"})
+    auth = MockFinTechAuthAPIs("sess_no_cid", session_store=fake_redis)
+    raw_result = await auth.validate_otp("123456")
+
+    assert "failed" in raw_result.lower()
+    stored: dict[str, Any] = await fake_redis.get("sess_no_cid") or {}
+    assert (
+        stored.get("auth_state") is None
+    ), "session marked authenticated despite missing customer_id — HIGH-1 regression"
+    assert stored.get("customer_id") is None
+    assert stored.get("access_token") is None
+
+
+@pytest.mark.asyncio
 async def test_validate_otp_failure_does_not_mark_authenticated(
     fake_redis: RedisSessionStore,
     monkeypatch: pytest.MonkeyPatch,

@@ -162,7 +162,11 @@ class _PiiClass:
 
 
 _PII_CLASSES: tuple[_PiiClass, ...] = (
-    _PiiClass("phone", _PHONE_PATTERN, lambda m: m, _phone_is_exempt),
+    # Phone matches are already 10 digits by regex construction, but
+    # routing through `_canonicalise_phone` keeps intent explicit so a
+    # future regex widening (e.g. capturing `+91XXXXXXXXXX`) cannot
+    # silently leave matches un-normalised. (code-review LOW-1)
+    _PiiClass("phone", _PHONE_PATTERN, _canonicalise_phone, _phone_is_exempt),
     _PiiClass("pan", _PAN_PATTERN, _canonicalise_pan, _pan_is_exempt),
     _PiiClass(
         "aadhaar",

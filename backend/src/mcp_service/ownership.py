@@ -30,7 +30,19 @@ class OwnershipError(Exception):
         self.message = message
         self.reason = reason
         self.tool = tool or "unknown"
-        OWNERSHIP_REJECTIONS_TOTAL.labels(tool=self.tool, reason=reason).inc()
+        # Wrap the metric increment so a misbehaving prometheus client
+        # cannot raise a foreign exception out of our constructor —
+        # callers catch `OwnershipError` specifically, and anything else
+        # would bubble as an unhandled tool error. (code-review HIGH-2)
+        try:
+            OWNERSHIP_REJECTIONS_TOTAL.labels(tool=self.tool, reason=reason).inc()
+        except Exception as metric_exc:  # pragma: no cover — defence-in-depth
+            log.warning(
+                "ownership: metric increment failed tool=%s reason=%s err=%s",
+                self.tool,
+                reason,
+                metric_exc,
+            )
 
 
 _NOT_OWNED_MESSAGE = (
@@ -60,8 +72,20 @@ def verify_loan_ownership(
     for loan in ctx.loans:
         if loan.loan_number == target:
             return loan
+    # Emit the full known-loan list at DEBUG so forensic triage can opt in
+    # but the default INFO log stream doesn't carry a customer's entire
+    # loan portfolio under RBI/SEBI-sensitive PII constraints. An INFO-
+    # level summary (counts only) still records the reject for ops.
+    # (code-review LOW-5)
     log.info(
-        "ownership: deny tool=%s customer=%s requested=%s known=%s",
+        "ownership: deny tool=%s customer=%s requested=%s known_count=%d",
+        tool or "unknown",
+        ctx.customer_id,
+        target,
+        len(ctx.loans),
+    )
+    log.debug(
+        "ownership: deny detail tool=%s customer=%s requested=%s known=%s",
         tool or "unknown",
         ctx.customer_id,
         target,
@@ -84,7 +108,14 @@ def active_loan_or_raise(ctx: SessionContext, *, tool: str | None = None) -> Loa
         if loan.loan_number == ctx.app_id:
             return loan
     log.warning(
-        "ownership: app_id not in loans tool=%s customer=%s app_id=%s known=%s",
+        "ownership: app_id not in loans tool=%s customer=%s app_id=%s known_count=%d",
+        tool or "unknown",
+        ctx.customer_id,
+        ctx.app_id,
+        len(ctx.loans),
+    )
+    log.debug(
+        "ownership: app_id not in loans detail tool=%s customer=%s app_id=%s known=%s",
         tool or "unknown",
         ctx.customer_id,
         ctx.app_id,
