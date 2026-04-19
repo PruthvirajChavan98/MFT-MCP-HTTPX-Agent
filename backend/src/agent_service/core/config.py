@@ -1,3 +1,4 @@
+import hashlib
 import os
 from typing import Final
 
@@ -359,6 +360,34 @@ JWT_MFA_FRESHNESS_SECONDS = int(os.getenv("JWT_MFA_FRESHNESS_SECONDS", "300"))  
 # PyJWT 2.12.x enforces HS256 keys to be >=32 bytes (RFC 7518 §3.2) via InsecureKeyLengthWarning.
 JWT_SECRET: str | None = os.getenv("JWT_SECRET") or None
 FERNET_MASTER_KEY: str | None = os.getenv("FERNET_MASTER_KEY") or None
+
+
+def get_enrollment_token_hmac_key() -> bytes:
+    """Derive a 32-byte HMAC-SHA-256 key for the admin-enrollment token hash.
+
+    Keying the token hash means that even a DB compromise does NOT expose a
+    rainbow-table-ready artifact: the attacker would additionally need the
+    ``FERNET_MASTER_KEY`` to verify any plaintext against ``token_hash``.
+    Derivation uses BLAKE2b's personalised keyed-hash mode for domain
+    separation — the key is independent from FERNET_MASTER_KEY's use in
+    symmetric encryption. (code-review security H1)
+
+    Reads the key from ``os.environ`` at call time, falling back to the
+    module-level cache. This tolerates tests that ``importlib.reload(config)``
+    (which resets module globals) as long as the env var is set.
+    """
+    key = os.environ.get("FERNET_MASTER_KEY") or FERNET_MASTER_KEY
+    if not key:
+        raise RuntimeError(
+            "FERNET_MASTER_KEY is required to derive the enrollment token "
+            "HMAC key. Start the service with the admin auth env vars set."
+        )
+    return hashlib.blake2b(
+        key.encode("utf-8"),
+        digest_size=32,
+        person=b"enroll-hmac-v1",
+    ).digest()
+
 
 # Single super-admin identity — env-var seeded for prototype phase. When the user count
 # grows beyond one, these scalars become a query against an admin_users Postgres table

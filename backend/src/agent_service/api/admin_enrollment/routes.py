@@ -20,9 +20,11 @@ SHA-256 hash. Atomic redemption (SELECT ... FOR UPDATE) guarantees single-use.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import secrets as pysecrets
+import time
 from typing import Literal
 from uuid import UUID
 
@@ -288,6 +290,30 @@ async def redeem_token(
             },
         )
 
+    # Replay guard — even though consume_token_atomic serialises on the
+    # token row, the *same* (secret, code) pair can be submitted against
+    # the *same* token in a race window before the row lock acquires.
+    # Reject the second observation of any (secret, code) pair within the
+    # 90-second code validity window. (security review H2)
+    redis = await get_redis()
+    code_fp = hashlib.sha256(
+        f"{body.totp_secret_base32}:{body.totp_code}".encode("utf-8")
+    ).hexdigest()
+    redis_nonce_key = f"agent:enroll_code_seen:{code_fp}"
+    first_seen = await redis.set(redis_nonce_key, "1", ex=90, nx=True)
+    if not first_seen:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "totp_code_replayed",
+                "operation": "admin_enrollment_redeem",
+                "message": (
+                    "This TOTP code has already been submitted. Wait for the "
+                    "authenticator to generate a new code and try again."
+                ),
+            },
+        )
+
     pool = get_admin_pool(request)
     password_hashed = hash_password(body.password)
     totp_secret_enc = encrypt_secret(body.totp_secret_base32)
@@ -344,10 +370,13 @@ async def redeem_token(
 
     # Issue a full login session so the user lands authenticated at /admin.
     # Match the login endpoint's cookie shape (access + refresh + CSRF).
-    redis = await get_redis()
+    # The TOTP code was just verified for this exact redeem, so mark MFA
+    # fresh — otherwise any super-admin mutation in the same 5-minute
+    # window would prompt for MFA again after the user literally just
+    # proved possession. (security review M3)
     sub = str(admin.id)
     roles = ["admin", "super_admin"] if admin.is_super_admin else ["admin"]
-    access_token, _ = issue_access_token(sub=sub, roles=roles, mfa_verified_at=None)
+    access_token, _ = issue_access_token(sub=sub, roles=roles, mfa_verified_at=int(time.time()))
     refresh_token, _ = await issue_refresh_token(redis, sub=sub)
     csrf_token = pysecrets.token_urlsafe(32)
     _set_auth_cookies(response, access_token, refresh_token, csrf_token)

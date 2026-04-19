@@ -7,11 +7,14 @@ orchestrate, this module owns the SQL and the atomic-redeem transaction.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 from uuid import UUID
+
+from src.agent_service.core.config import get_enrollment_token_hmac_key
 
 
 @dataclass(frozen=True)
@@ -40,8 +43,29 @@ class IssuedToken:
 
 
 def _hash_token(plaintext: str) -> str:
-    """SHA-256 hex digest. Deterministic so GET/redeem can look up without the plaintext."""
-    return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
+    """Keyed HMAC-SHA-256 hex digest over the plaintext.
+
+    The key is derived from ``FERNET_MASTER_KEY`` via BLAKE2b domain
+    separation — see ``config.get_enrollment_token_hmac_key``. Using HMAC
+    instead of a bare SHA-256 means a DB compromise alone does not yield
+    a lookup artifact an attacker can verify against: the HMAC key is
+    required to verify any plaintext. (security review H1)
+
+    Historical note — early-beta tokens stored as bare SHA-256 are
+    incompatible with this derivation and will not verify. Since tokens
+    are single-use + short TTL (<= 168 h, default 24 h) they roll over
+    naturally; no migration path is provided.
+    """
+    key = get_enrollment_token_hmac_key()
+    return hmac.new(key, plaintext.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _tokens_match(stored_hash: str, candidate_plaintext: str) -> bool:
+    """Constant-time comparison for belt-and-braces defence beyond the
+    DB's own ``=`` operator. Used only in codepaths that already fetched
+    ``stored_hash`` by some other key (not used by the repo today but
+    exported for future call-sites that do double-check)."""
+    return hmac.compare_digest(stored_hash, _hash_token(candidate_plaintext))
 
 
 def _row_to_token(row: Any) -> EnrollmentTokenRow:
