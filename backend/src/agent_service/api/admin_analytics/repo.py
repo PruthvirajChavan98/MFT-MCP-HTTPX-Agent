@@ -191,7 +191,7 @@ class AdminAnalyticsRepo:
     async def fetch_trace_shadow_judge(self, pool: Any, trace_id: str) -> list[dict[str, Any]]:
         return await _pg_rows(
             pool,
-            """SELECT helpfulness, faithfulness, policy_adherence, summary, evaluated_at
+            """SELECT helpfulness, faithfulness, policy_adherence, summary, evaluated_at, status
                FROM shadow_judge_evals WHERE trace_id = $1
                ORDER BY evaluated_at DESC LIMIT 1""",
             trace_id,
@@ -231,7 +231,7 @@ class AdminAnalyticsRepo:
             pool,
             """
             SELECT DISTINCT ON (trace_id)
-                   trace_id, helpfulness, faithfulness, policy_adherence, summary, evaluated_at
+                   trace_id, helpfulness, faithfulness, policy_adherence, summary, evaluated_at, status
             FROM shadow_judge_evals
             WHERE trace_id = ANY($1::text[])
             ORDER BY trace_id ASC, evaluated_at DESC
@@ -313,10 +313,13 @@ class AdminAnalyticsRepo:
         return await _pg_rows(
             pool,
             """
-            SELECT trace_id, session_id, model, summary,
+            SELECT trace_id, session_id, model, summary, status,
                    helpfulness, faithfulness, policy_adherence, evaluated_at
             FROM shadow_judge_evals
-            WHERE policy_adherence < 0.5 OR faithfulness < 0.5 OR helpfulness < 0.5
+            WHERE status <> 'ok'
+               OR policy_adherence < 0.5
+               OR faithfulness < 0.5
+               OR helpfulness < 0.5
             ORDER BY evaluated_at DESC
             LIMIT $1
             """,

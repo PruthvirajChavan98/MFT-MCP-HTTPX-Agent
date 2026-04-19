@@ -3,15 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { fetchQuestionTypes } from '@features/admin/api/admin'
+import { formatCategoryLabel, isOtherCategory } from '@features/admin/lib/categoryLabels'
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
 import { Skeleton } from '@components/ui/skeleton'
 import { Alert, AlertDescription } from '@components/ui/alert'
 import { MobileHeader } from '@components/ui/mobile-header'
 import { ResponsiveGrid } from '@components/ui/responsive-grid'
-
-function humanizeCategory(value: string): string {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
-}
 
 export function QuestionCategories() {
   const { data = [], isLoading, error } = useQuery({
@@ -24,7 +21,7 @@ export function QuestionCategories() {
   const totalClassified = useMemo(() => sorted.reduce((sum, item) => sum + item.count, 0), [sorted])
 
   const topCategory = sorted[0]
-  const unknownShare = sorted.find((item) => item.reason.toLowerCase() === 'unknown')?.pct ?? 0
+  const unknownShare = sorted.find((item) => isOtherCategory(item.reason))?.pct ?? 0
   const coverage = 1 - unknownShare
 
   if (error) {
@@ -47,7 +44,7 @@ export function QuestionCategories() {
           Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-lg" />)
         ) : (
           <>
-            <Card><CardContent className="p-5"><p className="text-xs uppercase tracking-wide text-muted-foreground">Top Category</p><p className="text-base font-semibold mt-1">{topCategory ? humanizeCategory(topCategory.reason) : '—'}</p></CardContent></Card>
+            <Card><CardContent className="p-5"><p className="text-xs uppercase tracking-wide text-muted-foreground">Top Category</p><p className="text-base font-semibold mt-1">{topCategory ? formatCategoryLabel(topCategory.reason) : '—'}</p></CardContent></Card>
             <Card><CardContent className="p-5"><p className="text-xs uppercase tracking-wide text-muted-foreground">Unknown Share</p><p className="text-2xl font-bold mt-1">{(unknownShare * 100).toFixed(1)}%</p></CardContent></Card>
             <Card><CardContent className="p-5"><p className="text-xs uppercase tracking-wide text-muted-foreground">Coverage</p><p className="text-2xl font-bold mt-1">{(coverage * 100).toFixed(1)}%</p></CardContent></Card>
             <Card><CardContent className="p-5"><p className="text-xs uppercase tracking-wide text-muted-foreground">Total Classified</p><p className="text-2xl font-bold mt-1">{totalClassified}</p></CardContent></Card>
@@ -65,7 +62,7 @@ export function QuestionCategories() {
               <BarChart data={sorted.slice(0, 12)} layout="vertical" margin={{ left: 10, right: 20, top: 6, bottom: 6 }}>
                 <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
-                <YAxis type="category" dataKey="reason" tickFormatter={humanizeCategory} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} width={180} />
+                <YAxis type="category" dataKey="reason" tickFormatter={formatCategoryLabel} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} width={180} />
                 <Tooltip
                   cursor={{ fill: 'var(--accent)' }}
                   contentStyle={{
@@ -75,7 +72,7 @@ export function QuestionCategories() {
                     color: 'var(--foreground)',
                     fontSize: 12,
                   }}
-                  formatter={(value: number, _name, payload) => [value, humanizeCategory(String(payload?.payload?.reason || ''))]}
+                  formatter={(value: number, _name, payload) => [value, formatCategoryLabel(String(payload?.payload?.reason || ''))]}
                 />
                 <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
@@ -102,7 +99,7 @@ export function QuestionCategories() {
                     ))
                   : sorted.map((category) => (
                       <tr key={category.reason} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
-                        <td className="px-4 py-2.5 font-medium text-foreground">{humanizeCategory(category.reason)}</td>
+                        <td className="px-4 py-2.5 font-medium text-foreground">{formatCategoryLabel(category.reason)}</td>
                         <td className="px-4 py-2.5 font-tabular text-muted-foreground">{category.count}</td>
                         <td className="px-4 py-2.5 font-tabular text-muted-foreground">{(category.pct * 100).toFixed(1)}%</td>
                         <td className="hidden md:table-cell px-4 py-2.5 min-w-[220px]">

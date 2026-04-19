@@ -390,34 +390,70 @@ async def session_traces(
                 item["toolCalls"] = tool_calls
             items.append(item)
 
-        # Merge consecutive assistant messages produced by LangGraph's ReAct loop.
-        # A tool-using turn produces: AIMessage(tool_calls) → ToolMessage → AIMessage(text).
-        # After skipping ToolMessages above, this leaves two adjacent assistant items:
-        #   [i]   has toolCalls but empty content (the tool-call request)
-        #   [i+1] has content but no toolCalls  (the final text response)
-        # Merge them into a single item so the frontend renders one bubble.
+        # Collapse LangGraph's ReAct intermediate tool-calling turns.
+        # A multi-tool turn produces: AIMessage(tool_calls=[a]) → ToolMessage(a)
+        #   → AIMessage(tool_calls=[b]) → ToolMessage(b) → AIMessage(content="answer").
+        # After ToolMessages are skipped above, the assistant-side items look like:
+        #   [i]   toolCalls=[a]  content=""   ← intermediate
+        #   [i+1] toolCalls=[b]  content=""   ← intermediate
+        #   [i+2] toolCalls=[]   content="…"  ← final answer
+        # The prior binary merge only handled one intermediate + one final, losing
+        # earlier tool calls on multi-hop turns. This N-ary version walks forward,
+        # accumulating empty-content tool-call bubbles into `pending_*` and folding
+        # them into the next content-bearing assistant message. Matches the empty-
+        # content filter the public widget already applies (see shared_message_utils).
         merged: list[dict[str, Any]] = []
-        i = 0
-        while i < len(items):
-            cur = items[i]
-            nxt = items[i + 1] if i + 1 < len(items) else None
-            if (
-                nxt is not None
-                and cur.get("role") == "assistant"
-                and nxt.get("role") == "assistant"
-                and cur.get("toolCalls")
-            ):
-                # Merge: keep the second item (final response) as base,
-                # attach toolCalls from the first (tool-calling step).
-                nxt["toolCalls"] = cur["toolCalls"]
-                # Preserve reasoning from tool-call step if response has none.
-                if cur.get("reasoning") and not nxt.get("reasoning", "").strip():
-                    nxt["reasoning"] = cur["reasoning"]
-                merged.append(nxt)
-                i += 2
-            else:
-                merged.append(cur)
-                i += 1
+        pending_tool_calls: list[dict[str, str]] = []
+        pending_reasoning: str = ""
+
+        for item in items:
+            is_assistant = item.get("role") == "assistant"
+            content_stripped = (item.get("content") or "").strip()
+            has_tool_calls = bool(item.get("toolCalls"))
+
+            if is_assistant and has_tool_calls and not content_stripped:
+                # Intermediate tool-calling turn — fold into pending; drop bubble.
+                pending_tool_calls.extend(item["toolCalls"])
+                if item.get("reasoning") and not pending_reasoning:
+                    pending_reasoning = item["reasoning"]
+                continue
+
+            if is_assistant and (pending_tool_calls or pending_reasoning):
+                existing_ids = {tc.get("tool_call_id") for tc in (item.get("toolCalls") or [])}
+                combined = list(item.get("toolCalls") or [])
+                for tc in pending_tool_calls:
+                    if tc.get("tool_call_id") not in existing_ids:
+                        combined.append(tc)
+                if combined:
+                    item["toolCalls"] = combined
+                if pending_reasoning and not (item.get("reasoning") or "").strip():
+                    item["reasoning"] = pending_reasoning
+                pending_tool_calls = []
+                pending_reasoning = ""
+
+            merged.append(item)
+
+        # Trailing case: stream truncated mid-tool-chain with no final assistant
+        # text. Preserve the audit trail as a synthetic bubble so operators can
+        # still see which tools fired.
+        if pending_tool_calls or pending_reasoning:
+            merged.append(
+                {
+                    "id": f"{session_id}~trailing",
+                    "role": "assistant",
+                    "content": "",
+                    "reasoning": pending_reasoning,
+                    "timestamp": 0,
+                    "status": "done",
+                    "followUps": [],
+                    "cost": None,
+                    "provider": None,
+                    "model": None,
+                    "totalTokens": None,
+                    "toolCalls": pending_tool_calls,
+                }
+            )
+
         items = merged
 
     if not items:

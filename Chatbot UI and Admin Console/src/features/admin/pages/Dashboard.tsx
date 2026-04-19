@@ -19,6 +19,7 @@ import { StatCard } from '@features/admin/components/StatCard'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
 import { buildConversationHref, buildTraceHref } from '@features/admin/lib/admin-links'
 import type { EvalTraceSummary } from '@features/admin/types/admin'
+import { useAdminAuth } from '@features/admin/auth/AdminAuthProvider'
 
 // Lazy-load recharts via a page-scoped child. Shaves ~370 KB off the initial
 // admin bundle (vercel-react-best-practices: bundle-dynamic-imports).
@@ -100,26 +101,36 @@ function renderDashboardTraceCell(t: EvalTraceSummary, column: Column<EvalTraceS
 }
 
 export function Dashboard() {
+  // Queries gate on an authenticated session so they don't fire during the
+  // brief window after navigate('/admin') while AdminAuthProvider is still
+  // hydrating (prevents the "stale data until manual refresh" race).
+  const { session } = useAdminAuth()
+  const enabled = Boolean(session)
+
   const { data: traces = [], isLoading: tLoading, error: tError } = useQuery({
     queryKey: ['eval-traces'],
     queryFn: () => fetchEvalTraces(200),
     refetchInterval: 30_000,
+    enabled,
   })
 
   const { data: costs, isLoading: cLoading, error: cError } = useQuery({
     queryKey: ['session-cost-summary'],
     queryFn: fetchSessionCostSummary,
     refetchInterval: 30_000,
+    enabled,
   })
 
   const { data: categories = [], isLoading: catLoading } = useQuery({
     queryKey: ['question-types'],
     queryFn: () => fetchQuestionTypes(50),
+    enabled,
   })
 
   const { data: guardrails = [] } = useQuery({
     queryKey: ['guardrail-events'],
     queryFn: async () => (await fetchGuardrailEvents({ limit: 100 })).items,
+    enabled,
   })
 
   const loading = tLoading || cLoading || catLoading

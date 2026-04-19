@@ -126,7 +126,10 @@ export function parseToLangsmithTree(traceDetail: TraceDetail): FlatNode[] {
     if (!pendingTool.length) return
     const first = pendingTool[0]
     const last = pendingTool[pendingTool.length - 1]
-    const payload = getPayload(last) ?? getPayload(first)
+    // Input is emitted on tool_start (first); output on tool_end (last).
+    // Reading either field from the wrong event yields undefined and loses the arg.
+    const firstPayload = getPayload(first) as Record<string, unknown> | undefined
+    const lastPayload = getPayload(last) as Record<string, unknown> | undefined
     const parserStartMs = getEventMs(first)
     const executionStartEvent =
       pendingTool.find((event) => {
@@ -135,12 +138,24 @@ export function parseToLangsmithTree(traceDetail: TraceDetail): FlatNode[] {
       }) ?? first
     const executionStartMs = getEventMs(executionStartEvent)
 
+    const toolInput = firstPayload?.input ?? lastPayload?.input ?? firstPayload ?? lastPayload
+    const toolOutput =
+      lastPayload?.output ?? firstPayload?.output ?? last.text ?? 'Tool executed successfully'
+    const toolName =
+      (firstPayload?.tool as string | undefined) ??
+      (lastPayload?.tool as string | undefined) ??
+      (firstPayload?.name as string | undefined) ??
+      (lastPayload?.name as string | undefined) ??
+      last.name ??
+      last.event_key ??
+      'execute_tool'
+
     segments.push({
       key: `tool-parse-${seq++}`,
       type: 'parser',
       name: 'ToolParser',
       tokens: 0,
-      input: payload ?? first.text,
+      input: firstPayload ?? first.text,
       output: 'Parsed tool call successfully',
       startMs: parserStartMs,
       endMs:
@@ -154,15 +169,10 @@ export function parseToLangsmithTree(traceDetail: TraceDetail): FlatNode[] {
     segments.push({
       key: `tool-exec-${seq++}`,
       type: 'tool',
-      name:
-        (payload?.tool as string) ??
-        (payload?.name as string) ??
-        last.name ??
-        last.event_key ??
-        'execute_tool',
+      name: toolName,
       tokens: 0,
-      input: payload?.input ?? payload,
-      output: payload?.output ?? last.text ?? 'Tool executed successfully',
+      input: toolInput,
+      output: toolOutput,
       startMs: executionStartMs,
       endMs: getEventMs(last),
     })

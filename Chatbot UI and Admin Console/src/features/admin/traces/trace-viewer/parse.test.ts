@@ -56,6 +56,37 @@ describe('parseToLangsmithTree', () => {
     expect(knownDurationNodes.length).toBeGreaterThan(2)
   })
 
+  it('preserves tool input from tool_start when tool_end omits it', () => {
+    // Regression: collector emits input only on tool_start; tool_end has {tool, tool_call_id, output}.
+    // Previously flushTool read payload from the last event and lost the input.
+    const detail: TraceDetail = {
+      trace: {
+        name: 'trace-tool-input',
+        latency_ms: 500,
+        status: 'success',
+        final_output: 'done',
+      },
+      events: [
+        {
+          event_type: 'tool_start',
+          ts: '2026-04-18T10:00:00.000Z',
+          payload_json: { tool: 'select_loan', input: { loan_id: 'MOCK-TWL-8a613a' } },
+        },
+        {
+          event_type: 'tool_end',
+          ts: '2026-04-18T10:00:00.400Z',
+          payload_json: { tool: 'select_loan', tool_call_id: 'call_abc', output: 'selected' },
+        },
+      ],
+    }
+
+    const nodes = parseToLangsmithTree(detail)
+    const toolNode = nodes.find((node) => node.name === 'select_loan')
+    expect(toolNode).toBeDefined()
+    expect(toolNode?.input).toEqual({ loan_id: 'MOCK-TWL-8a613a' })
+    expect(toolNode?.output).toBe('selected')
+  })
+
   it('shows unavailable timing when child-node timestamps do not exist', () => {
     const detail: TraceDetail = {
       trace: {

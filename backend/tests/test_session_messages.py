@@ -98,6 +98,69 @@ async def test_session_messages_returns_empty_for_missing_checkpoint():
 
 
 @pytest.mark.asyncio
+async def test_session_messages_skips_empty_ai_messages():
+    """Tool-call-only AIMessages (empty content) are filtered to avoid blank bubbles."""
+    tool_call_only = AIMessage(
+        content="",
+        tool_calls=[{"id": "call_1", "name": "select_loan", "args": {"loan_id": "X"}}],
+    )
+    final_answer = AIMessage(content="Your loan is selected.")
+
+    checkpoint = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="Select my loan."),
+                tool_call_only,
+                final_answer,
+            ],
+        },
+    }
+    checkpointer = _FakeCheckpointer(checkpoint)
+    fake_app = SimpleNamespace(state=SimpleNamespace(checkpointer=checkpointer))
+    request = SimpleNamespace(app=fake_app)
+
+    response = await sessions_mod.get_session_messages(
+        session_id="sess-empty",
+        request=request,
+        limit=120,
+    )
+
+    assert len(response["messages"]) == 2
+    assert response["messages"][0]["role"] == "user"
+    assert response["messages"][1]["role"] == "assistant"
+    assert response["messages"][1]["content"] == "Your loan is selected."
+
+
+@pytest.mark.asyncio
+async def test_session_messages_skips_ai_messages_with_list_empty_content():
+    """Anthropic-style AIMessages with list content of only empty blocks are filtered."""
+    ai_empty_blocks = AIMessage(content=[{"type": "text", "text": ""}])  # type: ignore[arg-type]
+    ai_real_blocks = AIMessage(content=[{"type": "text", "text": "Here is the answer."}])  # type: ignore[arg-type]
+
+    checkpoint = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="question"),
+                ai_empty_blocks,
+                ai_real_blocks,
+            ],
+        },
+    }
+    checkpointer = _FakeCheckpointer(checkpoint)
+    fake_app = SimpleNamespace(state=SimpleNamespace(checkpointer=checkpointer))
+    request = SimpleNamespace(app=fake_app)
+
+    response = await sessions_mod.get_session_messages(
+        session_id="sess-blocks",
+        request=request,
+        limit=120,
+    )
+
+    assert len(response["messages"]) == 2
+    assert response["messages"][1]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
 async def test_session_messages_skips_tool_messages():
     """Tool messages are filtered out — frontend displays them inline via SSE."""
     from langchain_core.messages import ToolMessage

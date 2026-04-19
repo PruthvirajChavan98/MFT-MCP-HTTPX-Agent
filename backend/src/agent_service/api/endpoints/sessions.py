@@ -6,6 +6,7 @@ import uuid_utils  # Added dependency
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.agent_service.api.admin_auth import require_admin
+from src.agent_service.api.shared_message_utils import _is_empty_content
 from src.agent_service.core.config import DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER
 from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.core.resource_resolver import ResourceResolver
@@ -99,6 +100,12 @@ async def get_session_messages(
         if msg_type not in ("human", "ai"):
             continue
 
+        content = getattr(msg, "content", "")
+        # LangGraph emits tool-call-only AIMessages (content="") between the human turn
+        # and the final answer. Rendering each as a bubble produces blank cards in the UI.
+        if msg_type == "ai" and _is_empty_content(content):
+            continue
+
         kwargs = getattr(msg, "additional_kwargs", {}) or {}
         resp_meta = getattr(msg, "response_metadata", {}) or {}
 
@@ -109,7 +116,7 @@ async def get_session_messages(
             {
                 "id": kwargs.get("msg_id") or f"{sid}~{i}",
                 "role": "user" if msg_type == "human" else "assistant",
-                "content": getattr(msg, "content", ""),
+                "content": content,
                 "reasoning": str(kwargs.get("reasoning") or ""),
                 "timestamp": timestamp,
                 "status": "done",

@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { formatCategoryLabel } from '@features/admin/lib/categoryLabels'
 
 export interface ActivityTrendPoint {
   date: string
@@ -138,6 +139,7 @@ export function DashboardCharts({ activityTrend, categories }: DashboardChartsPr
                   color: 'var(--foreground)',
                   fontSize: 12,
                 }}
+                formatter={(value: number, name: string) => [value, formatCategoryLabel(name)]}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -151,7 +153,7 @@ export function DashboardCharts({ activityTrend, categories }: DashboardChartsPr
                   style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                 />
                 <span className="text-muted-foreground truncate">
-                  {cat.reason.replace(/_/g, ' ')}
+                  {formatCategoryLabel(cat.reason)}
                 </span>
               </div>
               <span className="font-tabular text-foreground">

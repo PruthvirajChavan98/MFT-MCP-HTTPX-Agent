@@ -391,7 +391,7 @@ async def trace_eval_status(request: Request, trace_id: str) -> dict[str, Any]:
         # 3. Fetch shadow judge evaluation
         shadow_row = await pool.fetchrow(
             """
-            SELECT helpfulness, faithfulness, policy_adherence, summary, evaluated_at
+            SELECT helpfulness, faithfulness, policy_adherence, summary, evaluated_at, status
             FROM shadow_judge_evals
             WHERE trace_id = $1
             ORDER BY evaluated_at DESC
@@ -540,24 +540,34 @@ async def eval_vector_search(
 
     expr = " and ".join(filters) or None
 
+    # Phase F4 (2026-04-18): swapped from langchain-milvus async wrappers
+    # (which hang on 0.3.3 + pymilvus 2.6.11) to milvus_mgr.semantic_search_raw.
+    # Single helper handles both the pre-computed-vector and text-query paths.
+    collection_name = "eval_traces_emb" if req.kind == "trace" else "eval_results_emb"
     try:
-        store = milvus_mgr.eval_traces if req.kind == "trace" else milvus_mgr.eval_results
-        if store is None:
-            raise RuntimeError("Milvus store not initialized")
-
-        kwargs: dict[str, Any] = {"k": int(req.k)}
-        if expr:
-            kwargs["expr"] = expr
-
         if use_vector:
             if req.vector is None:
                 raise HTTPException(
                     status_code=400,
                     detail="Vector embedding is required for vector search",
                 )
-            hits = await store.asimilarity_search_with_score_by_vector(req.vector, **kwargs)
+            hits = await milvus_mgr.semantic_search_raw(
+                collection=collection_name,
+                query_vector=list(req.vector),
+                limit=int(req.k),
+                expr=expr,
+                output_fields=["trace_id", "eval_id", "metric_name", "status", "text"],
+            )
         else:
-            hits = await store.asimilarity_search_with_score(query_text, **kwargs)
+            hits = await milvus_mgr.semantic_search_raw(
+                collection=collection_name,
+                query=query_text,
+                limit=int(req.k),
+                expr=expr,
+                output_fields=["trace_id", "eval_id", "metric_name", "status", "text"],
+            )
+    except HTTPException:
+        raise
     except Exception as exc:
         log.error("Milvus vector search failed: %s", exc)
         raise HTTPException(
@@ -761,7 +771,7 @@ async def question_types(request: Request, limit: int = 200):
         COALESCE(
             question_category,
             {ROUTER_REASON_TO_CATEGORY_CASE},
-            'Unknown'
+            'other'
         ) AS reason,
         COUNT(*) AS n
     FROM (
