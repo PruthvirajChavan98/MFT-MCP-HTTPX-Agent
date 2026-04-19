@@ -145,11 +145,12 @@ area.
   Labels: `tool` (any authenticated tool name) × `reason` ∈
   `{missing_loan_number, loan_not_owned, no_active_loan,
   app_id_not_owned}`.
-- `agent_pii_leak_suspicions_total{tool}` — Counter. Incremented once
-  per *unique* foreign 10-digit sequence found in an authenticated
-  tool's response (see §7). A sustained spike means either the CRM
-  is leaking another customer's data or the tool legitimately returns
-  phone-shaped non-PII strings — both worth knowing.
+- `agent_pii_leak_suspicions_total{tool, pii_class}` — Counter.
+  Incremented once per *unique* foreign PII-shaped match found in an
+  authenticated tool's response (see §7). `pii_class` is one of
+  `phone`, `pan`, `aadhaar`, `email`. A sustained spike means either
+  the CRM is leaking another customer's data OR the tool legitimately
+  returns data shaped like one of the classes — both worth knowing.
 
 ---
 
@@ -261,3 +262,36 @@ next login cycle (< 24 h in practice given the TTL).
 Keep this corpus green. Any attempt to loosen one of the rejection
 strings or the decorator's behaviour should come with a new corpus
 entry proving the new behaviour is intentional.
+
+### Integration suite (opt-in)
+
+`backend/tests/integration/test_cross_session_attack.py` exercises
+the full decorator + ownership + CRM round-trip against a running
+local stack. Two customer sessions authenticate via the live mock
+CRM, then session A tries to select session B's loan — the test
+asserts the ownership rejection fires and the victim's `app_id` is
+not mutated.
+
+The suite is gated behind `pytest -m integration` (default
+`addopts` in `pyproject.toml` skip it) and the conftest probes
+`MCP_SERVER_URL` before collection so the tests auto-skip when the
+stack is down.
+
+Run after `make local-up`:
+
+```bash
+make -C backend test-integration
+# Expect: 2 passed
+#   test_cross_session_select_loan_rejected
+#   test_unauthenticated_tool_call_rejected
+```
+
+Phone auto-discovery probes a fixed pool (`_PROBE_POOL` in the
+test file) against the mock CRM's `generate_otp` endpoint and
+picks the first two accepted phones. To override:
+
+- `INTEGRATION_PHONE_A` / `INTEGRATION_PHONE_B` — specific phones.
+- `INTEGRATION_OTP_BYPASS` — the OTP value the mock CRM accepts
+  (default `123456`).
+- `MCP_SERVER_URL` — SSE endpoint (default
+  `http://localhost:8050/sse`).

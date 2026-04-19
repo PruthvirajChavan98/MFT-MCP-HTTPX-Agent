@@ -36,7 +36,8 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  dev                 - Run API in development mode"
-	@echo "  test                - Run test suite"
+	@echo "  test                - Run unit test suite (excludes integration)"
+	@echo "  test-integration    - Run integration suite against live stack (MCP + Redis + mock CRM)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  format              - Format code with Black, isort, and Ruff"
@@ -104,6 +105,15 @@ test-deprecation:
 
 verify-deprecation: test-deprecation
 	@echo "Deprecation verification passed"
+
+# Integration suite — requires a running local stack (MCP + Redis +
+# mock CRM). Skipped by default in pytest via the `integration` marker
+# and addopts="-m 'not integration'" in pyproject.toml. Override
+# MCP_SERVER_URL / INTEGRATION_PHONE_A / INTEGRATION_PHONE_B /
+# INTEGRATION_OTP_BYPASS via shell env to point at a different stack.
+test-integration:
+	MCP_SERVER_URL="$${MCP_SERVER_URL:-http://localhost:8050/sse}" \
+		uv run python -m pytest tests/integration/ -m integration -v
 
 backfill-question-categories:
 	uv run python -m scripts.backfill_question_categories --apply --batch-size $${BATCH_SIZE:-500}
