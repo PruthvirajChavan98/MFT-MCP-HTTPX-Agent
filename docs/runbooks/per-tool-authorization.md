@@ -158,25 +158,67 @@ area.
 After the decorator lets a tool response through, the same wrapper
 calls `scan_tool_response_for_pii` from
 `backend/src/mcp_service/output_pii_scanner.py` on the returned
-string. The scanner:
+string. The scanner covers **four** PII classes and increments a
+single Prometheus Counter labelled by `(tool, pii_class)`.
 
-- Canonicalises the caller's phone to its last-10-digits form.
-- Uses regex `(?<!\d)(\d{10})(?!\d)` to find all 10-digit runs
-  bounded by non-digits (excludes longer sequences like timestamps,
-  order numbers, loan amounts with no separators).
-- For every digit run that is NOT the caller's own phone, logs a
-  warning and increments `agent_pii_leak_suspicions_total{tool}`.
-- **Never blocks the response.** This layer is detection-only.
-  Operators review warnings and decide whether to (a) fix the
-  upstream CRM leak, or (b) allow-list the tool if the false positive
-  is structural (e.g., always returns a tracking number that happens
-  to be 10 digits).
+| Class   | Regex (compiled)                                       | Exempt source (`ctx.user_details`)                          |
+|---------|--------------------------------------------------------|-------------------------------------------------------------|
+| phone   | `(?<!\d)(\d{10})(?!\d)`                                | `ctx.phone_number` → canonical last-10-digits               |
+| pan     | `\b([A-Z]{5}[0-9]{4}[A-Z])\b`                          | `pan` key, uppercased/stripped                              |
+| aadhaar | `(?<!\d)(\d{4}\s?\d{4}\s?\d{4})(?!\d)`                 | `aadhaar` (full 12-digit) OR `aadhaar_last_4` (suffix match) |
+| email   | `\b[\w.+\-]+@[\w\-]+\.[\w.\-]+\b`                      | `email` key, lowercased/stripped                            |
 
-Adding a new authenticated tool does not require touching this
-scanner — it runs unconditionally on every decorated tool's
-response. If the tool legitimately exposes 10-digit strings that are
-NOT PII (unlikely but possible), add an allow-list entry in
-`output_pii_scanner.py` and document the reasoning in this runbook.
+All four canonicalise case/whitespace before comparison so the
+caller's own value is reliably exempt regardless of the shape the
+CRM happens to return.
+
+### How it fires
+
+For every unique canonical match that is NOT the caller's own value,
+the scanner:
+
+- Emits a warning: `pii_scan: foreign_<class>_detected tool=<name>
+  caller=<customer_id> hits=<N>`.
+- Increments `agent_pii_leak_suspicions_total{tool=<name>,
+  pii_class=<class>}` by N (N = number of unique foreign matches in
+  that class for that call).
+
+**Never blocks the response.** Detection only. Operators review
+metric spikes and decide whether to (a) fix the upstream CRM leak,
+or (b) allow-list the `(tool, pii_class)` pair if the false positive
+is structural (e.g. a loan application number shaped like a PAN).
+
+### Known false-positive patterns to watch for
+
+- **Phone**: none significant — 10-digit word-bounded runs are rare
+  outside PII. Possible false hits: 10-digit tracking numbers.
+- **PAN**: any 10-char string matching `AAAAA9999A` with any
+  meaning. Rare in loan / CRM responses but monitor the
+  `pii_class="pan"` counter for structural hits.
+- **Aadhaar**: any 12-digit run bounded by non-digits — timestamps
+  with microseconds `YYYYMMDDHHMMSSS` are filtered out by the
+  non-digit boundary requirement, but a literal 12-digit transaction
+  ID WOULD match. Very rare; if seen, add `aadhaar_last_4` to the
+  session so legitimate caller-owned values exempt cleanly.
+- **Email**: simplified pattern misses exotic valid emails (quoted
+  local parts, IP-literal domains). Over-permissive on the other
+  end: anything `@` between word chars + dot fires. Watch for
+  `noreply@example.com`-style service emails baked into templates
+  and allow-list by tool if structural.
+
+### Adding an allow-list
+
+Edit `_PII_CLASSES` in `output_pii_scanner.py` to short-circuit the
+class's `is_exempt` function for specific `(tool_name, canonical)`
+tuples. Alternatively, mute the alert in Grafana if the structural
+noise is tolerable. Either way, document the decision in the PR
+updating this runbook.
+
+### Adding a new authenticated tool
+
+Nothing to do — the decorator runs the scanner on every
+authenticated response, and every PII class checks unconditionally.
+Revisit only if your tool legitimately returns one of the patterns.
 
 ---
 
