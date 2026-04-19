@@ -22,6 +22,8 @@ from redis.asyncio import Redis as AsyncRedis
 from src.agent_service.core.config import (
     RATE_LIMIT_ADMIN_AUTH_LOGIN_RPS,
     RATE_LIMIT_ADMIN_AUTH_MFA_RPS,
+    RATE_LIMIT_ADMIN_ENROLLMENT_ISSUE_RPS,
+    RATE_LIMIT_ADMIN_ENROLLMENT_PUBLIC_RPS,
     RATE_LIMIT_ADMIN_TIER_RPS,
     RATE_LIMIT_ADMIN_USERS_MUTATE_RPS,
     RATE_LIMIT_AGENT_QUERY_RPS,
@@ -180,6 +182,28 @@ class RateLimiterManager:
         """
         return await self._get_limiter(
             "endpoint:admin_users_mutate", RATE_LIMIT_ADMIN_USERS_MUTATE_RPS
+        )
+
+    async def get_admin_enrollment_issue_limiter(self) -> RedisRateLimiter:
+        """Rate limiter for POST /agent/admin/enrollment/tokens (super-admin issues).
+
+        Per-caller-admin, ~5 req/min default (0.083 rps). Cheap operation but
+        worth throttling so a compromised super-admin session cannot bulk-issue
+        invite tokens faster than the audit log can keep up.
+        """
+        return await self._get_limiter(
+            "endpoint:admin_enrollment_issue", RATE_LIMIT_ADMIN_ENROLLMENT_ISSUE_RPS
+        )
+
+    async def get_admin_enrollment_public_limiter(self) -> RedisRateLimiter:
+        """Rate limiter for the PUBLIC enrollment metadata + redeem endpoints.
+
+        Per-IP, ~2 req/min default (0.033 rps). Tight because these are the
+        only unauthenticated enrollment surface — SHA-256 preimage resistance
+        plus this limit are what prevent token enumeration / brute-force.
+        """
+        return await self._get_limiter(
+            "endpoint:admin_enrollment_public", RATE_LIMIT_ADMIN_ENROLLMENT_PUBLIC_RPS
         )
 
     async def get_default_limiter(self) -> RedisRateLimiter:

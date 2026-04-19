@@ -35,7 +35,10 @@ x-agent-env: &agent-env
   NBFC_ROUTER_ANSWERABILITY_MARGIN: "0.04"
   NBFC_ROUTER_ANSWERABILITY_MAX_TOOLS: "60"
   NBFC_ROUTER_ANSWERABILITY_VECTOR_CACHE_SIZE: "64"
-  AGENT_INLINE_ROUTER_ENABLED: "false"
+  # Override in .env to enable/disable the hybrid classifier that tags traces
+  # with router_reason. See docs/runbooks or CLAUDE.md for the Topic Distribution
+  # dashboard wiring. Non-blocking, safe default false for fresh clones.
+  AGENT_INLINE_ROUTER_ENABLED: "${AGENT_INLINE_ROUTER_ENABLED:-false}"
   AGENT_INLINE_ROUTER_EXPOSE: "false"
   AGENT_STREAM_EXPOSE_INTERNAL_EVENTS: "false"
   AGENT_STREAM_EXPOSE_REASONING: "true"

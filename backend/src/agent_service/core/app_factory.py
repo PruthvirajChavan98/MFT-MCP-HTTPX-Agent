@@ -297,6 +297,13 @@ class AppFactory:
         from src.agent_service.api.admin_users.routes import router as admin_users_router
 
         app.include_router(admin_users_router, tags=["admin-users"])
+
+        # Admin self-service enrollment via single-use tokens — super-admin
+        # issues, new admin redeems on a public page to set their own
+        # password + TOTP.
+        from src.agent_service.api.admin_enrollment.routes import router as admin_enrollment_router
+
+        app.include_router(admin_enrollment_router, tags=["admin-enrollment"])
         app.include_router(feedback_router)
 
         app.include_router(health_router)

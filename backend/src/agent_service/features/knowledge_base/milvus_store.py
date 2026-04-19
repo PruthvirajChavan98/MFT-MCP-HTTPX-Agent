@@ -72,9 +72,14 @@ class KBMilvusStore:
                     continue
 
     async def semantic_search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
-        """Return top-k FAQ matches by cosine similarity (score 0–1, higher = better)."""
-        results = await milvus_mgr.kb_faqs.asimilarity_search_with_score(  # type: ignore[union-attr]
-            query, k=limit
+        """Return top-k FAQ matches by cosine similarity (score 0–1, higher = better).
+
+        Phase F4 (2026-04-18): swapped from langchain-milvus async wrapper to
+        raw pymilvus + executor. See milvus_mgr.semantic_search_raw and the
+        kb_search.py swap for context.
+        """
+        results = await milvus_mgr.semantic_search_raw(
+            collection="kb_faqs", query=query, limit=limit
         )
         return [
             {

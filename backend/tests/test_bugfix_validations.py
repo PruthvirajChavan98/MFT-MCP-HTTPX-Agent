@@ -141,8 +141,13 @@ async def test_eval_search_uses_asyncpg_positional_having_params_and_correct_cou
 @pytest.mark.asyncio
 async def test_eval_vector_search_uses_req_vector_path(monkeypatch):
     pool = _VectorSearchPool()
-    store = _VectorStore()
-    monkeypatch.setattr(eval_read.milvus_mgr, "eval_traces", store)
+    calls: list[dict[str, object]] = []
+
+    async def _fake_search_raw(**kwargs):
+        calls.append(kwargs)
+        return [(SimpleNamespace(metadata={"trace_id": "trace-1"}), 0.91)]
+
+    monkeypatch.setattr(eval_read.milvus_mgr, "semantic_search_raw", _fake_search_raw)
 
     result = await eval_read.eval_vector_search(
         request=_FakeRequest(pool),
@@ -150,11 +155,11 @@ async def test_eval_vector_search_uses_req_vector_path(monkeypatch):
         x_openrouter_key=None,
     )
 
-    assert len(store.by_vector_calls) == 1
-    vector, kwargs = store.by_vector_calls[0]
-    assert vector == [0.1, 0.2]
-    assert kwargs == {"k": 2}
-    assert store.by_text_calls == []
+    assert len(calls) == 1
+    assert calls[0]["collection"] == "eval_traces_emb"
+    assert calls[0]["query_vector"] == [0.1, 0.2]
+    assert calls[0]["limit"] == 2
+    assert calls[0].get("query", "") == ""  # vector path — no text query
     assert result["items"][0]["trace_id"] == "trace-1"
     assert result["items"][0]["question"] == "how do i close my loan"
 
@@ -162,8 +167,13 @@ async def test_eval_vector_search_uses_req_vector_path(monkeypatch):
 @pytest.mark.asyncio
 async def test_eval_vector_search_text_path_no_longer_requires_request_openrouter_key(monkeypatch):
     pool = _VectorSearchPool()
-    store = _TextVectorStore()
-    monkeypatch.setattr(eval_read.milvus_mgr, "eval_traces", store)
+    calls: list[dict[str, object]] = []
+
+    async def _fake_search_raw(**kwargs):
+        calls.append(kwargs)
+        return [(SimpleNamespace(metadata={"trace_id": "trace-1"}), 0.88)]
+
+    monkeypatch.setattr(eval_read.milvus_mgr, "semantic_search_raw", _fake_search_raw)
 
     result = await eval_read.eval_vector_search(
         request=_FakeRequest(pool),
@@ -171,8 +181,11 @@ async def test_eval_vector_search_text_path_no_longer_requires_request_openroute
         x_openrouter_key=None,
     )
 
-    assert store.by_vector_calls == []
-    assert store.by_text_calls == [("loan closure", {"k": 2})]
+    assert len(calls) == 1
+    assert calls[0]["collection"] == "eval_traces_emb"
+    assert calls[0]["query"] == "loan closure"
+    assert calls[0]["limit"] == 2
+    assert calls[0].get("query_vector") is None
     assert result["items"][0]["trace_id"] == "trace-1"
 
 

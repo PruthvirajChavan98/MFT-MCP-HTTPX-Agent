@@ -290,8 +290,30 @@ SHADOW_TRACE_QUEUE_PUSH_TIMEOUT_SECONDS = float(
 SHADOW_JUDGE_ENABLED = os.getenv("SHADOW_JUDGE_ENABLED", "true").lower() in ("1", "true", "yes")
 SHADOW_JUDGE_POLL_SECONDS = int(os.getenv("SHADOW_JUDGE_POLL_SECONDS", "60"))
 SHADOW_JUDGE_BATCH_SIZE = int(os.getenv("SHADOW_JUDGE_BATCH_SIZE", "50"))
+ADMIN_PUBLIC_BASE_URL = os.getenv("ADMIN_PUBLIC_BASE_URL", "").strip()
+ADMIN_ENROLLMENT_TOKEN_TTL_HOURS_DEFAULT = int(
+    os.getenv("ADMIN_ENROLLMENT_TOKEN_TTL_HOURS_DEFAULT", "24")
+)
+ADMIN_ENROLLMENT_TOKEN_TTL_HOURS_MAX = int(os.getenv("ADMIN_ENROLLMENT_TOKEN_TTL_HOURS_MAX", "168"))
+# Per-caller limit on POST /agent/admin/enrollment/tokens (issue). Each issue is
+# cheap (a single INSERT + token generation) — 5 req/min is plenty for legitimate
+# super-admin invites and throttles spam of the super-admin's invite surface.
+RATE_LIMIT_ADMIN_ENROLLMENT_ISSUE_RPS = float(
+    os.getenv("RATE_LIMIT_ADMIN_ENROLLMENT_ISSUE_RPS", "0.083")
+)
+# Per-IP limit on the PUBLIC metadata + redeem endpoints. Must be tight —
+# these are the only public attack surface for the enrollment flow.
+RATE_LIMIT_ADMIN_ENROLLMENT_PUBLIC_RPS = float(
+    os.getenv("RATE_LIMIT_ADMIN_ENROLLMENT_PUBLIC_RPS", "0.033")
+)
+
 SHADOW_JUDGE_MODEL = os.getenv("SHADOW_JUDGE_MODEL", "openai/gpt-oss-120b").strip()
-SHADOW_JUDGE_MODEL_FALLBACK = os.getenv("SHADOW_JUDGE_MODEL_FALLBACK", "gpt-oss-120b").strip()
+# Fallback must be a *different* Groq model from the primary, otherwise a single
+# account rate-limit takes out both. "gpt-oss-120b" (without openai/ prefix) was
+# a silent 404 on Groq and the failure mode the admin UI saw as 0/0/0 scores.
+SHADOW_JUDGE_MODEL_FALLBACK = os.getenv(
+    "SHADOW_JUDGE_MODEL_FALLBACK", "llama-3.3-70b-versatile"
+).strip()
 SHADOW_JUDGE_REASONING_EFFORT = os.getenv("SHADOW_JUDGE_REASONING_EFFORT", "medium").strip().lower()
 
 # =============================================================================
