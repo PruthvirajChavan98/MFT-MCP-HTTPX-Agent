@@ -157,11 +157,21 @@ class MockFinTechAuthAPIs:
                 return self._to_vsc({"status": "failed", "error": "No token in response."})
 
             loans: list = auth_data.get("loans") or []
+            user = auth_data.get("user") or {}
+            # Explicit customer identity anchor (GD6 TA1). Previously identity
+            # was implicit via phone_number; now downstream authorization
+            # checks can assert customer_id directly without dict-digging.
+            customer_id = str(user.get("id") or user.get("customer_id") or "").strip()
 
             updates: Dict[str, Any] = {
                 "access_token": access_token,
                 "phone_number": phone_number,
-                "user_details": auth_data.get("user", {}),
+                "customer_id": customer_id,
+                # Explicit auth state — the @requires_authenticated_session
+                # decorator checks this rather than inferring from field
+                # presence.
+                "auth_state": "authenticated",
+                "user_details": user,
                 "loans": loans,
             }
 
