@@ -60,6 +60,12 @@ dev = [
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
+# Integration tests hit a running stack (MCP + Redis + mock CRM) and are
+# opt-in via `pytest -m integration`. Unit test runs never collect them.
+addopts = "-m 'not integration'"
+markers = [
+    "integration: opt-in test that requires a running local stack (MCP_SERVER_URL, REDIS_URL, mock CRM)",
+]
 
 # =============================================================================
 # Code Formatting & Linting (Production Grade)
