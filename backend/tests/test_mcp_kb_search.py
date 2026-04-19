@@ -1,4 +1,9 @@
-"""Unit tests for mcp_service.kb_search — semantic FAQ search for MCP tools."""
+"""Unit tests for mcp_service.kb_search — semantic FAQ search for MCP tools.
+
+2026-04-18: kb_search swapped from langchain-milvus async wrapper
+(``asimilarity_search_with_score``) to ``milvus_mgr.semantic_search_raw`` —
+raw pymilvus via executor. These tests mock the new call site.
+"""
 
 from __future__ import annotations
 
@@ -14,8 +19,7 @@ from src.mcp_service import kb_search
 def _reset_milvus_mgr(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test starts with a fresh mocked milvus_mgr."""
     mock_mgr = MagicMock()
-    mock_mgr.kb_faqs = None
-    mock_mgr.aconnect = AsyncMock()
+    mock_mgr.semantic_search_raw = AsyncMock(return_value=[])
     monkeypatch.setattr(kb_search, "milvus_mgr", mock_mgr)
 
 
@@ -36,32 +40,20 @@ async def test_semantic_search_returns_empty_on_empty_query() -> None:
 
 
 @pytest.mark.asyncio
-async def test_semantic_search_returns_empty_when_milvus_aconnect_fails() -> None:
-    kb_search.milvus_mgr.aconnect.side_effect = RuntimeError("milvus unreachable")
+async def test_semantic_search_returns_empty_when_raw_helper_raises() -> None:
+    kb_search.milvus_mgr.semantic_search_raw.side_effect = RuntimeError("milvus unreachable")
     results = await kb_search.semantic_search("how do I pay my loan?")
-    assert results == []
-    kb_search.milvus_mgr.aconnect.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_semantic_search_returns_empty_when_kb_faqs_still_none_after_connect() -> None:
-    # aconnect succeeds but kb_faqs never gets assigned
-    kb_search.milvus_mgr.aconnect = AsyncMock()  # no side effect
-    kb_search.milvus_mgr.kb_faqs = None
-    results = await kb_search.semantic_search("query")
     assert results == []
 
 
 @pytest.mark.asyncio
 async def test_semantic_search_returns_formatted_results_on_hit() -> None:
-    fake_store = MagicMock()
-    fake_store.asimilarity_search_with_score = AsyncMock(
+    kb_search.milvus_mgr.semantic_search_raw = AsyncMock(
         return_value=[
             (_doc("How do I pay my loan?", "Visit the payments page."), 0.92),
             (_doc("When is my EMI due?", "Monthly on the 5th."), 0.78),
         ]
     )
-    kb_search.milvus_mgr.kb_faqs = fake_store
 
     results = await kb_search.semantic_search("how to pay loan")
     assert len(results) == 2
@@ -76,45 +68,32 @@ async def test_semantic_search_returns_formatted_results_on_hit() -> None:
 
 @pytest.mark.asyncio
 async def test_semantic_search_respects_limit_parameter() -> None:
-    fake_store = MagicMock()
-    fake_store.asimilarity_search_with_score = AsyncMock(return_value=[])
-    kb_search.milvus_mgr.kb_faqs = fake_store
+    kb_search.milvus_mgr.semantic_search_raw = AsyncMock(return_value=[])
 
     await kb_search.semantic_search("anything", limit=3)
-    fake_store.asimilarity_search_with_score.assert_awaited_once_with("anything", k=3)
+    kb_search.milvus_mgr.semantic_search_raw.assert_awaited_once_with(
+        collection="kb_faqs", query="anything", limit=3
+    )
 
 
 @pytest.mark.asyncio
 async def test_semantic_search_default_limit_is_five() -> None:
-    fake_store = MagicMock()
-    fake_store.asimilarity_search_with_score = AsyncMock(return_value=[])
-    kb_search.milvus_mgr.kb_faqs = fake_store
+    kb_search.milvus_mgr.semantic_search_raw = AsyncMock(return_value=[])
 
     await kb_search.semantic_search("anything")
-    fake_store.asimilarity_search_with_score.assert_awaited_once_with("anything", k=5)
-
-
-@pytest.mark.asyncio
-async def test_semantic_search_gracefully_handles_search_exception() -> None:
-    fake_store = MagicMock()
-    fake_store.asimilarity_search_with_score = AsyncMock(
-        side_effect=RuntimeError("milvus query failed")
+    kb_search.milvus_mgr.semantic_search_raw.assert_awaited_once_with(
+        collection="kb_faqs", query="anything", limit=5
     )
-    kb_search.milvus_mgr.kb_faqs = fake_store
-
-    results = await kb_search.semantic_search("anything")
-    assert results == []
 
 
 @pytest.mark.asyncio
-async def test_semantic_search_skips_aconnect_when_already_ready() -> None:
-    # kb_faqs pre-populated — aconnect should NOT be called
-    fake_store = MagicMock()
-    fake_store.asimilarity_search_with_score = AsyncMock(return_value=[])
-    kb_search.milvus_mgr.kb_faqs = fake_store
+async def test_semantic_search_strips_whitespace_before_calling_raw_helper() -> None:
+    kb_search.milvus_mgr.semantic_search_raw = AsyncMock(return_value=[])
 
-    await kb_search.semantic_search("query")
-    kb_search.milvus_mgr.aconnect.assert_not_awaited()
+    await kb_search.semantic_search("  what are loan products?  ")
+    kb_search.milvus_mgr.semantic_search_raw.assert_awaited_once_with(
+        collection="kb_faqs", query="what are loan products?", limit=5
+    )
 
 
 # ─────────── format_results ───────────

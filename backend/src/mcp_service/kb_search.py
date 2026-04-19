@@ -64,11 +64,14 @@ async def semantic_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     stripped = query.strip() if query else ""
     if not stripped:
         return []
-    if not await _ensure_kb_store_ready():
-        return []
+    # Phase F2 (2026-04-18): swapped from langchain-milvus async wrapper to
+    # raw pymilvus + executor. The langchain-milvus 0.3.3 +
+    # asimilarity_search_with_score hangs indefinitely on our setup; the raw
+    # helper composes OpenRouter embed + pymilvus Collection.search (both
+    # proven to work in isolation) for the same return shape.
     try:
-        results = await milvus_mgr.kb_faqs.asimilarity_search_with_score(  # type: ignore[union-attr]
-            stripped, k=limit
+        results = await milvus_mgr.semantic_search_raw(
+            collection="kb_faqs", query=stripped, limit=limit
         )
     except Exception as e:
         log.warning("kb_search: search failed for query=%r: %s", stripped[:80], e)
