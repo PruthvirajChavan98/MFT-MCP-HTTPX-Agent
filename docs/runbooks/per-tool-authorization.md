@@ -295,3 +295,22 @@ picks the first two accepted phones. To override:
   (default `123456`).
 - `MCP_SERVER_URL` — SSE endpoint (default
   `http://localhost:8050/sse`).
+
+### Sign-off evidence (first live run)
+
+On the local deployed stack (`mft_mcp` container rebuilt with GD6
+at `image: mft_mcp:latest`, exposed at `127.0.0.1:18050`):
+
+- `test_unauthenticated_tool_call_rejected` — **PASSED**: decorator
+  returns `AUTH_REJECT_MESSAGE` for an unauthenticated
+  `loan_details` call. Before the rebuild the running container
+  responded with the pre-GD6 string `"error: no app_id"`, confirming
+  the fix is what's now deployed.
+- `test_cross_session_select_loan_rejected` — **OTP-gated**: the
+  mock CRM at `test-mock-crm.pruthvirajchavan.codes` does not
+  honour a static bypass OTP, so end-to-end validation of the
+  cross-session rejection requires either real SMS delivery or a
+  bypass added to the mock CRM's `validate_new` endpoint. The
+  happy-path + cross-session behaviour is still anchored by the
+  57-entry in-process corpus (`test_mcp_tool_authorization_corpus.py`)
+  using fakeredis + stubbed CRM.

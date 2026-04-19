@@ -23,12 +23,19 @@ def _mcp_url() -> str:
 
 
 def _is_reachable(url: str, timeout: float = 2.0) -> bool:
-    """Probe the MCP SSE root with a short connect/read budget."""
+    """Probe the MCP SSE root with a short connect budget.
+
+    SSE endpoints respond to GET with 200 + ``text/event-stream`` and
+    then hold the connection open emitting server-sent events. A plain
+    ``client.get(url)`` would wait for the body and ``ReadTimeout``
+    before we see the status code. Using ``stream=True`` + closing
+    immediately after headers arrive gives us a reliable 200/not-200
+    signal within the connect budget.
+    """
     try:
-        # SSE endpoints respond to GET with 200 + text/event-stream.
         with httpx.Client(timeout=timeout) as client:
-            resp = client.get(url, headers={"Accept": "text/event-stream"})
-            return resp.status_code < 500
+            with client.stream("GET", url, headers={"Accept": "text/event-stream"}) as resp:
+                return resp.status_code < 500
     except (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout):
         return False
 
