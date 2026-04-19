@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 import { ADMIN_MFA_REQUIRED_EVENT } from '@/shared/api/http'
 
@@ -154,6 +154,16 @@ export function LoginPage() {
               <kbd className="text-[10px] font-tabular text-muted-foreground">
                 press <span className="border border-border rounded px-1 mx-0.5">enter</span> to submit
               </kbd>
+            </div>
+
+            <div className="pt-3 text-center text-xs text-muted-foreground">
+              Have an enrollment token?{' '}
+              <Link
+                to="/admin/enroll"
+                className="font-medium text-primary hover:underline"
+              >
+                Enroll →
+              </Link>
             </div>
           </form>
         </div>

@@ -25,12 +25,28 @@ them into the table on first boot (`seed_super_admin_if_absent`, idempotent
 on "any active super admin exists") and never reads them again at request
 time. Rotating the env password does not change the DB; rotate via SQL.
 
-Enrolling non-super-admins is done via the super-admin-only UI at
-`/admin/admins` (backed by `POST /agent/admin/admins`). See
-`docs/runbooks/admin-enrollment.md` for the full procedure. The raw
-TOTP secret is returned **once** in the POST response and never again —
-the server does not log it, and the frontend surfaces it in a one-time
-modal pane with a close-confirm guard.
+Enrolling non-super-admins supports two flows (see
+`docs/runbooks/admin-enrollment.md`):
+
+1. **Preferred — enrollment tokens.** Super-admin generates a single-use
+   token via `/admin/admins` → *Generate enrollment link* (backed by
+   `POST /agent/admin/enrollment/tokens` at
+   `backend/src/agent_service/api/admin_enrollment/routes.py`). The DB
+   stores only `sha256(plaintext)`; the plaintext is returned exactly once
+   in the issue response. The new admin redeems publicly at
+   `/admin/enroll?token=...` → `POST /admin/enrollment/tokens/:t/redeem`,
+   which runs an atomic `SELECT ... FOR UPDATE` transaction to consume the
+   token + insert the `admin_users` row + issue JWT cookies in one step.
+   The super-admin never handles the new admin's password.
+
+2. **Legacy — direct create.** `POST /agent/admin/admins` creates the row
+   directly and returns a one-time password + TOTP secret in the response
+   for the super-admin to hand off out-of-band. Retained for air-gapped
+   onboarding where the new admin can't reach the public redeem URL.
+
+The raw TOTP secret / token plaintext is returned **once** and never again —
+the server does not log it, and the frontend surfaces it in a one-time modal
+pane with a close-confirm guard.
 
 Revocation is soft: `admin_users.revoked_at = now()`. The partial unique
 index is on active rows only, so a revoked email can be re-enrolled.

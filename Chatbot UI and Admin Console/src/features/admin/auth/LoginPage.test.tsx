@@ -19,9 +19,19 @@ vi.mock('./AdminAuthProvider', () => ({
   }),
 }))
 
-vi.mock('react-router', () => ({
-  useNavigate: () => navigateMock,
-}))
+vi.mock('react-router', () => {
+  const React = require('react')
+  return {
+    useNavigate: () => navigateMock,
+    // Minimal Link stub — renders a native anchor so presence + href are testable.
+    Link: ({ to, children, ...rest }: { to: string; children: unknown } & Record<string, unknown>) =>
+      React.createElement(
+        'a',
+        { href: typeof to === 'string' ? to : '', ...rest },
+        children as React.ReactNode,
+      ),
+  }
+})
 
 import { LoginPage } from './LoginPage'
 
@@ -35,6 +45,13 @@ describe('LoginPage', () => {
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('shows the Enroll link pointing at /admin/enroll', () => {
+    render(<LoginPage />)
+    const link = screen.getByRole('link', { name: /enroll/i }) as HTMLAnchorElement
+    expect(link).toBeTruthy()
+    expect(link.getAttribute('href')).toBe('/admin/enroll')
   })
 
   it('renders email and password inputs with correct autocomplete hints', () => {

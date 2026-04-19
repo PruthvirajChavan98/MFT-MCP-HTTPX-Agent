@@ -6,8 +6,21 @@ import {
   useEffect,
   useState,
 } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { ApiError, requestJson } from '@/shared/api/http'
+
+// Query keys whose data is user-scoped and must be invalidated on login/logout.
+// Keep in sync with the queryKeys used by admin pages.
+const ADMIN_SCOPED_QUERY_KEYS: ReadonlySet<string> = new Set([
+  'question-types',
+  'eval-traces',
+  'session-cost-summary',
+  'guardrail-events',
+  'admin-analytics-overview',
+  'admin-users',
+  'knowledge-base-faqs',
+])
 
 export interface AdminSession {
   sub: string
@@ -48,6 +61,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AdminSession | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   const refreshSession = useCallback(async () => {
     setIsLoading(true)
@@ -85,6 +99,15 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
           body: { email, password },
         })
         await refreshSession()
+        // Admin-scoped caches from a prior session or pre-auth mount can linger
+        // with 401-empty payloads; invalidate so the dashboard refetches with
+        // the fresh cookie on first paint.
+        await queryClient.invalidateQueries({
+          predicate: (q) => {
+            const key = q.queryKey[0]
+            return typeof key === 'string' && ADMIN_SCOPED_QUERY_KEYS.has(key)
+          },
+        })
         return { mfa_required: response.mfa_required }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'login failed'
@@ -92,7 +115,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         throw err
       }
     },
-    [refreshSession],
+    [refreshSession, queryClient],
   )
 
   const logout = useCallback(async (): Promise<void> => {
@@ -103,8 +126,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setSession(null)
       setError(null)
+      // Clear caches so a different user logging in doesn't see the previous
+      // session's data between mount and first refetch.
+      queryClient.clear()
     }
-  }, [])
+  }, [queryClient])
 
   const verifyMfa = useCallback(
     async (code: string): Promise<void> => {
@@ -116,13 +142,19 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
           body: { code },
         })
         await refreshSession()
+        await queryClient.invalidateQueries({
+          predicate: (q) => {
+            const key = q.queryKey[0]
+            return typeof key === 'string' && ADMIN_SCOPED_QUERY_KEYS.has(key)
+          },
+        })
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'MFA verification failed'
         setError(message)
         throw err
       }
     },
-    [refreshSession],
+    [refreshSession, queryClient],
   )
 
   return (

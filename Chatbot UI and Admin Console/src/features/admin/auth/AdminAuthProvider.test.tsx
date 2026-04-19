@@ -1,4 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Vitest hoists vi.mock() to the top of the file, so any symbols the factory
@@ -83,6 +85,16 @@ async function waitForLoadingDone(): Promise<void> {
   })
 }
 
+function renderWithClient(
+  ui: ReactElement,
+  client: QueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  }),
+): { client: QueryClient } {
+  render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+  return { client }
+}
+
 describe('AdminAuthProvider', () => {
   beforeEach(() => {
     requestJsonMock.mockReset()
@@ -94,7 +106,7 @@ describe('AdminAuthProvider', () => {
 
   it('hydrates session from GET /admin/auth/me on mount', async () => {
     requestJsonMock.mockResolvedValueOnce(SESSION_SAMPLE)
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -109,7 +121,7 @@ describe('AdminAuthProvider', () => {
 
   it('treats 401 from /me as no session, silently (no error state)', async () => {
     requestJsonMock.mockRejectedValueOnce(new TestApiError('unauthenticated', 401, null))
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -121,7 +133,7 @@ describe('AdminAuthProvider', () => {
 
   it('surfaces non-401 /me errors as error state', async () => {
     requestJsonMock.mockRejectedValueOnce(new TestApiError('server down', 500, null))
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -139,7 +151,7 @@ describe('AdminAuthProvider', () => {
     // follow-up /me call
     requestJsonMock.mockResolvedValueOnce(SESSION_SAMPLE)
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -166,7 +178,7 @@ describe('AdminAuthProvider', () => {
     requestJsonMock.mockRejectedValueOnce(new TestApiError('unauth', 401, null)) // /me
     requestJsonMock.mockRejectedValueOnce(new TestApiError('bad creds', 401, null)) // /login
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -185,7 +197,7 @@ describe('AdminAuthProvider', () => {
     requestJsonMock.mockResolvedValueOnce(SESSION_SAMPLE) // mount
     requestJsonMock.mockResolvedValueOnce({ ok: true }) // logout
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -208,7 +220,7 @@ describe('AdminAuthProvider', () => {
     requestJsonMock.mockResolvedValueOnce(SESSION_SAMPLE) // mount
     requestJsonMock.mockRejectedValueOnce(new TestApiError('server down', 500, null))
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -230,7 +242,7 @@ describe('AdminAuthProvider', () => {
       mfa_fresh: true,
     }) // /me follow-up
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <TestConsumer />
       </AdminAuthProvider>,
@@ -247,12 +259,80 @@ describe('AdminAuthProvider', () => {
     })
   })
 
+  it('login() invalidates admin-scoped TanStack Query caches', async () => {
+    requestJsonMock.mockRejectedValueOnce(new TestApiError('unauth', 401, null)) // mount /me
+    requestJsonMock.mockResolvedValueOnce({ ok: true, mfa_required: false }) // login
+    requestJsonMock.mockResolvedValueOnce(SESSION_SAMPLE) // post-login /me
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // Prime admin-scoped cache entries that should be invalidated on login.
+    client.setQueryData(['question-types'], [{ reason: 'stale', count: 0 }])
+    client.setQueryData(['eval-traces'], [{ id: 'stale' }])
+    // Non-admin-scoped entry — must NOT be invalidated.
+    client.setQueryData(['unrelated-key'], { untouched: true })
+
+    renderWithClient(
+      <AdminAuthProvider>
+        <TestConsumer />
+      </AdminAuthProvider>,
+      client,
+    )
+    await waitForLoadingDone()
+
+    screen.getByRole('button', { name: 'login' }).click()
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('session').textContent).toBe(SESSION_SAMPLE.sub)
+    })
+
+    const qtState = client.getQueryState(['question-types'])
+    const etState = client.getQueryState(['eval-traces'])
+    const unrelatedState = client.getQueryState(['unrelated-key'])
+
+    expect(qtState?.isInvalidated).toBe(true)
+    expect(etState?.isInvalidated).toBe(true)
+    // Unrelated cache stays intact.
+    expect(unrelatedState?.isInvalidated).toBe(false)
+  })
+
+  it('logout() clears the entire TanStack Query cache', async () => {
+    requestJsonMock.mockResolvedValueOnce(SESSION_SAMPLE) // mount
+    requestJsonMock.mockResolvedValueOnce({ ok: true }) // logout
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['question-types'], [{ reason: 'x' }])
+    client.setQueryData(['admin-users'], [{ id: 'y' }])
+
+    renderWithClient(
+      <AdminAuthProvider>
+        <TestConsumer />
+      </AdminAuthProvider>,
+      client,
+    )
+    await waitForLoadingDone()
+
+    screen.getByRole('button', { name: 'logout' }).click()
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('session').textContent).toBe('none')
+    })
+
+    expect(client.getQueryData(['question-types'])).toBeUndefined()
+    expect(client.getQueryData(['admin-users'])).toBeUndefined()
+  })
+
   it('useAdminAuth() throws when used outside the provider', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      expect(() => render(<TestConsumer />)).toThrow(
-        /useAdminAuth must be used inside/,
-      )
+      expect(() =>
+        render(
+          <QueryClientProvider
+            client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+          >
+            <TestConsumer />
+          </QueryClientProvider>,
+        ),
+      ).toThrow(/useAdminAuth must be used inside/)
     } finally {
       spy.mockRestore()
     }
@@ -283,7 +363,7 @@ describe('AuthGuard (inside AdminAuthProvider)', () => {
       }),
     )
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <AuthGuard>
           <GuardedChild />
@@ -302,7 +382,7 @@ describe('AuthGuard (inside AdminAuthProvider)', () => {
   it('redirects to /admin/login when no session is present', async () => {
     requestJsonMock.mockRejectedValueOnce(new TestApiError('no session', 401, null))
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <AuthGuard>
           <GuardedChild />
@@ -320,7 +400,7 @@ describe('AuthGuard (inside AdminAuthProvider)', () => {
   it('passes through when a JWT session is present', async () => {
     requestJsonMock.mockResolvedValueOnce(SESSION_SAMPLE)
 
-    render(
+    renderWithClient(
       <AdminAuthProvider>
         <AuthGuard>
           <GuardedChild />

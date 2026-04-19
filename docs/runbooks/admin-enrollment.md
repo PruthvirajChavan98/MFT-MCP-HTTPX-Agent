@@ -4,6 +4,63 @@ This runbook covers enrolling **non-super-admin** users (role `admin`, not
 `super_admin`). For the one-time bootstrap of the first super-admin, see
 [super-admin-enrollment.md](./super-admin-enrollment.md).
 
+Two flows are supported. **Prefer tokens** — the super-admin never handles the
+new admin's password.
+
+---
+
+## Flow A — Enrollment token (recommended)
+
+Schema: `backend/infra/sql/05_admin_enrollment_tokens.sql`.
+Endpoints: `backend/src/agent_service/api/admin_enrollment/routes.py`.
+
+1. **Super-admin issues a token**
+   `/admin/admins` → **Generate enrollment link**. Pick email + role + TTL
+   (default 24 h, max 168 h). Modal returns a plaintext token and a redeem URL.
+   The server stores only `sha256(token)`; this is the only time the plaintext is
+   retrievable.
+2. **Hand the redeem URL to the new admin**
+   Use a secure channel (Signal, 1Password, signed email). The URL is
+   `https://<host>/admin/enroll?token=<plaintext>`.
+3. **New admin redeems the link**
+   Opens the URL on any device. The page:
+   - Shows "Setting up account for \<email\>".
+   - Client-side generates a base32 TOTP secret (never leaves the browser until
+     redeem), displays the secret + `otpauth://` URI to scan/paste into an
+     authenticator.
+   - New admin enters their own password + the 6-digit code, submits.
+   - Server verifies code vs. secret, Argon2id-hashes password,
+     Fernet-encrypts TOTP secret, creates `admin_users` row, marks token
+     `consumed_at`, issues JWT cookies — the new admin lands authenticated at
+     `/admin`.
+4. **Atomic single-use guarantee** — `consume_token_atomic` wraps the check +
+   consume + row-create in one Postgres txn with `SELECT … FOR UPDATE`. Two
+   concurrent redeems serialize and exactly one wins (other gets `409
+   consumed`). Same pattern as `revoke_if_not_last_super`.
+
+### Failure modes
+
+| HTTP | code | meaning |
+|------|------|---------|
+| 404  | `not_found`  | token doesn't match any row (bad paste, or never issued)  |
+| 410  | `expired`    | `expires_at` elapsed; ask super-admin for a fresh token  |
+| 409  | `consumed`   | already redeemed, or an active admin already exists for that email |
+| 400  | `invalid_totp` | submitted code doesn't match submitted secret — rescan |
+
+### Rate limits
+
+- **Issue** (super-admin): `0.083 rps` (5/min) per caller. `RATE_LIMIT_ADMIN_ENROLLMENT_ISSUE_RPS`.
+- **Public lookup + redeem**: `0.033 rps` (2/min) per IP. `RATE_LIMIT_ADMIN_ENROLLMENT_PUBLIC_RPS`.
+  Tight limits + SHA-256 preimage resistance are the only barriers to token
+  enumeration on the public surface.
+
+---
+
+## Flow B — Direct create (legacy, still supported)
+
+Use only when the token flow is unavailable (e.g. air-gapped onboarding where
+the new admin can't reach the public `/admin/enroll` URL).
+
 ## Background
 
 Since the admin-users migration (`backend/infra/sql/03_admin_users.sql`):

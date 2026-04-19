@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { Link2, Loader2, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { Navigate } from 'react-router'
 import { toast } from 'sonner'
 
@@ -19,6 +19,7 @@ import {
 import { formatDateTime } from '@shared/lib/format'
 import { getErrorMessage } from '@shared/lib/errors'
 import { AdminUsersCreateModal } from './AdminUsersCreateModal'
+import { AdminEnrollTokenModal } from './AdminEnrollTokenModal'
 
 export function AdminUsersPage() {
   const queryClient = useQueryClient()
@@ -26,6 +27,7 @@ export function AdminUsersPage() {
   const { withMfa } = useMfaPrompt()
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [tokenModalOpen, setTokenModalOpen] = useState(false)
   const [lastCreated, setLastCreated] = useState<CreateAdminResult | null>(null)
 
   // Client-side role guard — the backend already returns 403 for non-super-
@@ -77,13 +79,23 @@ export function AdminUsersPage() {
         title="Admin Users"
         description="Create and revoke non-super-admin accounts. Each enrollment returns a one-time TOTP secret."
         actions={
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all active:scale-95"
-          >
-            <UserPlus size={16} />
-            Add Admin
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setTokenModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all active:scale-95"
+            >
+              <Link2 size={16} />
+              Generate enrollment link
+            </button>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-border bg-muted text-foreground hover:bg-accent transition-all active:scale-95"
+              title="Create admin with an initial password (legacy flow)"
+            >
+              <UserPlus size={16} />
+              Add Admin (direct)
+            </button>
+          </div>
         }
       />
 
@@ -189,6 +201,14 @@ export function AdminUsersPage() {
           }}
         />
       )}
+
+      <AdminEnrollTokenModal
+        open={tokenModalOpen}
+        onClose={() => {
+          setTokenModalOpen(false)
+          queryClient.invalidateQueries({ queryKey: ['admins'] })
+        }}
+      />
     </div>
   )
 }

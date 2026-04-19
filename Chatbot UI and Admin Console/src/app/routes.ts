@@ -66,6 +66,10 @@ const AdminUsersPage = lazy(async () => {
   const module = await import('@features/admin/pages/AdminUsersPage')
   return { default: module.AdminUsersPage }
 })
+const EnrollRedeemPage = lazy(async () => {
+  const module = await import('@features/admin/pages/EnrollRedeemPage')
+  return { default: module.EnrollRedeemPage }
+})
 
 export const router = createBrowserRouter([
   {
@@ -81,6 +85,14 @@ export const router = createBrowserRouter([
   {
     path: '/admin/login',
     Component: AdminLoginRoute,
+    errorElement: createElement(RouteErrorBoundary),
+  },
+  {
+    // Public — new admins redeem a one-time enrollment token to set their own
+    // password + TOTP. Sits outside AdminLayout (no AuthGuard) since the user
+    // is unauthenticated until the redeem response sets the JWT cookies.
+    path: '/admin/enroll',
+    Component: EnrollRedeemPage,
     errorElement: createElement(RouteErrorBoundary),
   },
   {
