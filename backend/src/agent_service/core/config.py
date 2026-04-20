@@ -41,6 +41,10 @@ NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 # Groq support for multiple keys (Load Balancing)
 _groq_env = os.getenv("GROQ_API_KEYS", os.getenv("GROQ_API_KEY", ""))
 GROQ_API_KEYS = [k.strip() for k in _groq_env.split(",") if k.strip()]
+# TTL on the "cooling" Redis marker after a 429 from a Groq key.
+GROQ_KEY_COOLING_TTL_S = int(os.getenv("GROQ_KEY_COOLING_TTL_S", "60"))
+# Per-RAGAS-metric timeout so one slow Groq key can't stall the other two.
+RAGAS_PER_METRIC_TIMEOUT_S = int(os.getenv("RAGAS_PER_METRIC_TIMEOUT_S", "30"))
 
 # Optional OpenRouter Branding
 OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "")

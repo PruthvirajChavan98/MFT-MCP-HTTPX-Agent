@@ -13,6 +13,7 @@ import httpx
 from src.agent_service.core.config import (
     GROQ_API_KEYS,
     GROQ_BASE_URL,
+    GROQ_KEY_COOLING_TTL_S,
     POSTGRES_DSN,
     SHADOW_JUDGE_BATCH_SIZE,
     SHADOW_JUDGE_ENABLED,
@@ -22,6 +23,7 @@ from src.agent_service.core.config import (
 )
 from src.agent_service.core.http_client import close_http_client, get_http_client
 from src.agent_service.eval_store.shadow_queue import RedisTraceQueue, trace_queue
+from src.agent_service.llm.groq_rotator import mark_key_cooling, next_groq_key
 from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger(__name__)
@@ -112,8 +114,9 @@ class ShadowJudgeWorker:
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }
+        api_key = await next_groq_key()
         headers = {
-            "Authorization": f"Bearer {GROQ_API_KEYS[0]}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         client = await get_http_client()
@@ -122,7 +125,12 @@ class ShadowJudgeWorker:
             json=payload,
             headers=headers,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429:
+                await mark_key_cooling(api_key, ttl_seconds=GROQ_KEY_COOLING_TTL_S)
+            raise
         body = response.json()
         text = ""
         choices = body.get("choices")

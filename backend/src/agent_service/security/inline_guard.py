@@ -11,7 +11,6 @@ from typing import Any, Literal
 from prometheus_client import Counter
 
 from src.agent_service.core.config import (
-    GROQ_API_KEYS,
     GROQ_GUARD_BASE_URL,
     INLINE_GUARD_ENABLED,
     INLINE_GUARD_GROQ_MODEL,
@@ -19,7 +18,7 @@ from src.agent_service.core.config import (
     INLINE_GUARD_TOTAL_TIMEOUT_MS,
 )
 from src.agent_service.core.http_client import get_http_client
-from src.agent_service.core.session_utils import get_redis
+from src.agent_service.llm.groq_rotator import next_groq_key
 
 log = logging.getLogger(__name__)
 
@@ -76,8 +75,6 @@ _HIGH_RISK_TOKENS: tuple[str, ...] = (
 
 _HIGH_RISK_BLOCK_THRESHOLD = 0.75
 
-_GROQ_RR_COUNTER_KEY = "agent:groq_rr_counter"
-
 _GROQ_GUARD_SYSTEM_PROMPT = """You are a security classifier for user prompts.
 Classify whether USER_INPUT is unsafe.
 
@@ -98,17 +95,6 @@ Rules:
 - do not answer the user's request
 - do not include markdown or code fences
 """
-
-
-async def _get_next_groq_key() -> str:
-    """Atomic round-robin selection across GROQ_API_KEYS via Redis INCR."""
-    if not GROQ_API_KEYS:
-        raise RuntimeError("No GROQ_API_KEYS configured for inline guard.")
-    if len(GROQ_API_KEYS) == 1:
-        return GROQ_API_KEYS[0]
-    redis = await get_redis()
-    counter = await redis.incr(_GROQ_RR_COUNTER_KEY)
-    return GROQ_API_KEYS[(counter - 1) % len(GROQ_API_KEYS)]
 
 
 @dataclass(slots=True)
@@ -227,7 +213,7 @@ def _parse_guard_classifier_response(text: str) -> dict[str, Any]:
 
 async def _groq_guard_check(prompt: str) -> bool:
     """Call Groq safeguard model and return True when prompt is safe."""
-    api_key = await _get_next_groq_key()
+    api_key = await next_groq_key()
     client = await get_http_client()
     payload: dict[str, Any] = {
         "model": INLINE_GUARD_GROQ_MODEL,

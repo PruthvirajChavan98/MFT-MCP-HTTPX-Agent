@@ -187,12 +187,22 @@ async def compute_llm_metrics(
     judge_model = model_name or trace.get("model") or JUDGE_MODEL_NAME
 
     try:
-        judge = RagasJudge(
-            model_name=judge_model,
-            openrouter_api_key=openrouter_api_key,
-            nvidia_api_key=nvidia_api_key,
-            groq_api_key=groq_api_key,
-        )
+        if groq_api_key:
+            # Session BYOK — honor the user's key, single-LLM path.
+            judge = RagasJudge(
+                model_name=judge_model,
+                openrouter_api_key=openrouter_api_key,
+                nvidia_api_key=nvidia_api_key,
+                groq_api_key=groq_api_key,
+            )
+        else:
+            # No session key — eval path spreads 3 metrics across 3 Groq keys
+            # via the shared rotator.
+            judge = await RagasJudge.for_eval(
+                model_name=judge_model,
+                openrouter_api_key=openrouter_api_key,
+                nvidia_api_key=nvidia_api_key,
+            )
     except Exception as exc:
         log.warning(
             "[shadow_eval] RAGAS judge initialization failed trace=%s: %s",
