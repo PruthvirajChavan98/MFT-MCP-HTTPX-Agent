@@ -27,6 +27,7 @@ from src.agent_service.api.endpoints.rate_limit_metrics import router as rate_li
 from src.agent_service.api.endpoints.router_endpoints import router as router_router
 from src.agent_service.api.endpoints.sessions import router as sessions_router
 from src.agent_service.api.eval_ingest import router as eval_router
+from src.agent_service.api.eval_read import public_router as eval_public_router
 from src.agent_service.api.eval_read import router as eval_read_router
 from src.agent_service.api.feedback import router as feedback_router
 from src.agent_service.core.config import (
@@ -283,6 +284,8 @@ class AppFactory:
         """Mount all API routers."""
         app.include_router(eval_router, prefix="/eval", tags=["evaluation"])
         app.include_router(eval_read_router, prefix="/eval", tags=["evaluation"])
+        # Chat-widget-facing eval-status poll — deliberately not admin-gated.
+        app.include_router(eval_public_router, prefix="/eval", tags=["evaluation"])
 
         app.include_router(admin_router, tags=["admin"])
         app.include_router(admin_analytics_router)
