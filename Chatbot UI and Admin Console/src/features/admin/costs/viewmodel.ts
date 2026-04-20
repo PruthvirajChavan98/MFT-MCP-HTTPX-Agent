@@ -10,8 +10,15 @@ export type SessionCostSummary = {
 }
 
 export type CostSeriesPoint = {
+  /** Compact label used as the x-axis tick — first 8 chars of the
+   *  session_id (uppercased) so every bar is uniquely interpretable at
+   *  a glance. The full session_id is on the datum for the tooltip. */
   name: string
+  /** Ordinal 1-based rank by cost (S1 = most expensive) — retained so
+   *  the tooltip can show rank alongside the truncated ID. */
+  rank: number
   sessionId: string
+  lastActive?: string
   cost: number
   requests: number
 }
@@ -33,6 +40,16 @@ export type CostDashboardViewModel = {
 }
 
 const SERIES_LIMIT = 12
+
+/**
+ * Strip hex-style separators and return a short identifier that is
+ * distinguishable across top-12 sessions. Falls back to the raw id if
+ * the session_id is already shorter than the cap.
+ */
+function shortSessionLabel(sessionId: string): string {
+  const trimmed = (sessionId || '').replace(/[-_]/g, '')
+  return trimmed.slice(0, 8) || sessionId || '—'
+}
 
 function byCostThenRequestsDesc(a: SessionSummaryRow, b: SessionSummaryRow): number {
   if (b.total_cost !== a.total_cost) return b.total_cost - a.total_cost
@@ -93,8 +110,10 @@ export function mapSessionCostSummary(summary?: SessionCostSummary): CostDashboa
       conversationHref: buildConversationHref(session.session_id),
     })),
     series: sessions.slice(0, SERIES_LIMIT).map((session, index) => ({
-      name: `S${index + 1}`,
+      name: shortSessionLabel(session.session_id),
+      rank: index + 1,
       sessionId: session.session_id,
+      lastActive: session.last_request_at,
       cost: session.total_cost,
       requests: session.total_requests,
     })),

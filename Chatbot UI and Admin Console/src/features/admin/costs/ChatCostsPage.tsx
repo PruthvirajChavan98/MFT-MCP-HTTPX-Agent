@@ -43,6 +43,11 @@ import { sessionCostSummaryQueryOptions } from '@features/admin/query/queryOptio
 type CostTooltipDatum = {
   name: string
   cost: number
+  /** Present on Cost-by-Session points (session-axis chart). */
+  rank?: number
+  sessionId?: string
+  lastActive?: string
+  requests?: number
 }
 
 function isCostTooltipDatum(value: unknown): value is CostTooltipDatum {
@@ -58,10 +63,47 @@ function CostTooltip({ active, payload }: TooltipContentProps<ValueType, NameTyp
   const datum = isCostTooltipDatum(first.payload) ? first.payload : null
   const numericValue = typeof first.value === 'number' ? first.value : Number(first.value ?? 0)
 
+  // Session-axis points carry rank + sessionId + requests; the over-time
+  // chart's datum has only name+cost. Render the richer context when
+  // available; fall back to the minimal shape otherwise.
+  const isSessionPoint = datum?.sessionId !== undefined
+
   return (
-    <div className="min-w-[140px] rounded-xl border border-border bg-card p-3 shadow-lg">
-      <p className="mb-1 text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">{datum?.name ?? 'Session'}</p>
-      <p className="text-[13px] font-tabular font-semibold text-primary">Cost: {formatCurrency(numericValue)}</p>
+    <div className="min-w-[200px] rounded-xl border border-border bg-card p-3 shadow-lg">
+      {isSessionPoint ? (
+        <>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <span className="text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">
+              {`#${datum!.rank ?? '—'}`}
+            </span>
+            {datum!.lastActive ? (
+              <span className="text-[10px] font-tabular text-muted-foreground">
+                {formatDateTime(datum!.lastActive)}
+              </span>
+            ) : null}
+          </div>
+          <p className="mb-1 break-all font-tabular text-[11px] text-foreground">
+            {datum!.sessionId}
+          </p>
+          <p className="text-[13px] font-tabular font-semibold text-primary">
+            Cost: {formatCurrency(numericValue)}
+          </p>
+          {typeof datum!.requests === 'number' ? (
+            <p className="mt-0.5 text-[11px] font-tabular text-muted-foreground">
+              {datum!.requests} request{datum!.requests === 1 ? '' : 's'}
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p className="mb-1 text-[10px] font-tabular uppercase tracking-[0.15em] text-muted-foreground">
+            {datum?.name ?? 'Session'}
+          </p>
+          <p className="text-[13px] font-tabular font-semibold text-primary">
+            Cost: {formatCurrency(numericValue)}
+          </p>
+        </>
+      )}
     </div>
   )
 }

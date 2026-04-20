@@ -29,18 +29,58 @@ describe('costs viewmodel', () => {
     expect(model.sessions[0].conversationHref).toBe('/admin/conversations?sessionId=session-a')
     expect(model.series).toEqual([
       {
-        name: 'S1',
+        name: 'sessiona',
+        rank: 1,
         sessionId: 'session-a',
+        lastActive: '2026-02-27T22:20:00Z',
         cost: 1,
         requests: 9,
       },
       {
-        name: 'S2',
+        name: 'sessionb',
+        rank: 2,
         sessionId: 'session-b',
+        lastActive: '2026-02-27T22:18:41Z',
         cost: 0.2,
         requests: 3,
       },
     ])
+  })
+
+  it('uses the first 8 chars of the session id (separators stripped) as the chart label', () => {
+    const model = mapSessionCostSummary({
+      active_sessions: 1,
+      total_cost: 0.1,
+      total_requests: 1,
+      sessions: [
+        {
+          session_id: 'dd1a3dcb-7f84-4c8a-9a80-abcdef123456',
+          total_cost: 0.1,
+          total_requests: 1,
+          last_request_at: '2026-04-04T10:00:00Z',
+        },
+      ],
+    })
+    expect(model.series[0].name).toBe('dd1a3dcb')
+    expect(model.series[0].rank).toBe(1)
+    expect(model.series[0].sessionId).toBe('dd1a3dcb-7f84-4c8a-9a80-abcdef123456')
+  })
+
+  it('falls back gracefully when the session id is shorter than the cap', () => {
+    const model = mapSessionCostSummary({
+      active_sessions: 1,
+      total_cost: 0.05,
+      total_requests: 1,
+      sessions: [
+        {
+          session_id: 'abc',
+          total_cost: 0.05,
+          total_requests: 1,
+          last_request_at: '2026-04-04T10:00:00Z',
+        },
+      ],
+    })
+    expect(model.series[0].name).toBe('abc')
   })
 })
 
