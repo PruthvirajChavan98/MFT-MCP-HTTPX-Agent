@@ -21,6 +21,11 @@ from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("eval_read_api")
 router = APIRouter(dependencies=[Depends(require_admin)])
+# Public sibling router — carries only the chat-widget-facing eval-status
+# endpoint polled by `useEvalStatus` after a chat response (see
+# `features/chat/hooks/useEvalStatus.ts`). Every other endpoint in this file
+# remains admin-gated on `router`.
+public_router = APIRouter()
 _TRACE_STATUS_GRACE_SECONDS = TRACE_STATUS_GRACE_SECONDS
 _SHADOW_WORKER_BACKLOG_SECONDS = SHADOW_WORKER_BACKLOG_SECONDS
 _SHADOW_TIMED_OUT_SECONDS = SHADOW_TIMED_OUT_SECONDS
@@ -353,9 +358,16 @@ async def eval_trace(request: Request, trace_id: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/trace/{trace_id}/eval-status")
+@public_router.get("/trace/{trace_id}/eval-status")
 async def trace_eval_status(request: Request, trace_id: str) -> dict[str, Any]:
-    """Return evaluation status for a trace (polled by frontend after chat response)."""
+    """Return evaluation status for a trace.
+
+    Polled by the chat widget after each assistant response (see
+    `features/chat/hooks/useEvalStatus.ts`). Unauthenticated on purpose —
+    chat sessions have no admin cookie. The trace_id is the 32-hex handle
+    returned in the SSE `done` event, so the caller must already hold it;
+    this endpoint does not enumerate traces.
+    """
     pool = _get_pool(request)
 
     try:
