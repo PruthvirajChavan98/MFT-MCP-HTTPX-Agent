@@ -34,13 +34,18 @@ import {
  */
 function useTargetRects(ids: readonly string[], enabled: boolean): Map<string, DOMRect> {
   const [rects, setRects] = useState<Map<string, DOMRect>>(() => new Map())
+  // Serialize the ids into a primitive so React's dep-comparison fires the
+  // effect whenever the set of targets changes — the spotlight tour swaps
+  // target IDs as the user advances steps, and the previous stable-ref
+  // shortcut caused the effect to stick on the first step's target.
+  const idsKey = ids.join('|')
 
   useEffect(() => {
     if (!enabled) return
 
     const update = () => {
       const next = new Map<string, DOMRect>()
-      for (const id of ids) {
+      for (const id of idsKey.split('|').filter(Boolean)) {
         const el = document.querySelector<HTMLElement>(`[data-highlight-id="${id}"]`)
         if (!el) continue
         next.set(id, el.getBoundingClientRect())
@@ -55,7 +60,7 @@ function useTargetRects(ids: readonly string[], enabled: boolean): Map<string, D
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
     }
-  }, [enabled, ids])
+  }, [enabled, idsKey])
 
   return rects
 }
@@ -186,11 +191,9 @@ function LandingSpotlightTour({
   onClose: () => void
 }) {
   const step = LANDING_SPOTLIGHT_STEPS[stepIndex]
-  // Wrap in an array identity stable across renders so useTargetRects doesn't
-  // rebuild its effect every render of this component.
-  const singletonIds = useRef([step.targetId]).current
-  singletonIds[0] = step.targetId
-  const rects = useTargetRects(singletonIds, isOpen)
+  // useTargetRects serialises ids internally so we can pass a fresh array
+  // each render without rebuilding the effect gratuitously.
+  const rects = useTargetRects([step.targetId], isOpen)
   const targetRect = rects.get(step.targetId) ?? null
 
   if (!isOpen) return null
