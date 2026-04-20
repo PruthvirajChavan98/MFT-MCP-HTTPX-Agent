@@ -134,6 +134,12 @@ describe('NBFCLandingPage', () => {
 
     // The sequential tour should NOT be open yet — attention runs first.
     expect(screen.queryByRole('dialog', { name: /site tour/i })).not.toBeInTheDocument()
+
+    // The "demo page vs. real product" note sits above the dismiss button.
+    const note = screen.getByTestId('landing-attention-note')
+    expect(note).toHaveTextContent(/demo landing page/i)
+    expect(note).toHaveTextContent(/agent/i)
+    expect(note).toHaveTextContent(/admin console/i)
   })
 
   it('dismisses the attention highlight, persists localStorage, and then opens the spotlight', async () => {

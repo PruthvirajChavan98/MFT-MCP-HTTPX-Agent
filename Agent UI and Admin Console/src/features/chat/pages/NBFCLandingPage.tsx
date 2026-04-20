@@ -356,7 +356,22 @@ function LandingAttentionHighlight({
         )
       })}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-16 flex justify-center px-4">
+      <div className="pointer-events-none absolute inset-x-0 bottom-16 flex flex-col items-center gap-3 px-4">
+        <div
+          data-testid="landing-attention-note"
+          className="pointer-events-auto max-w-xl rounded-2xl border border-white/10 bg-slate-950/85 px-5 py-3 text-center shadow-[0_20px_50px_-28px_rgba(34,211,238,0.6)] backdrop-blur-md"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
+            Demo landing page
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-200">
+            This marketing page is scaffolding. The real product is the{' '}
+            <span className="font-semibold text-white">Agent</span> (chat widget) and the{' '}
+            <span className="font-semibold text-white">Admin Console</span> — both highlighted
+            above.
+          </p>
+        </div>
+
         <button
           type="button"
           onClick={onDismiss}
