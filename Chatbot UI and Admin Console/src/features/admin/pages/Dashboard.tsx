@@ -18,6 +18,7 @@ import { Card } from '@components/ui/card'
 import { StatCard } from '@features/admin/components/StatCard'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
 import { buildConversationHref, buildTraceHref } from '@features/admin/lib/admin-links'
+import { isBlockingDecision } from '@features/admin/guardrails/viewmodel'
 import type { EvalTraceSummary } from '@features/admin/types/admin'
 
 // Lazy-load recharts via a page-scoped child. Shaves ~370 KB off the initial
@@ -148,7 +149,9 @@ export function Dashboard() {
   const avgLatency = traces.length
     ? Math.round(traces.reduce((s, t) => s + (t.latency_ms ?? 0), 0) / traces.length)
     : 0
-  const denyCount = guardrails.filter((g) => g.risk_decision === 'deny').length
+  // Backend vocabulary is {block, allow, degraded_allow} — never 'deny'.
+  // Use the shared helper so any future rename stays covered in one place.
+  const denyCount = guardrails.filter((g) => isBlockingDecision(g.risk_decision ?? '')).length
   const totalCost = costs?.total_cost ?? 0
 
   if (error) {
