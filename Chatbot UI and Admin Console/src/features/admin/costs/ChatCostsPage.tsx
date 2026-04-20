@@ -26,7 +26,18 @@ import { ResponsiveGrid } from '@components/ui/responsive-grid'
 import { ResponsiveTable, type Column } from '@components/ui/responsive-table'
 import { Skeleton } from '@components/ui/skeleton'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
-import { mapSessionCostSummary, type CostSessionRow, type CostSeriesPoint } from './viewmodel'
+import {
+  mapCostOverTime,
+  mapSessionCostSummary,
+  type CostOverTimePoint,
+  type CostSessionRow,
+  type CostSeriesPoint,
+} from './viewmodel'
+import {
+  GranularityTabs,
+  usePersistedGranularity,
+} from '@features/admin/components/GranularityTabs'
+import type { Granularity } from '@features/admin/lib/time-bucket'
 import { sessionCostSummaryQueryOptions } from '@features/admin/query/queryOptions'
 
 type CostTooltipDatum = {
@@ -159,6 +170,85 @@ function ChartSection({ series }: { series: CostSeriesPoint[] }) {
   )
 }
 
+function CostOverTimeSection({
+  series,
+  granularity,
+  onGranularityChange,
+}: {
+  series: CostOverTimePoint[]
+  granularity: Granularity
+  onGranularityChange: (g: Granularity) => void
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-6 pb-2 pt-5">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="size-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Cost Over Time</span>
+        </div>
+        <GranularityTabs
+          chartId="cost-over-time"
+          value={granularity}
+          onChange={onGranularityChange}
+          ariaLabel="Cost over time granularity"
+        />
+      </div>
+
+      <div className="p-6">
+        {series.length === 0 ? (
+          <EmptyCostState />
+        ) : (
+          <div className="h-[260px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                accessibilityLayer
+                data={series}
+                margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
+              >
+                <defs>
+                  <linearGradient id="costOverTimeGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                  dy={8}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                  tickFormatter={(value: number) => `$${value.toFixed(4)}`}
+                  domain={[0, 'auto']}
+                  width={70}
+                />
+                <Tooltip
+                  content={(props) => <CostTooltip {...props} />}
+                  cursor={{ stroke: 'var(--border)', strokeWidth: 1 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cost"
+                  stroke="var(--primary)"
+                  strokeWidth={2.5}
+                  fill="url(#costOverTimeGradient)"
+                  dot={{ r: 5, fill: 'var(--primary)', stroke: 'var(--card)', strokeWidth: 2 }}
+                  activeDot={{ r: 7, fill: 'var(--primary)', stroke: 'var(--card)', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const costSessionColumns: Column<CostSessionRow>[] = [
   { key: 'sessionId', label: 'Session ID' },
   { key: 'requests', label: 'Requests' },
@@ -213,6 +303,12 @@ export function ChatCostsPage() {
   const costsQuery = useQuery(sessionCostSummaryQueryOptions())
 
   const model = useMemo(() => mapSessionCostSummary(costsQuery.data), [costsQuery.data])
+
+  const [costGranularity, setCostGranularity] = usePersistedGranularity('cost-over-time')
+  const costOverTime = useMemo(
+    () => mapCostOverTime(costsQuery.data, costGranularity),
+    [costsQuery.data, costGranularity],
+  )
 
   if (costsQuery.error) {
     return (
@@ -282,7 +378,21 @@ export function ChatCostsPage() {
         )}
       </ResponsiveGrid>
 
-      {costsQuery.isLoading ? <Skeleton className="h-[360px] rounded-2xl" /> : <ChartSection series={model.series} />}
+      {costsQuery.isLoading ? (
+        <Skeleton className="h-[360px] rounded-2xl" />
+      ) : (
+        <ChartSection series={model.series} />
+      )}
+
+      {costsQuery.isLoading ? (
+        <Skeleton className="h-[360px] rounded-2xl" />
+      ) : (
+        <CostOverTimeSection
+          series={costOverTime}
+          granularity={costGranularity}
+          onGranularityChange={setCostGranularity}
+        />
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center gap-2 border-b border-border/60 px-6 py-4">

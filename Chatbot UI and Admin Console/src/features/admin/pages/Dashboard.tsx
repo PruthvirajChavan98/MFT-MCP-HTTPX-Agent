@@ -16,6 +16,8 @@ import { ResponsiveTable, type Column } from '@components/ui/responsive-table'
 import { MobileHeader } from '@components/ui/mobile-header'
 import { Card } from '@components/ui/card'
 import { StatCard } from '@features/admin/components/StatCard'
+import { usePersistedGranularity } from '@features/admin/components/GranularityTabs'
+import { trailingBuckets } from '@features/admin/lib/time-bucket'
 import { formatCurrency, formatDateTime } from '@shared/lib/format'
 import { buildConversationHref, buildTraceHref } from '@features/admin/lib/admin-links'
 import type { EvalTraceSummary } from '@features/admin/types/admin'
@@ -125,21 +127,18 @@ export function Dashboard() {
   const loading = tLoading || cLoading || catLoading
   const error = tError || cError
 
-  const activityTrend = useMemo(() => {
-    if (!traces.length) return []
-    const counts: Record<string, number> = {}
-    traces.forEach((t) => {
-      if (!t.started_at) return
-      const date = new Date(t.started_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      })
-      counts[date] = (counts[date] || 0) + 1
-    })
-    return Object.entries(counts)
-      .map(([date, count]) => ({ date, requests: count }))
-      .reverse()
-  }, [traces])
+  const [volumeGranularity, setVolumeGranularity] = usePersistedGranularity('request-volume')
+
+  const activityTrend = useMemo(
+    () =>
+      trailingBuckets(
+        traces,
+        (t) => t.started_at,
+        () => 1,
+        volumeGranularity,
+      ).map((p) => ({ date: p.label, requests: p.value })),
+    [traces, volumeGranularity],
+  )
 
   const successCount = traces.filter((t) => t.status === 'success' || !t.error).length
   const successRate = traces.length
@@ -295,6 +294,8 @@ export function Dashboard() {
             <DashboardCharts
               activityTrend={activityTrend}
               categories={categories}
+              volumeGranularity={volumeGranularity}
+              onVolumeGranularityChange={setVolumeGranularity}
             />
           </Suspense>
         )}

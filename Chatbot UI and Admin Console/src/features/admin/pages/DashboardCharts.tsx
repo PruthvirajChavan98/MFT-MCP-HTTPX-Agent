@@ -10,6 +10,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { GranularityTabs } from '@features/admin/components/GranularityTabs'
+import type { Granularity } from '@features/admin/lib/time-bucket'
 
 export interface ActivityTrendPoint {
   date: string
@@ -25,6 +27,8 @@ export interface CategoryPoint {
 export interface DashboardChartsProps {
   activityTrend: ActivityTrendPoint[]
   categories: CategoryPoint[]
+  volumeGranularity: Granularity
+  onVolumeGranularityChange: (next: Granularity) => void
 }
 
 // Token-bound palette — pulls the four accent hues from :root/.dark via CSS vars.
@@ -43,15 +47,23 @@ const PIE_COLORS = [
  * the parent `Dashboard.tsx` can `lazy()`-load it. Recharts is ~370 KB gz;
  * keeping it out of the initial admin bundle is worth a deferred load here.
  */
-export function DashboardCharts({ activityTrend, categories }: DashboardChartsProps) {
+export function DashboardCharts({
+  activityTrend,
+  categories,
+  volumeGranularity,
+  onVolumeGranularityChange,
+}: DashboardChartsProps) {
   return (
     <>
       <div className="xl:col-span-2 rounded-lg border border-border bg-card p-6 flex flex-col min-h-[360px]">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 gap-3">
           <h3 className="text-sm font-medium tracking-tight">Request Volume</h3>
-          <span className="text-[10px] font-tabular uppercase tracking-[0.2em] text-muted-foreground">
-            trailing window
-          </span>
+          <GranularityTabs
+            chartId="request-volume"
+            value={volumeGranularity}
+            onChange={onVolumeGranularityChange}
+            ariaLabel="Request volume granularity"
+          />
         </div>
         <div className="flex-1 min-h-0">
           <ResponsiveContainer width="100%" height="100%">

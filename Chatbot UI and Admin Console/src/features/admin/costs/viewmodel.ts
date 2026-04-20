@@ -1,4 +1,5 @@
 import { buildConversationHref } from '@features/admin/lib/admin-links'
+import { trailingBuckets, type Granularity } from '@features/admin/lib/time-bucket'
 import type { SessionSummaryRow } from '@features/admin/api/admin'
 
 export type SessionCostSummary = {
@@ -39,6 +40,42 @@ function byCostThenRequestsDesc(a: SessionSummaryRow, b: SessionSummaryRow): num
   const aLast = a.last_request_at || ''
   const bLast = b.last_request_at || ''
   return bLast.localeCompare(aLast)
+}
+
+export type CostOverTimePoint = {
+  /** YYYY-MM-DD bucket key (Monday for week; first-of-month for month). */
+  bucket: string
+  /** Human-facing label (e.g. "Apr 4", "Apr 2026"). */
+  label: string
+  /**
+   * Mirrors ``label`` so the existing ``CostTooltip`` predicate (which
+   * checks for a ``name`` field) picks up the bucket caption without a
+   * second tooltip implementation.
+   */
+  name: string
+  /** Summed cost in USD for the bucket. */
+  cost: number
+}
+
+/**
+ * Re-bucket the same session rows the Cost-by-Session chart uses into a
+ * time-axis series. Uses each session's ``last_request_at`` as the
+ * activity anchor — not perfect for sessions with long tails, but the
+ * truest single-field approximation the current API surface exposes. A
+ * future plan can push ``DATE_TRUNC(hour, cost_events.at)`` server-side
+ * for proper per-event granularity.
+ */
+export function mapCostOverTime(
+  summary: SessionCostSummary | undefined,
+  granularity: Granularity,
+): CostOverTimePoint[] {
+  const rows = summary?.sessions ?? []
+  return trailingBuckets(
+    rows,
+    (s) => s.last_request_at,
+    (s) => s.total_cost,
+    granularity,
+  ).map((p) => ({ bucket: p.bucket, label: p.label, name: p.label, cost: p.value }))
 }
 
 export function mapSessionCostSummary(summary?: SessionCostSummary): CostDashboardViewModel {
