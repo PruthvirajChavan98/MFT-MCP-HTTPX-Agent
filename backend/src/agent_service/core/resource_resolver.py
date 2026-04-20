@@ -17,6 +17,7 @@ from src.agent_service.core.prompts import prompt_manager
 from src.agent_service.core.schemas import AgentRequest
 from src.agent_service.data.config_manager import config_manager
 from src.agent_service.llm.client import get_llm
+from src.agent_service.llm.groq_rotator import next_groq_key
 from src.agent_service.tools.mcp_manager import mcp_manager
 
 log = logging.getLogger(__name__)
@@ -118,7 +119,14 @@ class ResourceResolver:
             # Owner-managed OpenRouter remains available for internal routing/embedding helpers.
             openrouter_key = session_openrouter_key or OPENROUTER_API_KEY
             nvidia_key = session_nvidia_key
-            groq_key = session_groq_key or (GROQ_API_KEYS[0] if GROQ_API_KEYS else None)
+            # When no session BYOK key, fan load across GROQ_API_KEYS atomically
+            # instead of pinning every BYOK-less user to GROQ_API_KEYS[0].
+            if session_groq_key:
+                groq_key = session_groq_key
+            elif GROQ_API_KEYS:
+                groq_key = await next_groq_key(keys=GROQ_API_KEYS)
+            else:
+                groq_key = None
 
             # Get LLM (returns tuple: model, actual_provider)
             llm_result = get_llm(
