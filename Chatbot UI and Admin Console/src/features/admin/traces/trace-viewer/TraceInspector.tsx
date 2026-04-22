@@ -97,7 +97,10 @@ function SystemPromptCard({ text }: { text: string }) {
       <div className="px-4 py-2 border-b border-border">
         <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">System</span>
       </div>
-      <div className="px-4 py-3 text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap font-sans">
+      {/* `break-words` + `[overflow-wrap:anywhere]` so raw HTML-like tokens
+          (e.g. `<span style="color:#03691e">…`) or long URLs wrap inside
+          the card instead of overflowing the right edge. */}
+      <div className="px-4 py-3 text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-sans">
         {text}
       </div>
     </div>
@@ -106,7 +109,11 @@ function SystemPromptCard({ text }: { text: string }) {
 
 function DataCard({ data }: { data: unknown }) {
   if (typeof data === 'string') {
-    return <div className="rounded-xl border border-border bg-card px-4 py-3 text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap font-sans min-h-[80px]">{data}</div>
+    return (
+      <div className="rounded-xl border border-border bg-card px-4 py-3 text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-sans min-h-[80px]">
+        {data}
+      </div>
+    )
   }
   return <div className="rounded-xl border border-border bg-card min-h-[60px] overflow-hidden"><JsonViewer data={data} /></div>
 }
