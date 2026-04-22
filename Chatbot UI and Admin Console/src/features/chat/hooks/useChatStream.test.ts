@@ -156,7 +156,7 @@ describe('useChatStream stream-only contract', () => {
         handlers.onEvent(
           'tool_call',
           JSON.stringify({
-            name: 'mock_fintech_knowledge_base',
+            name: 'search_knowledge_base',
             tool_call_id: 'tool_123',
             output: '{"answer":"Sure"}',
           }),
@@ -175,7 +175,7 @@ describe('useChatStream stream-only contract', () => {
     const assistant = hook.result.current.messages.find((m) => m.role === 'assistant')
     expect(assistant?.toolCalls).toEqual([
       {
-        name: 'mock_fintech_knowledge_base',
+        name: 'search_knowledge_base',
         tool_call_id: 'tool_123',
         output: '{"answer":"Sure"}',
       },
@@ -231,7 +231,7 @@ describe('useChatStream stream-only contract', () => {
         handlers.onEvent(
           'tool_call',
           JSON.stringify({
-            name: 'mock_fintech_knowledge_base',
+            name: 'search_knowledge_base',
             tool_call_id: 'tc_b',
             output: '{"answer":"Yes"}',
           }),
@@ -256,9 +256,9 @@ describe('useChatStream stream-only contract', () => {
       if (url.endsWith('/agent/stream')) {
         handlers.onEvent(
           'tool_call',
-          "{'name':'mock_fintech_knowledge_base','tool_call_id':'tool_legacy','output':'ok'}",
+          "{'name':'search_knowledge_base','tool_call_id':'tool_legacy','output':'ok'}",
           {
-            name: 'mock_fintech_knowledge_base',
+            name: 'search_knowledge_base',
             tool_call_id: 'tool_legacy',
             output: 'ok',
           },
@@ -277,7 +277,7 @@ describe('useChatStream stream-only contract', () => {
     const assistant = hook.result.current.messages.find((m) => m.role === 'assistant')
     expect(assistant?.toolCalls).toEqual([
       {
-        name: 'mock_fintech_knowledge_base',
+        name: 'search_knowledge_base',
         tool_call_id: 'tool_legacy',
         output: 'ok',
       },

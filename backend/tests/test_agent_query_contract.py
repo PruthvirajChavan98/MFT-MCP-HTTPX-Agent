@@ -38,7 +38,7 @@ async def test_query_agent_former_kb_first_question_uses_graph_path(monkeypatch)
             provider="openrouter",
             model_name="dummy-model",
             system_prompt="system",
-            tools=["mock_fintech_knowledge_base"],
+            tools=["search_knowledge_base"],
             model=object(),
             openrouter_api_key="key",
             nvidia_api_key=None,

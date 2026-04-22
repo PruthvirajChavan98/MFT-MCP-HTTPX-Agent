@@ -24,12 +24,11 @@ from src.common.milvus_mgr import milvus_mgr
 
 log = logging.getLogger("nbfc.answerability")
 
-# Either of these satisfies "KB tool available": `search_knowledge_base`
-# is the MCP-side Milvus semantic FAQ search (Phase M1 plan 2026-04-11);
-# `mock_fintech_knowledge_base` is the LangChain-side RAG fallback kept
-# for when MCP is unavailable. prompts.yaml tells the model to prefer the
-# former and fall back to the latter, so the router treats either as KB.
-_KB_TOOL_NAMES: frozenset[str] = frozenset({"mock_fintech_knowledge_base", "search_knowledge_base"})
+# Canonical KB tool name. The previous LangChain-side fallback
+# (`mock_fintech_knowledge_base`) was removed in the Phase-M1 cleanup —
+# MCP is fate-shared with the agent process, so a KB-only fallback was
+# dead code.
+_KB_TOOL_NAME = "search_knowledge_base"
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _KB_HINT_RE = re.compile(
     r"\b(emi|foreclose|foreclosure|part payment|partpay|loan|interest|charges|statement|"
@@ -261,8 +260,8 @@ class QueryAnswerabilityClassifier:
     ) -> dict[str, Any]:
         q = _norm_text(query)
         all_candidates = self._to_candidates(tools, max_tools=self.max_tools)
-        kb_available = any(c.name in _KB_TOOL_NAMES for c in all_candidates)
-        mcp_candidates = [c for c in all_candidates if c.name not in _KB_TOOL_NAMES]
+        kb_available = any(c.name == _KB_TOOL_NAME for c in all_candidates)
+        mcp_candidates = [c for c in all_candidates if c.name != _KB_TOOL_NAME]
         has_any_tools = bool(all_candidates)
 
         # MCP lexical scoring
