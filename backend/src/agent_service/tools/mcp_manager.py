@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Optional
 from langchain_core.tools import StructuredTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
-from pydantic import BaseModel, Field, create_model
+from pydantic import create_model
 
 from src.agent_service.core.config import SERVER_NAME, SERVER_URL
-from src.agent_service.core.session_utils import is_user_authenticated, valid_session_id
+from src.agent_service.core.session_utils import valid_session_id
 from src.agent_service.core.utils import normalize_result
 from src.agent_service.tools.tool_execution_policy import get_tool_execution_policy
 
@@ -20,7 +20,6 @@ PUBLIC_TOOLS = {
     "generate_otp",
     "validate_otp",
     "is_logged_in",
-    "mock_fintech_knowledge_base",  # The FAQ RAG tool
     "search_knowledge_base",  # Semantic FAQ search (MCP-side Milvus, Phase M1 plan 2026-04-11)
 }
 
@@ -120,12 +119,9 @@ class MCPManager:
         """
         sid = valid_session_id(session_id)
 
-        # 1. Async Auth Check (Redis)
-        is_auth = await is_user_authenticated(sid)
-
         tools: List[StructuredTool] = []
 
-        # 2. Iterate Blueprints (Remote MCP Tools)
+        # Iterate Blueprints (Remote MCP Tools)
         if self.tool_blueprints:
             for bp in self.tool_blueprints:
                 tool_name = bp["name"]
@@ -183,38 +179,7 @@ class MCPManager:
                     log.error("Failed to create MCP tool '%s': %s", tool_name, e)
                     continue
 
-        # 3. Add local KB semantic search tool (Milvus) — skip if MCP already provides one
-        mcp_has_kb = any(bp["name"] == "mock_fintech_knowledge_base" for bp in self.tool_blueprints)
-        if not mcp_has_kb and (is_auth or "mock_fintech_knowledge_base" in PUBLIC_TOOLS):
-            try:
-                tools.append(self._build_kb_tool())
-            except Exception as e:
-                log.error("Failed to attach KB tool: %s", e)
-
         return tools
-
-    def _build_kb_tool(self) -> StructuredTool:
-        from src.agent_service.core.prompts import prompt_manager
-        from src.agent_service.features.knowledge_base.milvus_store import kb_milvus_store
-
-        kb_description = prompt_manager.get_template("tools", "kb_search")
-
-        class KBQueryInput(BaseModel):
-            query: str = Field(
-                description="Natural language query to search the fintech FAQ knowledge base."
-            )
-
-        async def mock_fintech_knowledge_base(query: str) -> dict[str, Any]:
-            results = await kb_milvus_store.semantic_search(query, limit=5)
-            return normalize_result(results)
-
-        return StructuredTool.from_function(
-            func=None,
-            coroutine=mock_fintech_knowledge_base,
-            name="mock_fintech_knowledge_base",
-            description=kb_description,
-            args_schema=KBQueryInput,
-        )
 
 
 mcp_manager = MCPManager()

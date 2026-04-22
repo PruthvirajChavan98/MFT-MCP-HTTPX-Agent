@@ -36,7 +36,7 @@ async def test_answerability_mcp_lexical_classification():
     )
     tools = [
         _Tool("validate_otp", "Validate OTP and login state for an active session."),
-        _Tool("mock_fintech_knowledge_base", "Search FAQs database."),
+        _Tool("search_knowledge_base", "Search FAQs database."),
     ]
     out = await classifier.classify("I need OTP validation for login", tools, api_key=None)
     assert out["mcp"]["answerable"] is True
@@ -51,7 +51,7 @@ async def test_answerability_kb_heuristic_without_vector():
         kb_heuristic_threshold=0.35,
         mcp_threshold=0.9,
     )
-    tools = [_Tool("mock_fintech_knowledge_base", "Search FAQs database.")]
+    tools = [_Tool("search_knowledge_base", "Search FAQs database.")]
     out = await classifier.classify(
         "Need EMI statement and foreclosure details", tools, api_key=None
     )

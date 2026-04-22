@@ -27,11 +27,7 @@ DEFAULT_RULES = [
     {
         "name": "StolenVehicleEmiFaq",
         "when": r"(vehicle\s+is\s+stolen|stolen\s+vehicle|stop\s+my\s+emi|emi\s+presentation)",
-        # Either KB tool satisfies the rule: prompts.yaml prefers
-        # `search_knowledge_base` (MCP-side Milvus, post-Phase-M1) and
-        # falls back to `mock_fintech_knowledge_base` (LangChain-side
-        # RAG) when MCP is unavailable. Both are canonical.
-        "require_tool": ["search_knowledge_base", "mock_fintech_knowledge_base"],
+        "require_tool": "search_knowledge_base",
         "answer_pattern": r"(cannot\s*be\s*stopped|emi.*continue|continue\s*paying|credit\s*record|knowledge\s*base\s*error)",
     }
 ]

@@ -19,17 +19,17 @@ describe('parseToLangsmithTree', () => {
         {
           event_type: 'tool_call',
           ts: '2026-04-03T10:00:00.500Z',
-          payload_json: { tool: 'mock_fintech_knowledge_base', input: { query: 'emi' } },
+          payload_json: { tool: 'search_knowledge_base', input: { query: 'emi' } },
         },
         {
           event_type: 'tool_start',
           ts: '2026-04-03T10:00:00.650Z',
-          payload_json: { tool: 'mock_fintech_knowledge_base', input: { query: 'emi' } },
+          payload_json: { tool: 'search_knowledge_base', input: { query: 'emi' } },
         },
         {
           event_type: 'tool_end',
           ts: '2026-04-03T10:00:01.250Z',
-          payload_json: { tool: 'mock_fintech_knowledge_base', output: 'KB answer' },
+          payload_json: { tool: 'search_knowledge_base', output: 'KB answer' },
         },
         { event_type: 'token', ts: '2026-04-03T10:00:01.400Z', text: 'Here is' },
         { event_type: 'token', ts: '2026-04-03T10:00:01.900Z', text: ' your EMI plan.' },
@@ -45,7 +45,7 @@ describe('parseToLangsmithTree', () => {
     expect(nodes.find((node) => node.name === 'ToolParser')).toMatchObject({
       latencyS: '0.15',
     })
-    expect(nodes.find((node) => node.name === 'mock_fintech_knowledge_base')).toMatchObject({
+    expect(nodes.find((node) => node.name === 'search_knowledge_base')).toMatchObject({
       latencyS: '0.60',
     })
     expect(nodes.find((node) => node.name === 'GenerationEngine')).toMatchObject({

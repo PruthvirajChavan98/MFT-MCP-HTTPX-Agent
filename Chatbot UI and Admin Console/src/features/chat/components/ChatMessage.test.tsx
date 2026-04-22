@@ -74,7 +74,7 @@ describe('ChatMessage', () => {
           reasoning: 'model reasoning',
           toolCalls: [
             {
-              name: 'mock_fintech_knowledge_base',
+              name: 'search_knowledge_base',
               tool_call_id: 'tool_123',
               output: '{"answer":"Sure"}',
             },
@@ -91,7 +91,7 @@ describe('ChatMessage', () => {
 
     fireEvent.click(rawToolButton)
 
-    expect(within(bubble).getByText('mock_fintech_knowledge_base')).toBeInTheDocument()
+    expect(within(bubble).getByText('search_knowledge_base')).toBeInTheDocument()
     expect(within(bubble).getByText('tool_123')).toBeInTheDocument()
     expect(within(bubble).getByText(/"answer": "Sure"/)).toBeInTheDocument()
   })

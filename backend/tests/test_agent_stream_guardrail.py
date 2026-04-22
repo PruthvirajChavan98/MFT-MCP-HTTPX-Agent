@@ -98,7 +98,7 @@ async def test_stream_agent_former_kb_first_question_uses_normal_graph_path(monk
             provider="openrouter",
             model_name="dummy-model",
             system_prompt="system",
-            tools=["mock_fintech_knowledge_base"],
+            tools=["search_knowledge_base"],
             model=object(),
             openrouter_api_key="key",
             nvidia_api_key=None,
