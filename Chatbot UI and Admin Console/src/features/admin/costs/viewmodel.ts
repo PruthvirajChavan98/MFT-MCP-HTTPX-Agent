@@ -33,6 +33,18 @@ export type CostDashboardViewModel = {
 
 const SERIES_LIMIT = 12
 
+/**
+ * Compact, stable identifier used as the bar chart tick. First 8 chars of
+ * the session_id with dashes/underscores stripped so every bar cross-
+ * references exactly one row in the Sessions list — replaces the prior
+ * `S1, S2, …` ordinal labels which were unreadable and non-unique across
+ * refreshes.
+ */
+function shortSessionLabel(sessionId: string): string {
+  const trimmed = (sessionId || '').replace(/[-_]/g, '')
+  return trimmed.slice(0, 8) || sessionId || '—'
+}
+
 function byCostThenRequestsDesc(a: SessionSummaryRow, b: SessionSummaryRow): number {
   if (b.total_cost !== a.total_cost) return b.total_cost - a.total_cost
   if (b.total_requests !== a.total_requests) return b.total_requests - a.total_requests
@@ -55,8 +67,8 @@ export function mapSessionCostSummary(summary?: SessionCostSummary): CostDashboa
       lastActive: session.last_request_at,
       conversationHref: buildConversationHref(session.session_id),
     })),
-    series: sessions.slice(0, SERIES_LIMIT).map((session, index) => ({
-      name: `S${index + 1}`,
+    series: sessions.slice(0, SERIES_LIMIT).map((session) => ({
+      name: shortSessionLabel(session.session_id),
       sessionId: session.session_id,
       cost: session.total_cost,
       requests: session.total_requests,
