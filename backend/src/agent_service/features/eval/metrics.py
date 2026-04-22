@@ -27,7 +27,11 @@ DEFAULT_RULES = [
     {
         "name": "StolenVehicleEmiFaq",
         "when": r"(vehicle\s+is\s+stolen|stolen\s+vehicle|stop\s+my\s+emi|emi\s+presentation)",
-        "require_tool": "mock_fintech_knowledge_base",
+        # Either KB tool satisfies the rule: prompts.yaml prefers
+        # `search_knowledge_base` (MCP-side Milvus, post-Phase-M1) and
+        # falls back to `mock_fintech_knowledge_base` (LangChain-side
+        # RAG) when MCP is unavailable. Both are canonical.
+        "require_tool": ["search_knowledge_base", "mock_fintech_knowledge_base"],
         "answer_pattern": r"(cannot\s*be\s*stopped|emi.*continue|continue\s*paying|credit\s*record|knowledge\s*base\s*error)",
     }
 ]
@@ -125,17 +129,32 @@ def compute_non_llm_metrics(
                 log.debug("Rule regex match failed for rule=%s: %s", name, exc)
                 continue
 
-        req_tool = str(r.get("require_tool") or "").strip()
-        if req_tool:
-            has = req_tool in tool_names
+        req_tool_raw = r.get("require_tool")
+        req_tools: List[str] = []
+        if isinstance(req_tool_raw, str):
+            tool = req_tool_raw.strip()
+            if tool:
+                req_tools = [tool]
+        elif isinstance(req_tool_raw, (list, tuple, set)):
+            req_tools = [str(x).strip() for x in req_tool_raw if str(x).strip()]
+
+        if req_tools:
+            matched = next((t for t in req_tools if t in tool_names), None)
+            has = matched is not None
+            label = matched or " | ".join(req_tools)
+            reasoning = (
+                f"Tool {matched} called"
+                if has
+                else f"No required tool called (expected one of: {', '.join(req_tools)})"
+            )
             out.append(
                 _metric(
                     trace_id,
-                    f"ToolMatch({req_tool})",
+                    f"ToolMatch({label})",
                     has,
                     1.0 if has else 0.0,
-                    f"Tool {req_tool} called" if has else "Missing tool call",
-                    meta={"rule": name},
+                    reasoning,
+                    meta={"rule": name, "expected_any_of": req_tools},
                 )
             )
 
