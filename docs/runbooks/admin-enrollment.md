@@ -145,6 +145,6 @@ in the super-admin's browser tab during the modal's lifetime.
 - Backend migration: `backend/infra/sql/03_admin_users.sql`
 - Repo: `backend/src/agent_service/api/admin_users/repo.py`
 - Routes: `backend/src/agent_service/api/admin_users/routes.py`
-- Frontend page: `Chatbot UI and Admin Console/src/features/admin/pages/AdminUsersPage.tsx`
-- Frontend modal: `Chatbot UI and Admin Console/src/features/admin/pages/AdminUsersCreateModal.tsx`
+- Frontend page: `Agent UI and Admin Console/src/features/admin/pages/AdminUsersPage.tsx`
+- Frontend modal: `Agent UI and Admin Console/src/features/admin/pages/AdminUsersCreateModal.tsx`
 - Project-wide admin-auth conventions: `.cursor/rules/admin-auth.mdc`

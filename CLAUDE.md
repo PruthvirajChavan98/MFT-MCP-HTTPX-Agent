@@ -35,7 +35,7 @@ mft-mcp-httpx-agent/
 │   ├── tests/                            # pytest suite, asyncio_mode = "strict"
 │   ├── Makefile                          # Canonical command surface — ALWAYS prefer make targets
 │   └── pyproject.toml                    # uv-managed, Python 3.11+
-├── Chatbot UI and Admin Console/         # React 19 / Vite 8 / TS 5.9 / Tailwind v4 / Vitest v4
+├── Agent UI and Admin Console/         # React 19 / Vite 8 / TS 5.9 / Tailwind v4 / Vitest v4
 │   ├── src/{app,features,shared,components}/
 │   ├── nginx.conf                        # Production edge (L7 DoS defense, SSE-safe proxy)
 │   └── package.json                      # Node >= 22.12
@@ -47,9 +47,9 @@ mft-mcp-httpx-agent/
 └── AGENTS.md                             # Shared operating philosophy (read it)
 ```
 
-**Path gotcha:** `Chatbot UI and Admin Console/` contains spaces. Always quote it in shell:
+**Path gotcha:** `Agent UI and Admin Console/` contains spaces. Always quote it in shell:
 ```bash
-cd "Chatbot UI and Admin Console"
+cd "Agent UI and Admin Console"
 ```
 
 ---
@@ -68,7 +68,7 @@ make format            # black + isort + ruff --fix
 make quality           # format-check + lint (CI gate)
 ```
 
-### Frontend (from `"Chatbot UI and Admin Console"/`)
+### Frontend (from `"Agent UI and Admin Console"/`)
 
 ```bash
 npm install
@@ -124,7 +124,7 @@ PYTHONWARNINGS='error::DeprecationWarning,error::PendingDeprecationWarning' \
     uv run python -m pytest tests/ -v                            # deprecation gate (make test-deprecation)
 ```
 
-### Frontend (from `"Chatbot UI and Admin Console"/`)
+### Frontend (from `"Agent UI and Admin Console"/`)
 
 ```bash
 npm run typecheck                          # tsc --noEmit
@@ -182,7 +182,7 @@ Backend LangGraph checkpointer is the **source of truth**. Frontend `localStorag
 - Routes are lazy-loaded from `src/app/routes.ts`.
 - UI uses shadcn/ui + Radix primitives + Tailwind v4 + TanStack Query v5 + React Router v7.
 
-### Nginx edge (`Chatbot UI and Admin Console/nginx.conf`)
+### Nginx edge (`Agent UI and Admin Console/nginx.conf`)
 - Layer-7 DoS defense via `limit_req_zone` / `limit_conn_zone` with NAT-safe thresholds.
 - SSE-safe proxy for `/api/agent/stream`: `proxy_buffering off`, streaming-friendly timeouts. **`/api/agent/stream` must stay above the generic `/api/` location block.**
 - **Do not** move business/tenant quotas to Nginx — those stay in FastAPI `RateLimiterManager`.
@@ -233,7 +233,7 @@ A large drop in either count during your changes is a red flag — investigate b
 - Project conventions → [`.cursor/rules/*.mdc`](./.cursor/rules) (all apply to Claude too)
 - Monorepo boot instructions → [`README.md`](./README.md)
 - Backend targets → [`backend/Makefile`](./backend/Makefile)
-- Frontend scripts → [`Chatbot UI and Admin Console/package.json`](./Chatbot%20UI%20and%20Admin%20Console/package.json)
+- Frontend scripts → [`Agent UI and Admin Console/package.json`](./Agent%20UI%20and%20Admin%20Console/package.json)
 
 ---
 

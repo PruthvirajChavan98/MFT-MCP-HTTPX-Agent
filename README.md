@@ -1,7 +1,7 @@
 # Monorepo Layout
 
 - `backend/`: Python/FastAPI/MCP backend project.
-- `Chatbot UI and Admin Console/`: React 19 + Vite frontend (prod build).
+- `Agent UI and Admin Console/`: React 19 + Vite frontend (prod build).
 - `compose.yaml`: Single compose file. All services run without profiles — there is one deployed environment (prod).
 - `.env`: Base env vars — source of truth; shared by local and prod.
 - `.env.local`: Local-dev-only overrides.
@@ -21,12 +21,12 @@ make deploy-prod       # rebuild + force-recreate prod
 
 ## Frontend
 
-The production frontend lives in `Chatbot UI and Admin Console/`. It is built by the `frontend-prod` service (profile: prod).
+The production frontend lives in `Agent UI and Admin Console/`. It is built by the `frontend-prod` service (profile: prod).
 
 For local frontend development, run directly from the UI directory:
 
 ```bash
-cd "Chatbot UI and Admin Console"
+cd "Agent UI and Admin Console"
 npm install
 npm run dev
 ```

@@ -182,7 +182,7 @@ services:
 
   frontend-prod:
     build:
-      context: "./Chatbot UI and Admin Console"
+      context: "./Agent UI and Admin Console"
       dockerfile: Dockerfile.prod
     image: mft_frontend_prod:latest
     container_name: mft_frontend_prod

@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: Chatbot UI and Admin Console
+        working-directory: Agent UI and Admin Console
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: '22.22.2'
           cache: 'npm'
-          cache-dependency-path: Chatbot UI and Admin Console/package-lock.json
+          cache-dependency-path: Agent UI and Admin Console/package-lock.json
 
       - name: Install dependencies
         run: npm ci

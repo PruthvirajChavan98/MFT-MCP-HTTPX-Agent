@@ -1,6 +1,6 @@
 # Testing Standards
 
-> Applies to `backend/tests/**/*.py` and `Chatbot UI and Admin Console/src/**/*.test.*`.
+> Applies to `backend/tests/**/*.py` and `Agent UI and Admin Console/src/**/*.test.*`.
 
 ## Backend Testing (Pytest)
 
@@ -63,7 +63,7 @@ Tests cover: admin guardrails, agent query contract, stream events, stream guard
 
 ### Execution
 ```bash
-# From "Chatbot UI and Admin Console/"
+# From "Agent UI and Admin Console/"
 npm run test       # → vitest run
 ```
 

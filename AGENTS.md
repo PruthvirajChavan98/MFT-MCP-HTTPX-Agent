@@ -357,7 +357,7 @@ uv run mypy --explicit-package-bases --follow-imports=skip --ignore-missing-impo
 ruff check .
 uv run python -m pytest tests/ -v
 
-# Frontend (run from "Chatbot UI and Admin Console/")
+# Frontend (run from "Agent UI and Admin Console/")
 npm run typecheck
 npm run build
 npm run test

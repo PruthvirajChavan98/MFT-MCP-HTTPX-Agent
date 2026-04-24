@@ -1,12 +1,12 @@
 ---
-description: Chatbot UI and Admin Console Nginx edge standards
-globs: "Chatbot UI and Admin Console/nginx.conf"
+description: Agent UI and Admin Console Nginx edge standards
+globs: "Agent UI and Admin Console/nginx.conf"
 alwaysApply: false
 ---
 
 # Frontend Admin Console Nginx Standards
 
-This rule governs edge behavior for `Chatbot UI and Admin Console/nginx.conf`.
+This rule governs edge behavior for `Agent UI and Admin Console/nginx.conf`.
 Changes here are production-impacting and must follow enterprise ingress controls.
 
 ## Required Edge Controls

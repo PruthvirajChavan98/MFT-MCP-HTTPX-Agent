@@ -20,7 +20,7 @@
 │       ├── mcp_service/            # FastMCP server — FinTech tools via SSE on port 8050
 │       └── common/                 # Shared utilities and data structures
 │   └── tests/                      # Pytest suite (16 test modules)
-├── Chatbot UI and Admin Console/   # Vite 7 + React 19 + TypeScript frontend
+├── Agent UI and Admin Console/   # Vite 7 + React 19 + TypeScript frontend
 │   └── src/
 │       ├── app/components/         # Chat widget, admin console, trace viewer
 │       ├── hooks/                  # Custom React hooks

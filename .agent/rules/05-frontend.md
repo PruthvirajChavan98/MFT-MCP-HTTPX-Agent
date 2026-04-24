@@ -1,6 +1,6 @@
 # Frontend Standards — Chatbot UI & Admin Console
 
-> Applies to `Chatbot UI and Admin Console/src/**`.
+> Applies to `Agent UI and Admin Console/src/**`.
 
 ## Tech Stack
 

@@ -25,6 +25,19 @@ Chatbot UI and Admin Console/playwright-report/
 Chatbot UI and Admin Console/blob-report/
 Chatbot UI and Admin Console/.playwright/
 
+# Renamed from "Chatbot UI and Admin Console" — same rules, new path.
+Agent UI and Admin Console/node_modules/
+Agent UI and Admin Console/.vite/
+Agent UI and Admin Console/dist/
+Agent UI and Admin Console/dist-ssr/
+Agent UI and Admin Console/.ruff_cache/
+Agent UI and Admin Console/build.log
+Agent UI and Admin Console/.env
+Agent UI and Admin Console/test-results/
+Agent UI and Admin Console/playwright-report/
+Agent UI and Admin Console/blob-report/
+Agent UI and Admin Console/.playwright/
+
 STALE_OLD_UI/node_modules/
 STALE_OLD_UI/.vite/
 STALE_OLD_UI/dist/
@@ -52,3 +65,5 @@ Reference UI/
 .claude/settings.local.json
 cloudflared/credentials.json
 neo4j_data/
+
+.dumperignore
