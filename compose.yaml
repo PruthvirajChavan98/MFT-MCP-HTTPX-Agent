@@ -203,6 +203,7 @@ services:
     cpus: 0.50
     networks:
       - mft_net
+      - databases   # reach crm_api directly instead of hairpinning through Cloudflare
 
   shadow_judge_worker:
     build:
