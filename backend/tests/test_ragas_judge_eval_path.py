@@ -57,6 +57,30 @@ async def test_evaluate_returns_three_results_when_all_metrics_pass() -> None:
 
 
 @pytest.mark.asyncio
+async def test_evaluate_empty_contexts_emits_only_answer_relevancy() -> None:
+    """Tool-less traces must still produce ≥1 RAGAS row (answer_relevancy).
+
+    Faithfulness and ContextRelevance are skipped — they require non-empty
+    retrieved_contexts and would either raise or score zero on empty input,
+    which previously dropped the entire RAGAS row set for tool-less traces.
+    """
+    judge = _bare_judge()
+    judge._answer_rel = _FakeMetric(0.85)
+    # Construct context-dependent metrics so we can assert they were never called.
+    judge._faithfulness = _FakeMetric(0.8)
+    judge._context_rel = _FakeMetric(0.6)
+
+    results = await judge.evaluate("q", "a", [], "trace-no-tools")
+
+    assert len(results) == 1
+    assert results[0]["metric_name"] == "answer_relevancy"
+    assert results[0]["passed"] is True
+    # Critically: faithfulness/context_relevance must NOT have been invoked.
+    assert judge._faithfulness.calls == 0
+    assert judge._context_rel.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_evaluate_per_metric_timeout_does_not_stall_others(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -173,22 +173,31 @@ class RagasJudge:
         short = self.model_name.split("/", 1)[-1] if "/" in self.model_name else self.model_name
         evaluator_id = f"ragas:{short}"
 
+        # `answer_relevancy` is the only metric that scores meaningfully without
+        # retrieved contexts. `faithfulness` and `context_relevance` need
+        # tool-call outputs and would raise / score 0 on an empty list — gate
+        # them so tool-less traces still produce ≥1 RAGAS row instead of zero.
         metric_coros: list[tuple[str, Any]] = [
-            (
-                "faithfulness",
-                self._faithfulness.ascore(
-                    user_input=question, response=answer, retrieved_contexts=ctxs
-                ),
-            ),
             (
                 "answer_relevancy",
                 self._answer_rel.ascore(user_input=question, response=answer),
             ),
-            (
-                "context_relevance",
-                self._context_rel.ascore(user_input=question, retrieved_contexts=ctxs),
-            ),
         ]
+        if ctxs:
+            metric_coros.append(
+                (
+                    "faithfulness",
+                    self._faithfulness.ascore(
+                        user_input=question, response=answer, retrieved_contexts=ctxs
+                    ),
+                )
+            )
+            metric_coros.append(
+                (
+                    "context_relevance",
+                    self._context_rel.ascore(user_input=question, retrieved_contexts=ctxs),
+                )
+            )
 
         async def _scored(name: str, coro: Any) -> tuple[str, float | BaseException]:
             try:
