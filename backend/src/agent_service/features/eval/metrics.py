@@ -1,18 +1,26 @@
-"""LLM-based metric computation for shadow evaluation.
+"""LLM-graded evaluation + minimal transport sanity metrics.
 
-The eval system is **pure LLM-graded**:
+The evaluation surface is overwhelmingly LLM-graded:
 - RAGAS (`compute_llm_metrics` here) writes ``answer_relevancy`` for every trace
   with non-empty ``final_output``; ``faithfulness`` and ``context_relevance``
   additionally fire when the trace has retrieved contexts.
 - Shadow-judge (separate worker) writes ``Helpfulness`` / ``Faithfulness`` /
-  ``PolicyAdherence`` and mirrors them into ``eval_results`` so the
-  Evaluation panel surfaces all judges in a single place.
+  ``PolicyAdherence`` and mirrors them into ``eval_results``.
 
-There are NO regex rules, NO category-specific assertions, NO threshold
-checks. Hardcoded category rules were removed because they yielded silent
-zero-coverage for any question the operator hadn't pre-anticipated. If a
-domain-specific deterministic check is ever needed, add it as a separate
-named metric — do **not** reintroduce the rule-loop.
+Two **transport sanity** metrics — ``StreamOk`` and ``AnswerNonEmpty`` — also
+emit for every trace via ``compute_non_llm_metrics``. They are deliberately
+NOT evaluations of agent quality; they answer "did the request complete and
+return text?" If they fail, the LLM judges' scores are unreliable, so
+operators see them surfaced alongside the judges as a context floor.
+
+What we still don't do:
+- NO regex category rules.
+- NO ``require_tool`` / ``answer_pattern`` assertions.
+- NO threshold checks (latency budgets, token caps, etc.).
+
+Domain-specific deterministic checks should be added as **named** universal
+metrics in ``compute_non_llm_metrics`` — do NOT reintroduce a rule-loop or
+``DEFAULT_RULES`` config.
 """
 
 from __future__ import annotations
@@ -55,23 +63,52 @@ def _metric(
 
 
 # ---------------------------------------------------------------------------
-# Non-LLM metrics — intentionally empty
+# Transport sanity metrics — universal, deterministic, always-emit
 # ---------------------------------------------------------------------------
 def compute_non_llm_metrics(
     trace: Dict[str, Any],
     events: Sequence[Dict[str, Any]],
     tool_names: Set[str],
 ) -> List[Dict[str, Any]]:
-    """Returns ``[]``. Kept as a stable callable for upstream `_commit_bundle`.
+    """Emit two universal sanity metrics: ``StreamOk`` and ``AnswerNonEmpty``.
 
-    Earlier revisions emitted ``AnswerNonEmpty`` / ``StreamOk`` plus
-    regex-rule-driven ``ToolMatch`` and ``NormalizedRegexMatch`` rows. Those
-    were transport invariants and category-coupled checks respectively —
-    neither is a real evaluation. All evaluation now flows through
-    ``compute_llm_metrics`` (RAGAS) and the shadow-judge worker.
+    These are **not** quality evaluations — they're transport floors that tell
+    operators whether the LLM judges' scores can be trusted. A trace where
+    ``StreamOk`` fails almost certainly has noise downstream; a trace where
+    ``AnswerNonEmpty`` fails has nothing for the judges to grade.
+
+    The previous regex-rule-driven ``ToolMatch`` / ``NormalizedRegexMatch``
+    metrics were removed in PR #18 — they yielded silent zero-coverage for
+    95% of questions and have not been reintroduced.
     """
-    _ = trace, events, tool_names
-    return []
+    _ = events, tool_names
+    trace_id = str(trace.get("trace_id"))
+    final_output = trace.get("final_output") or ""
+    out: List[Dict[str, Any]] = []
+
+    ok_out = bool(str(final_output).strip())
+    out.append(
+        _metric(
+            trace_id,
+            "AnswerNonEmpty",
+            ok_out,
+            1.0 if ok_out else 0.0,
+            "final_output is non-empty" if ok_out else "final_output empty",
+        )
+    )
+
+    ok_status = (trace.get("status") == "success") and not trace.get("error")
+    out.append(
+        _metric(
+            trace_id,
+            "StreamOk",
+            ok_status,
+            1.0 if ok_status else 0.0,
+            "status=success" if ok_status else f"error={trace.get('error')}",
+        )
+    )
+
+    return out
 
 
 # ---------------------------------------------------------------------------
