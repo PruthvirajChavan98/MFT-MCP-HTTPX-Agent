@@ -37,6 +37,27 @@ INSERT INTO shadow_judge_evals (
 ON CONFLICT (eval_id) DO NOTHING
 """
 
+# Mirror shadow-judge scores into eval_results so the trace-detail
+# Evaluation panel surfaces them alongside RAGAS metrics. Deterministic
+# eval_id keying (`shadow:<trace>:<metric>`) makes re-runs idempotent.
+_INSERT_EVAL_RESULTS_MIRROR = """
+INSERT INTO eval_results (
+    eval_id, trace_id, metric_name, score, passed,
+    reasoning, evaluator_id, meta_json, evidence_json
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
+ON CONFLICT (eval_id) DO NOTHING
+"""
+
+# Pass threshold mirrors the shadow-judge convention (≥0.7 = pass)
+_SHADOW_JUDGE_PASS_THRESHOLD = 0.7
+
+# Metric-name (column-key) projection. Order is stable for tests.
+_SHADOW_JUDGE_METRICS: tuple[tuple[str, str], ...] = (
+    ("Helpfulness", "helpfulness"),
+    ("Faithfulness", "faithfulness"),
+    ("PolicyAdherence", "policy_adherence"),
+)
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -226,6 +247,52 @@ class ShadowJudgeWorker:
             for r in rows
         ]
         await self._pool.executemany(_INSERT_SHADOW_JUDGE_EVAL, params)
+        await self._mirror_into_eval_results(rows)
+
+    async def _mirror_into_eval_results(self, rows: list[dict[str, Any]]) -> None:
+        """Project shadow-judge scores into ``eval_results`` so the trace-detail
+        Evaluation panel surfaces them alongside RAGAS metrics. Mirror
+        failures are logged but do not fail the worker batch — the canonical
+        ``shadow_judge_evals`` write has already succeeded by the time we
+        reach this method.
+        """
+        if not rows or self._pool is None:
+            return
+
+        params: list[tuple[Any, ...]] = []
+        for r in rows:
+            trace_id = r.get("trace_id")
+            if not trace_id:
+                continue
+            model = r.get("model") or "gpt-oss-120b"
+            evaluator_id = f"shadow_judge:{model}"
+            summary = r.get("summary") or ""
+            for metric_name, key in _SHADOW_JUDGE_METRICS:
+                score = float(r.get(key, 0.0) or 0.0)
+                params.append(
+                    (
+                        f"shadow:{trace_id}:{key}",
+                        trace_id,
+                        metric_name,
+                        score,
+                        score >= _SHADOW_JUDGE_PASS_THRESHOLD,
+                        summary,
+                        evaluator_id,
+                        "{}",
+                        "[]",
+                    )
+                )
+
+        if not params:
+            return
+        try:
+            await self._pool.executemany(_INSERT_EVAL_RESULTS_MIRROR, params)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "[shadow_judge] eval_results mirror write failed (rows=%d): %s",
+                len(params),
+                exc,
+            )
 
     async def process_once(self) -> int:
         if not SHADOW_JUDGE_ENABLED:

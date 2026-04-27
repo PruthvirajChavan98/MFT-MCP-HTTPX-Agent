@@ -1,60 +1,37 @@
-"""Rule-based and LLM-based metric computation for shadow evaluation."""
+"""LLM-based metric computation for shadow evaluation.
+
+The eval system is **pure LLM-graded**:
+- RAGAS (`compute_llm_metrics` here) writes ``answer_relevancy`` for every trace
+  with non-empty ``final_output``; ``faithfulness`` and ``context_relevance``
+  additionally fire when the trace has retrieved contexts.
+- Shadow-judge (separate worker) writes ``Helpfulness`` / ``Faithfulness`` /
+  ``PolicyAdherence`` and mirrors them into ``eval_results`` so the
+  Evaluation panel surfaces all judges in a single place.
+
+There are NO regex rules, NO category-specific assertions, NO threshold
+checks. Hardcoded category rules were removed because they yielded silent
+zero-coverage for any question the operator hadn't pre-anticipated. If a
+domain-specific deterministic check is ever needed, add it as a separate
+named metric — do **not** reintroduce the rule-loop.
+"""
 
 from __future__ import annotations
 
-import json
 import logging
-import os
-import re
 import uuid
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 from src.agent_service.core.config import ENABLE_LLM_JUDGE, JUDGE_MODEL_NAME
 from src.agent_service.eval_store.ragas_judge import RagasJudge
 
-from .collector import ShadowEvalCollector, _strip_html
+from .collector import ShadowEvalCollector
 
 log = logging.getLogger("shadow_eval")
-
-# ---------------------------------------------------------------------------
-# Config (env) — judge and rules
-# ---------------------------------------------------------------------------
-JUDGE_REASONING_EFFORT = os.getenv("JUDGE_REASONING_EFFORT", "low")
-
-RULES_JSON = (os.getenv("SHADOW_EVAL_RULES_JSON") or "").strip()
-
-DEFAULT_RULES = [
-    {
-        "name": "StolenVehicleEmiFaq",
-        "when": r"(vehicle\s+is\s+stolen|stolen\s+vehicle|stop\s+my\s+emi|emi\s+presentation)",
-        "require_tool": "search_knowledge_base",
-        "answer_pattern": r"(cannot\s*be\s*stopped|emi.*continue|continue\s*paying|credit\s*record|knowledge\s*base\s*error)",
-    }
-]
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-def _normalize_text(s: str) -> str:
-    s = _strip_html(s or "")
-    s = s.lower()
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-def _load_rules() -> List[dict]:
-    if not RULES_JSON:
-        return DEFAULT_RULES
-    try:
-        obj = json.loads(RULES_JSON)
-        if isinstance(obj, list) and obj:
-            return [x for x in obj if isinstance(x, dict)]
-    except Exception as exc:
-        log.debug("Failed to parse SHADOW_EVAL_RULES_JSON, using defaults: %s", exc)
-    return DEFAULT_RULES
-
-
 def _metric(
     trace_id: str,
     metric_name: str,
@@ -78,100 +55,23 @@ def _metric(
 
 
 # ---------------------------------------------------------------------------
-# Non-LLM (rule-based) metrics
+# Non-LLM metrics — intentionally empty
 # ---------------------------------------------------------------------------
 def compute_non_llm_metrics(
     trace: Dict[str, Any],
     events: Sequence[Dict[str, Any]],
     tool_names: Set[str],
 ) -> List[Dict[str, Any]]:
-    trace_id = str(trace.get("trace_id"))
-    question = str((trace.get("inputs") or {}).get("question") or "")
-    final_output = trace.get("final_output") or ""
-    norm_out = _normalize_text(str(final_output))
-    out: List[Dict[str, Any]] = []
+    """Returns ``[]``. Kept as a stable callable for upstream `_commit_bundle`.
 
-    ok_out = bool(str(final_output).strip())
-    out.append(
-        _metric(
-            trace_id,
-            "AnswerNonEmpty",
-            ok_out,
-            1.0 if ok_out else 0.0,
-            "final_output is non-empty" if ok_out else "final_output empty",
-        )
-    )
-
-    ok_status = (trace.get("status") == "success") and not trace.get("error")
-    out.append(
-        _metric(
-            trace_id,
-            "StreamOk",
-            ok_status,
-            1.0 if ok_status else 0.0,
-            "status=success" if ok_status else f"error={trace.get('error')}",
-        )
-    )
-
-    rules = _load_rules()
-    for r in rules:
-        name = str(r.get("name") or "rule")
-        when = r.get("when")
-        if when:
-            try:
-                if not re.search(when, question, flags=re.I):
-                    continue
-            except Exception as exc:
-                log.debug("Rule regex match failed for rule=%s: %s", name, exc)
-                continue
-
-        req_tool_raw = r.get("require_tool")
-        req_tools: List[str] = []
-        if isinstance(req_tool_raw, str):
-            tool = req_tool_raw.strip()
-            if tool:
-                req_tools = [tool]
-        elif isinstance(req_tool_raw, (list, tuple, set)):
-            req_tools = [str(x).strip() for x in req_tool_raw if str(x).strip()]
-
-        if req_tools:
-            matched = next((t for t in req_tools if t in tool_names), None)
-            has = matched is not None
-            label = matched or " | ".join(req_tools)
-            reasoning = (
-                f"Tool {matched} called"
-                if has
-                else f"No required tool called (expected one of: {', '.join(req_tools)})"
-            )
-            out.append(
-                _metric(
-                    trace_id,
-                    f"ToolMatch({label})",
-                    has,
-                    1.0 if has else 0.0,
-                    reasoning,
-                    meta={"rule": name, "expected_any_of": req_tools},
-                )
-            )
-
-        pat = r.get("answer_pattern")
-        if pat:
-            try:
-                m = re.search(pat, norm_out, flags=re.I)
-                ok = m is not None
-                out.append(
-                    _metric(
-                        trace_id,
-                        "NormalizedRegexMatch",
-                        ok,
-                        1.0 if ok else 0.0,
-                        f"Matched pattern '{pat}'" if ok else "Failed pattern",
-                        meta={"rule": name},
-                    )
-                )
-            except Exception as e:
-                out.append(_metric(trace_id, "RegexError", False, 0.0, str(e)))
-    return out
+    Earlier revisions emitted ``AnswerNonEmpty`` / ``StreamOk`` plus
+    regex-rule-driven ``ToolMatch`` and ``NormalizedRegexMatch`` rows. Those
+    were transport invariants and category-coupled checks respectively —
+    neither is a real evaluation. All evaluation now flows through
+    ``compute_llm_metrics`` (RAGAS) and the shadow-judge worker.
+    """
+    _ = trace, events, tool_names
+    return []
 
 
 # ---------------------------------------------------------------------------
