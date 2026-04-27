@@ -25,12 +25,12 @@ import asyncio
 import json
 import logging
 import os
+from types import SimpleNamespace
 from typing import Any
 
 import asyncpg
 
 from src.agent_service.eval_store.pg_store import EvalPgStore
-from src.agent_service.features.eval.collector import ShadowEvalCollector
 from src.agent_service.features.eval.metrics import compute_llm_metrics
 
 log = logging.getLogger("backfill_ragas_metrics")
@@ -80,11 +80,14 @@ async def _reconstruct_trace(pool: asyncpg.Pool, trace_id: str) -> dict[str, Any
     }
 
 
-async def _reconstruct_collector(pool: asyncpg.Pool, trace_id: str) -> ShadowEvalCollector:
-    """Build a collector populated only with the contexts needed by RAGAS.
+async def _reconstruct_collector(pool: asyncpg.Pool, trace_id: str) -> SimpleNamespace:
+    """Return a minimal collector-shaped object exposing ``retrieved_context``.
 
-    Mirrors `ShadowEvalCollector.on_tool_end` formatting so the RAGAS
-    judge sees inputs identical to what it would see at request time.
+    `compute_llm_metrics` only reads ``collector.retrieved_context``; building
+    a full ``ShadowEvalCollector`` (a dataclass with many required fields)
+    isn't worth the ceremony for a backfill. The contexts are reconstructed
+    from `eval_events.tool_end` payloads using the same
+    ``Tool <{tool}> Output: {output}`` formatting the live collector emits.
     """
     rows = await pool.fetch(
         """
@@ -95,7 +98,7 @@ async def _reconstruct_collector(pool: asyncpg.Pool, trace_id: str) -> ShadowEva
         """,
         trace_id,
     )
-    collector = ShadowEvalCollector(trace_id=trace_id)
+    contexts: list[str] = []
     for r in rows:
         payload = r["payload_json"]
         if isinstance(payload, str):
@@ -109,8 +112,8 @@ async def _reconstruct_collector(pool: asyncpg.Pool, trace_id: str) -> ShadowEva
         if output is None:
             continue
         out_str = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False)
-        collector.retrieved_context.append(f"Tool <{tool}> Output: {out_str}")
-    return collector
+        contexts.append(f"Tool <{tool}> Output: {out_str}")
+    return SimpleNamespace(retrieved_context=contexts)
 
 
 async def main() -> None:
