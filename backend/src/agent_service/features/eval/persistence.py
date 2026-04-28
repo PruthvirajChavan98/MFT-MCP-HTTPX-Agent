@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
+from src.agent_service.eval_store._bg import schedule
 from src.agent_service.eval_store.embedder import EvalEmbedder
 from src.agent_service.eval_store.pg_store import EvalPgStore, get_shared_pool
 
@@ -48,3 +49,12 @@ async def _commit_bundle(
         await STORE.upsert_events(pool, trace["trace_id"], events)
     if evals:
         await STORE.upsert_evals(pool, trace["trace_id"], evals)
+
+    # Schedule trace embedding unconditionally — previously the embed only
+    # fired when shadow_eval produced evals (5% sample rate by default, so
+    # ~95% of traces ended up orphaned in Postgres without a Milvus row).
+    # The embedder short-circuits on doc_hash match, so a duplicate call
+    # from the inline eval path is a no-op.
+    embedder = get_eval_embedder()
+    if embedder.enabled:
+        schedule(embedder.embed_trace_if_needed(pool, trace, events or []))

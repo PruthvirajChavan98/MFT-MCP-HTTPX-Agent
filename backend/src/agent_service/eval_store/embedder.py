@@ -112,16 +112,20 @@ class EvalEmbedder:
             log.debug("[eval_embedder] Trace %s already embedded (hash match)", trace_id)
             return
 
+        # Milvus varchar fields cannot be None — a NULL case_id or session_id
+        # surfaces as `varchar field 'xxx' is illegal … [expected=need string
+        # array][actual=got nil]`. Coerce every metadata value to a non-None
+        # string. `or ""` handles both "key missing" and "key present but None".
         try:
             milvus_doc = Document(
                 page_content=doc2,
                 metadata={
                     "trace_id": trace_id,
-                    "provider": trace.get("provider", ""),
-                    "model": trace.get("model", ""),
-                    "status": trace.get("status", ""),
-                    "session_id": trace.get("session_id", ""),
-                    "case_id": trace.get("case_id", ""),
+                    "provider": str(trace.get("provider") or ""),
+                    "model": str(trace.get("model") or ""),
+                    "status": str(trace.get("status") or ""),
+                    "session_id": str(trace.get("session_id") or ""),
+                    "case_id": str(trace.get("case_id") or ""),
                 },
             )
             await milvus_mgr.eval_traces.aadd_documents(  # type: ignore[union-attr]

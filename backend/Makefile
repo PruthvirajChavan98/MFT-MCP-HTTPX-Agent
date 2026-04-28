@@ -1,5 +1,5 @@
 .PHONY: \
-	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard \
+	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard rebuild-eval-results-collection backfill-trace-embeddings \
 	docker-build docker-up docker-down docker-logs docker-restart deploy deploy-prod prod-up prod-down \
 	local-validate prod-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
@@ -107,6 +107,12 @@ test-deprecation:
 # from the embedder's metadata shape (see docstring of the script).
 rebuild-eval-results-collection:
 	uv run python -m scripts.rebuild_eval_results_collection
+
+# One-shot: embed every eval_traces row that's missing its Milvus doc.
+# Needed once per environment after `_commit_bundle` started embedding
+# unconditionally (prior behaviour only embedded 5%-sampled rows).
+backfill-trace-embeddings:
+	uv run python -m scripts.backfill_trace_embeddings
 
 verify-deprecation: test-deprecation
 	@echo "Deprecation verification passed"

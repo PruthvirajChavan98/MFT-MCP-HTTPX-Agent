@@ -12,16 +12,35 @@ export function SemanticSearchUI() {
     const [query, setQuery] = useState('');
     const [activeQuery, setActiveQuery] = useState('');
 
-    const { data, isLoading, error } = useQuery({
+    // `staleTime: 0` + `gcTime: 0` defeat the default 5-minute TanStack
+    // cache for this explicit-action surface. The operator pressing
+    // "Search Vectors" is asking the backend to re-run the similarity
+    // search, so we want every submit to fetch afresh — not a stale
+    // copy from the in-memory cache.
+    const vectorSearch = useQuery({
         queryKey: ['vector-search', activeQuery],
         queryFn: () => fetchVectorSearch({ kind: 'trace', text: activeQuery, k: 5 }),
         enabled: activeQuery.length > 2,
+        staleTime: 0,
+        gcTime: 0,
     });
+    const { data, error, isFetching } = vectorSearch;
+    // Render the skeleton whenever a fetch is in flight (initial load OR
+    // a refetch triggered by a same-text click). The previous `isLoading`
+    // only covered the first-hit case.
+    const isLoading = isFetching;
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        if (query.trim()) {
-            setActiveQuery(query.trim());
+        const trimmed = query.trim();
+        if (!trimmed) return;
+        if (trimmed === activeQuery) {
+            // Same text as before — the queryKey wouldn't change so
+            // TanStack would serve the cached result. Force a refetch so
+            // the operator sees the backend's latest answer.
+            vectorSearch.refetch();
+        } else {
+            setActiveQuery(trimmed);
         }
     };
 
