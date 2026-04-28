@@ -60,7 +60,7 @@ export const FEATURES = [
   {
     icon: '🔒',
     title: 'Bank-Grade Security',
-    desc: '256-bit encryption and RBI-compliant data handling keeps your information safe.',
+    desc: '256-bit encryption data handling keeps your information safe.',
   },
   {
     icon: '📱',
@@ -106,4 +106,19 @@ export const LANDING_SPOTLIGHT_STEPS = [
     description:
       'Open the assistant at any time to ask about rates, eligibility, repayment plans, or your application.',
   },
+] as const
+
+/**
+ * One-shot attention showcase shown on the first landing visit BEFORE the
+ * sequential spotlight tour. All four targets highlight simultaneously under
+ * a dim backdrop so the visitor sees every key CTA at once. Dismissed once,
+ * persisted forever (same pattern as the spotlight).
+ */
+export const LANDING_ATTENTION_STORAGE_KEY = 'mft_landing_attention_dismissed_v1'
+
+export const LANDING_ATTENTION_TARGETS = [
+  { id: 'landing-admin-btn', label: 'Admin' },
+  { id: 'landing-register-btn', label: 'Register' },
+  { id: 'landing-architecture-btn', label: 'Architecture' },
+  { id: 'landing-chat-launcher', label: 'Chat assistant' },
 ] as const

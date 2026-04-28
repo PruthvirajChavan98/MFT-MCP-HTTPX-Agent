@@ -12,11 +12,58 @@ import { ChatWidget } from '../components/ChatWidget'
 import { RegisterDialog } from '../components/RegisterDialog'
 import {
   FEATURES,
+  LANDING_ATTENTION_STORAGE_KEY,
+  LANDING_ATTENTION_TARGETS,
   LANDING_SPOTLIGHT_STEPS,
   LANDING_SPOTLIGHT_STORAGE_KEY,
   LOAN_PRODUCTS,
   STATS,
 } from './landing-data'
+
+/**
+ * Poll the bounding rects of multiple `data-highlight-id` targets.
+ *
+ * Shared by `LandingSpotlightTour` (single-target) and
+ * `LandingAttentionHighlight` (multi-target). Re-measures on mount, window
+ * resize, and scroll so layout changes (disclaimer dismissing, font loading,
+ * mobile orientation change) keep cut-outs aligned with their targets.
+ *
+ * Returns a Map keyed by `data-highlight-id`; entries are omitted when the
+ * DOM element is missing or the rect is empty (off-screen / `display:none`),
+ * so callers can safely iterate without a null-check.
+ */
+function useTargetRects(ids: readonly string[], enabled: boolean): Map<string, DOMRect> {
+  const [rects, setRects] = useState<Map<string, DOMRect>>(() => new Map())
+  // Serialize the ids into a primitive so React's dep-comparison fires the
+  // effect whenever the set of targets changes — the spotlight tour swaps
+  // target IDs as the user advances steps, and the previous stable-ref
+  // shortcut caused the effect to stick on the first step's target.
+  const idsKey = ids.join('|')
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const update = () => {
+      const next = new Map<string, DOMRect>()
+      for (const id of idsKey.split('|').filter(Boolean)) {
+        const el = document.querySelector<HTMLElement>(`[data-highlight-id="${id}"]`)
+        if (!el) continue
+        next.set(id, el.getBoundingClientRect())
+      }
+      setRects(next)
+    }
+
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [enabled, idsKey])
+
+  return rects
+}
 
 const CTA_GEOMETRY =
   'inline-flex min-h-12 items-center justify-center rounded-full px-6 text-sm font-semibold tracking-tight transition-all duration-200'
@@ -143,26 +190,11 @@ function LandingSpotlightTour({
   onNext: () => void
   onClose: () => void
 }) {
-  const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
   const step = LANDING_SPOTLIGHT_STEPS[stepIndex]
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    const updateRect = () => {
-      const target = document.querySelector<HTMLElement>(`[data-highlight-id="${step.targetId}"]`)
-      setTargetRect(target?.getBoundingClientRect() ?? null)
-    }
-
-    updateRect()
-    window.addEventListener('resize', updateRect)
-    window.addEventListener('scroll', updateRect, true)
-
-    return () => {
-      window.removeEventListener('resize', updateRect)
-      window.removeEventListener('scroll', updateRect, true)
-    }
-  }, [isOpen, step.targetId])
+  // useTargetRects serialises ids internally so we can pass a fresh array
+  // each render without rebuilding the effect gratuitously.
+  const rects = useTargetRects([step.targetId], isOpen)
+  const targetRect = rects.get(step.targetId) ?? null
 
   if (!isOpen) return null
 
@@ -258,6 +290,105 @@ function LandingSpotlightTour({
   )
 }
 
+const LANDING_ATTENTION_TARGET_IDS = LANDING_ATTENTION_TARGETS.map((t) => t.id)
+
+/**
+ * First-visit attention showcase. Dims the rest of the page with a soft
+ * backdrop and highlights all four key CTAs simultaneously (Admin, Register,
+ * Architecture, Chat launcher), letting a visitor see every key flow at
+ * once without stepping through a sequential tour.
+ *
+ * Dismisses via a "Got it" button OR by clicking any highlighted target
+ * (the click forwards through to the underlying element, so the overlay
+ * doubles as a navigation affordance). Persists the dismissal under
+ * ``LANDING_ATTENTION_STORAGE_KEY`` — once dismissed, never shown again
+ * on the same browser profile.
+ */
+function LandingAttentionHighlight({
+  isOpen,
+  onDismiss,
+}: {
+  isOpen: boolean
+  onDismiss: () => void
+}) {
+  const rects = useTargetRects(LANDING_ATTENTION_TARGET_IDS, isOpen)
+
+  if (!isOpen) return null
+
+  const forwardClickTo = (id: string) => {
+    const el = document.querySelector<HTMLElement>(`[data-highlight-id="${id}"]`)
+    onDismiss()
+    // Fire the underlying click after dismiss so the navigation uses the
+    // post-dismiss state (overlay removed, no z-index blocking). queueMicrotask
+    // is enough — React commit finishes before the microtask drains.
+    if (el) queueMicrotask(() => el.click())
+  }
+
+  return (
+    <div
+      aria-label="Landing highlights"
+      aria-modal="true"
+      className="fixed inset-0 z-[75]"
+      role="dialog"
+      data-testid="landing-attention-highlight"
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px]"
+        onClick={onDismiss}
+      />
+
+      {LANDING_ATTENTION_TARGETS.map((target) => {
+        const rect = rects.get(target.id)
+        if (!rect) return null
+        return (
+          <button
+            key={target.id}
+            type="button"
+            aria-label={`Go to ${target.label}`}
+            data-testid={`landing-attention-cutout-${target.id}`}
+            className="absolute cursor-pointer rounded-[28px] border-2 border-cyan-300/80 shadow-[0_0_0_4px_rgba(34,211,238,0.18)] transition-all duration-200 hover:border-cyan-200 hover:shadow-[0_0_0_6px_rgba(34,211,238,0.28)]"
+            style={{
+              top: Math.max(6, rect.top - 8),
+              left: Math.max(6, rect.left - 8),
+              width: rect.width + 16,
+              height: rect.height + 16,
+            }}
+            onClick={() => forwardClickTo(target.id)}
+          />
+        )
+      })}
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-16 flex flex-col items-center gap-3 px-4">
+        <div
+          data-testid="landing-attention-note"
+          className="pointer-events-auto max-w-xl rounded-2xl border border-white/10 bg-slate-950/85 px-5 py-3 text-center shadow-[0_20px_50px_-28px_rgba(34,211,238,0.6)] backdrop-blur-md"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
+            Demo landing page
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-200">
+            This marketing page is scaffolding. The real product is the{' '}
+            <span className="font-semibold text-white">Agent</span> (chat widget) and the{' '}
+            <span className="font-semibold text-white">Admin Console</span> — both highlighted
+            above.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onDismiss}
+          data-testid="landing-attention-dismiss"
+          className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-slate-950/90 px-5 text-sm font-semibold text-slate-100 shadow-[0_20px_50px_-28px_rgba(34,211,238,0.7)] backdrop-blur-md transition-colors hover:bg-slate-900/95 hover:text-white"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
+          Got it — show me around
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export function NBFCLandingPage() {
@@ -268,12 +399,29 @@ export function NBFCLandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false)
   const [spotlightStepIndex, setSpotlightStepIndex] = useState(0)
+  const [isAttentionOpen, setIsAttentionOpen] = useState(false)
 
   useEffect(() => {
+    // Attention highlight shows FIRST (one-shot, simultaneous). The sequential
+    // spotlight tour only fires AFTER attention is dismissed so the two
+    // overlays don't stack on the same visit.
+    const maybeOpenAttention = () => {
+      try {
+        const disclaimerAccepted = window.localStorage.getItem(DISCLAIMER_ACCEPTED_KEY) === 'true'
+        if (!disclaimerAccepted) return
+        if (window.localStorage.getItem(LANDING_ATTENTION_STORAGE_KEY) === 'true') return
+        setIsAttentionOpen(true)
+      } catch {
+        // localStorage unavailable -- skip the overlay entirely.
+      }
+    }
+
     const maybeOpenSpotlight = () => {
       try {
         const disclaimerAccepted = window.localStorage.getItem(DISCLAIMER_ACCEPTED_KEY) === 'true'
         if (!disclaimerAccepted) return
+        // Hold the spotlight until the attention highlight has been seen.
+        if (window.localStorage.getItem(LANDING_ATTENTION_STORAGE_KEY) !== 'true') return
         if (window.localStorage.getItem(LANDING_SPOTLIGHT_STORAGE_KEY) !== 'true') {
           setIsSpotlightOpen(true)
         }
@@ -282,13 +430,35 @@ export function NBFCLandingPage() {
       }
     }
 
+    const maybeOpenAny = () => {
+      maybeOpenAttention()
+      maybeOpenSpotlight()
+    }
+
     // If the disclaimer was already accepted on a previous visit, open immediately.
-    maybeOpenSpotlight()
+    maybeOpenAny()
 
     // If the disclaimer is dismissed during this session, open after it closes.
-    window.addEventListener(DISCLAIMER_ACCEPTED_EVENT, maybeOpenSpotlight)
-    return () => window.removeEventListener(DISCLAIMER_ACCEPTED_EVENT, maybeOpenSpotlight)
+    window.addEventListener(DISCLAIMER_ACCEPTED_EVENT, maybeOpenAny)
+    return () => window.removeEventListener(DISCLAIMER_ACCEPTED_EVENT, maybeOpenAny)
   }, [])
+
+  const closeAttention = () => {
+    setIsAttentionOpen(false)
+    try {
+      window.localStorage.setItem(LANDING_ATTENTION_STORAGE_KEY, 'true')
+    } catch {
+      // localStorage can be unavailable in restricted environments.
+    }
+    // Chain into the spotlight tour if the visitor hasn't seen it yet.
+    try {
+      if (window.localStorage.getItem(LANDING_SPOTLIGHT_STORAGE_KEY) !== 'true') {
+        setIsSpotlightOpen(true)
+      }
+    } catch {
+      // localStorage unavailable -- skip the chained tour.
+    }
+  }
 
   const closeSpotlight = () => {
     setIsSpotlightOpen(false)
@@ -341,6 +511,7 @@ export function NBFCLandingPage() {
               <HoverCardTrigger asChild>
                 <Link
                   to="/admin"
+                  data-highlight-id="landing-admin-btn"
                   className={`hidden md:inline-flex ${CTA_GEOMETRY} min-w-[8.75rem] border border-orange-400/35 bg-orange-500/10 text-orange-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-orange-300/60 hover:bg-orange-400/20 hover:text-orange-100`}
                 >
                   Admin
@@ -374,6 +545,7 @@ export function NBFCLandingPage() {
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setRegisterOpen(true)}
+                  data-highlight-id="landing-register-btn"
                   className={`hidden md:inline-flex ${CTA_SECONDARY}`}
                 >
                   Register
@@ -391,7 +563,11 @@ export function NBFCLandingPage() {
                 </p>
               </HoverCardContent>
             </HoverCard>
-            <Link to="/architecture" className={`hidden md:inline-flex ${CTA_PRIMARY}`}>
+            <Link
+              to="/architecture"
+              data-highlight-id="landing-architecture-btn"
+              className={`hidden md:inline-flex ${CTA_PRIMARY}`}
+            >
               View Architecture
             </Link>
           </div>
@@ -637,6 +813,8 @@ export function NBFCLandingPage() {
 
       {/* ── Registration dialog ── */}
       <RegisterDialog open={registerOpen} onOpenChange={setRegisterOpen} />
+
+      <LandingAttentionHighlight isOpen={isAttentionOpen} onDismiss={closeAttention} />
 
       <LandingSpotlightTour
         isOpen={isSpotlightOpen}
