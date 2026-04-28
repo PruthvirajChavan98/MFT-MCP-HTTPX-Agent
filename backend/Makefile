@@ -102,6 +102,12 @@ test:
 test-deprecation:
 	PYTHONWARNINGS='error::DeprecationWarning,error::PendingDeprecationWarning' uv run python -m pytest tests/ -v
 
+# One-shot Milvus rebuild for the eval_results_emb collection. Only
+# needed once per environment when the collection's field schema drifts
+# from the embedder's metadata shape (see docstring of the script).
+rebuild-eval-results-collection:
+	uv run python -m scripts.rebuild_eval_results_collection
+
 verify-deprecation: test-deprecation
 	@echo "Deprecation verification passed"
 

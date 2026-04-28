@@ -587,11 +587,17 @@ async def eval_vector_search(
     if not hits:
         return {"kind": req.kind, "k": req.k, "min_score": req.min_score, "items": []}
 
-    # Batch-fetch full PG metadata
-    ids = [
-        doc.metadata.get("trace_id" if req.kind == "trace" else "eval_id", "") for doc, _ in hits
-    ]
-    ids = [i for i in ids if i]
+    # Batch-fetch full PG metadata. Fall back to the Milvus document id
+    # (``doc.id`` or the "pk" metadata field some langchain adapters
+    # surface) when the expected metadata key is missing — this keeps the
+    # endpoint working if a collection's schema drifts again in the future
+    # before a rebuild is run.
+    id_key = "trace_id" if req.kind == "trace" else "eval_id"
+    ids = []
+    for doc, _score in hits:
+        raw = doc.metadata.get(id_key) or doc.metadata.get("pk") or getattr(doc, "id", None) or ""
+        if raw:
+            ids.append(str(raw))
 
     try:
         if req.kind == "trace":
@@ -622,8 +628,12 @@ async def eval_vector_search(
     out = []
     for doc, score in hits:
         meta = doc.metadata
-        id_key = "trace_id" if req.kind == "trace" else "eval_id"
-        node_id = meta.get(id_key, "")
+        # Mirror the id-resolution used for the PG fetch above so the
+        # per-row merge still keys into pg_meta even when the metadata
+        # field is absent.
+        node_id = str(
+            meta.get(id_key) or meta.get("pk") or getattr(doc, "id", None) or "",
+        )
         pg = pg_meta.get(node_id, {})
 
         inputs = _json_load_maybe(pg.get("inputs_json"))
