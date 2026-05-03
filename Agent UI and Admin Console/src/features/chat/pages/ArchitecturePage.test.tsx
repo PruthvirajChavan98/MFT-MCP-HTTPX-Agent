@@ -92,4 +92,14 @@ describe('ArchitecturePage', () => {
     fireEvent.click(buttons[0])
     expect(writeText).toHaveBeenCalledTimes(1)
   })
+
+  it('folds consecutive token frames into one timeline beat in the lifecycle section', () => {
+    renderPage()
+    const lifecycle = document.getElementById('lifecycle')
+    expect(lifecycle).not.toBeNull()
+    // Walkthrough A has 4 consecutive token frames; the timeline must collapse
+    // them into a single beat carrying a `×4` count indicator.
+    const folded = within(lifecycle as HTMLElement).getByText('×4')
+    expect(folded).toBeInTheDocument()
+  })
 })

@@ -2,8 +2,13 @@ import { DiagramFallback } from './DiagramFallback'
 
 /**
  * Topology — 11-service compose stack laid out as four horizontal bands
- * (edge → frontend → app → data/workers/observability). Hand-tuned positions;
- * every node carries the real logo from public/icons.
+ * (edge → frontend → app + observability → data + workers). Hand-tuned
+ * positions; every node carries the real logo from public/icons.
+ *
+ * Geometry note: every node is 140 px wide so its label fits without clipping.
+ * `shadow_judge_worker` (19 chars) gets 180 px. The right-column observability
+ * trio sits inside the App-Plane band; alertmanager drops one row below
+ * prometheus/grafana to keep the band height under 720 px.
  */
 export function TopologyDiagram() {
   return (
@@ -69,8 +74,8 @@ export function TopologyDiagram() {
           {[
             { y: 60, label: 'EDGE' },
             { y: 200, label: 'FRONTEND' },
-            { y: 360, label: 'APP PLANE' },
-            { y: 540, label: 'DATA + WORKERS + OBSERVABILITY' },
+            { y: 360, label: 'APP PLANE  +  OBSERVABILITY' },
+            { y: 540, label: 'DATA + WORKERS' },
           ].map(({ y, label }) => (
             <g key={label}>
               <line x1="40" y1={y} x2="180" y2={y} stroke="#1e293b" strokeWidth="1" />
@@ -88,7 +93,7 @@ export function TopologyDiagram() {
           ))}
 
           {/* ── Edge: Cloudflare ── */}
-          <Node x={550} y={30} w={100} h={64} icon="cloudflare.svg" label="cloudflared-prod" subtext="tunnel" tone="cyan" />
+          <Node x={530} y={30} w={140} h={64} icon="cloudflare.svg" label="cloudflared-prod" subtext="tunnel" tone="cyan" />
 
           {/* Edge → Frontend */}
           <line x1="600" y1="94" x2="600" y2="160" stroke="#22d3ee" strokeWidth="1.5" markerEnd="url(#topo-arrow)" />
@@ -103,16 +108,18 @@ export function TopologyDiagram() {
           </text>
 
           {/* ── Frontend ── */}
-          <Node x={550} y={160} w={100} h={64} icon="nginx-svgrepo-com.svg" label="frontend-prod" subtext="nginx :80" tone="indigo" />
+          <Node x={530} y={160} w={140} h={64} icon="nginx-svgrepo-com.svg" label="frontend-prod" subtext="nginx :80" tone="indigo" />
 
           {/* Frontend → app plane */}
           <line x1="600" y1="224" x2="450" y2="320" stroke="#22d3ee" strokeWidth="1.5" markerEnd="url(#topo-arrow)" />
           <line x1="600" y1="224" x2="750" y2="320" stroke="#22d3ee" strokeWidth="1.5" markerEnd="url(#topo-arrow)" />
 
-          {/* ── App plane: agent + mcp ── */}
-          <rect x="60" y="290" width="1080" height="160" rx="12" fill="url(#topo-band)" opacity="0.5" />
-          <Node x={400} y={320} w={100} h={64} icon="FastAPI.svg" label="agent" subtext=":8000  uvicorn" tone="cyan" />
-          <Node x={700} y={320} w={100} h={64} icon="mcp.webp" label="mcp" subtext=":8050  FastMCP SSE" tone="emerald" />
+          {/* ── App plane band tint ── */}
+          <rect x="60" y="290" width="1080" height="180" rx="12" fill="url(#topo-band)" opacity="0.45" />
+
+          {/* App plane: agent + mcp */}
+          <Node x={380} y={320} w={140} h={64} icon="FastAPI.svg" label="agent" subtext=":8000  uvicorn" tone="cyan" />
+          <Node x={680} y={320} w={140} h={64} icon="mcp.webp" label="mcp" subtext=":8050  FastMCP SSE" tone="emerald" />
 
           {/* Inner plane label */}
           <text
@@ -128,13 +135,13 @@ export function TopologyDiagram() {
           </text>
 
           {/* agent ⇄ mcp */}
-          <line x1="500" y1="352" x2="700" y2="352" stroke="#34d399" strokeWidth="1.2" strokeDasharray="3 3" />
+          <line x1="520" y1="352" x2="680" y2="352" stroke="#34d399" strokeWidth="1.2" strokeDasharray="3 3" />
           <text x="600" y="346" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#94a3b8">
             tools.ainvoke()
           </text>
 
           {/* agent → outbound CRM (dashed) */}
-          <line x1="450" y1="320" x2="200" y2="240" stroke="#22d3ee" strokeWidth="1.2" strokeDasharray="4 4" />
+          <line x1="380" y1="320" x2="200" y2="240" stroke="#22d3ee" strokeWidth="1.2" strokeDasharray="4 4" />
           <text x="180" y="232" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#22d3ee">
             external CRM ↗
           </text>
@@ -143,57 +150,59 @@ export function TopologyDiagram() {
           </text>
 
           {/* App → data plane */}
-          <line x1="450" y1="384" x2="280" y2="510" stroke="#818cf8" strokeWidth="1.5" markerEnd="url(#topo-arrow-indigo)" />
-          <line x1="450" y1="384" x2="450" y2="510" stroke="#818cf8" strokeWidth="1.5" markerEnd="url(#topo-arrow-indigo)" />
-          <line x1="450" y1="384" x2="620" y2="510" stroke="#818cf8" strokeWidth="1.5" markerEnd="url(#topo-arrow-indigo)" />
+          <line x1="450" y1="384" x2="265" y2="510" stroke="#818cf8" strokeWidth="1.5" markerEnd="url(#topo-arrow-indigo)" />
+          <line x1="450" y1="384" x2="405" y2="510" stroke="#818cf8" strokeWidth="1.5" markerEnd="url(#topo-arrow-indigo)" />
+          <line x1="450" y1="384" x2="540" y2="510" stroke="#818cf8" strokeWidth="1.5" markerEnd="url(#topo-arrow-indigo)" />
 
-          <line x1="750" y1="384" x2="450" y2="510" stroke="#818cf8" strokeWidth="1.2" markerEnd="url(#topo-arrow-indigo)" opacity="0.5" />
-          <line x1="750" y1="384" x2="620" y2="510" stroke="#818cf8" strokeWidth="1.2" markerEnd="url(#topo-arrow-indigo)" opacity="0.5" />
+          <line x1="750" y1="384" x2="405" y2="510" stroke="#818cf8" strokeWidth="1.2" markerEnd="url(#topo-arrow-indigo)" opacity="0.5" />
+          <line x1="750" y1="384" x2="540" y2="510" stroke="#818cf8" strokeWidth="1.2" markerEnd="url(#topo-arrow-indigo)" opacity="0.5" />
 
-          {/* ── Data plane ── */}
-          <Node x={230} y={510} w={100} h={64} icon="postgresql-logo-svgrepo-com.svg" label="postgres" subtext=":5432" tone="indigo" />
-          <Node x={400} y={510} w={100} h={64} icon="Redis.svg" label="redis" subtext=":6379" tone="emerald" />
-          <Node x={570} y={510} w={100} h={64} icon="milvus.png" label="milvus" subtext="vector store" tone="indigo" />
+          {/* ── Right column: Observability ── */}
+          <Node x={920} y={310} w={130} h={56} icon="prometheus.svg" label="prometheus" subtext=":9090" tone="amber" />
+          <Node x={1060} y={310} w={130} h={56} icon="grafana.svg" label="grafana" subtext=":3000" tone="amber" />
+          <Node x={990} y={400} w={140} h={56} icon="prometheus.svg" label="alertmanager" subtext=":9093" tone="rose" />
 
-          {/* ── Workers ── */}
-          <Node x={770} y={510} w={120} h={64} icon="langgraph.svg" label="shadow_judge_worker" subtext="trace eval" tone="emerald" />
-
-          {/* shadow_judge -> postgres + redis (consumes queue, mirrors results) */}
-          <line x1="830" y1="574" x2="450" y2="574" stroke="#34d399" strokeWidth="1" strokeDasharray="2 3" markerEnd="url(#topo-arrow-emerald)" />
-          <line x1="830" y1="574" x2="280" y2="574" stroke="#34d399" strokeWidth="1" strokeDasharray="2 3" markerEnd="url(#topo-arrow-emerald)" />
-
-          {/* ── Observability — right column ── */}
-          <Node x={940} y={320} w={90} h={56} icon="prometheus.svg" label="prometheus" subtext=":9090" tone="amber" />
-          <Node x={1040} y={320} w={90} h={56} icon="grafana.svg" label="grafana" subtext=":3000" tone="amber" />
-          <Node x={990} y={420} w={90} h={56} icon="prometheus.svg" label="alertmanager" subtext=":9093" tone="rose" />
-
-          {/* agent → prometheus */}
-          <line x1="500" y1="338" x2="940" y2="345" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 3" />
-          <text x="940" y="338" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#94a3b8" textAnchor="end">
-            /metrics
+          {/* agent → prometheus (scrape) */}
+          <line x1="520" y1="338" x2="920" y2="338" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 3" />
+          <text x="912" y="332" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#94a3b8">
+            scrape /metrics
           </text>
-          <line x1="985" y1="346" x2="1040" y2="346" stroke="#fbbf24" strokeWidth="1" />
-          <line x1="985" y1="346" x2="1035" y2="430" stroke="#f87171" strokeWidth="1" />
 
-          {/* db-migrate as init-container glyph */}
-          <rect x="60" y="510" width="120" height="64" rx="8" fill="#0c1322" stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
-          <text x="120" y="535" textAnchor="middle" fontFamily="IBM Plex Sans, sans-serif" fontSize="12" fontWeight="600" fill="#cbd5e1">
+          {/* prometheus → grafana */}
+          <line x1="1050" y1="338" x2="1060" y2="338" stroke="#fbbf24" strokeWidth="1.2" markerEnd="url(#topo-arrow)" />
+
+          {/* prometheus → alertmanager */}
+          <line x1="985" y1="366" x2="1040" y2="400" stroke="#f87171" strokeWidth="1" />
+
+          {/* ── Data + workers row ── */}
+          {/* db-migrate (init container glyph — dashed, no logo) */}
+          <rect x="60" y="510" width="140" height="64" rx="8" fill="#0c1322" stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="130" y="535" textAnchor="middle" fontFamily="IBM Plex Sans, sans-serif" fontSize="13" fontWeight="600" fill="#cbd5e1">
             db-migrate
           </text>
-          <text x="120" y="552" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#64748b">
+          <text x="130" y="552" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#64748b">
             init container
           </text>
-          <text x="120" y="566" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#64748b">
+          <text x="130" y="566" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#64748b">
             postgres:18.3
           </text>
-          <line x1="180" y1="540" x2="230" y2="540" stroke="#818cf8" strokeWidth="1" markerEnd="url(#topo-arrow-indigo)" />
+          <line x1="200" y1="540" x2="220" y2="540" stroke="#818cf8" strokeWidth="1" markerEnd="url(#topo-arrow-indigo)" />
+
+          <Node x={220} y={510} w={130} h={64} icon="postgresql-logo-svgrepo-com.svg" label="postgres" subtext=":5432" tone="indigo" />
+          <Node x={370} y={510} w={120} h={64} icon="Redis.svg" label="redis" subtext=":6379" tone="emerald" />
+          <Node x={510} y={510} w={130} h={64} icon="milvus.png" label="milvus" subtext="vector store" tone="indigo" />
+          <Node x={660} y={510} w={180} h={64} icon="langgraph.svg" label="shadow_judge_worker" subtext="trace eval" tone="emerald" />
+
+          {/* shadow_judge → postgres + redis (consumes queue, mirrors results) */}
+          <line x1="740" y1="574" x2="430" y2="574" stroke="#34d399" strokeWidth="1" strokeDasharray="2 3" markerEnd="url(#topo-arrow-emerald)" />
+          <line x1="740" y1="574" x2="285" y2="574" stroke="#34d399" strokeWidth="1" strokeDasharray="2 3" markerEnd="url(#topo-arrow-emerald)" />
 
           {/* geoip glyph */}
-          <rect x="900" y="510" width="120" height="64" rx="8" fill="#0c1322" stroke="#1e293b" strokeWidth="1" />
-          <text x="960" y="535" textAnchor="middle" fontFamily="IBM Plex Sans, sans-serif" fontSize="12" fontWeight="600" fill="#cbd5e1">
+          <rect x="860" y="510" width="140" height="64" rx="8" fill="#0c1322" stroke="#1e293b" strokeWidth="1" />
+          <text x="930" y="535" textAnchor="middle" fontFamily="IBM Plex Sans, sans-serif" fontSize="13" fontWeight="600" fill="#cbd5e1">
             geoip_updater
           </text>
-          <text x="960" y="552" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#64748b">
+          <text x="930" y="552" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="#64748b">
             daily refresh
           </text>
 
@@ -218,10 +227,11 @@ export function TopologyDiagram() {
         Edge: cloudflared-prod (Cloudflare tunnel). Frontend: frontend-prod nginx :80, routes
         /api/agent/stream and the React bundle. App plane: agent (FastAPI :8000) and mcp (FastMCP
         :8050) — separate processes, no shared connection pools. agent calls mcp via tools.ainvoke
-        and reaches the external CRM via outbound HTTPS. Data plane: postgres, redis, milvus.
-        Workers: shadow_judge_worker (consumes trace queue), geoip_updater (daily). db-migrate is
-        an init container that bootstraps schema. Observability: prometheus scrapes /metrics,
-        grafana renders dashboards, alertmanager handles routing. Networks: mft_net + databases.
+        and reaches the external CRM via outbound HTTPS. Observability: prometheus scrapes /metrics
+        from the agent, grafana queries prometheus, alertmanager handles routing rules. Data plane:
+        postgres, redis, milvus. Workers: shadow_judge_worker (consumes trace queue),
+        geoip_updater (daily). db-migrate is an init container that bootstraps schema. Networks:
+        mft_net + databases.
       </DiagramFallback>
     </div>
   )
@@ -248,6 +258,9 @@ interface NodeProps {
 
 function Node({ x, y, w, h, icon, label, subtext, tone }: NodeProps) {
   const stroke = TONE_STROKE[tone]
+  const labelX = x + 44
+  const labelY = h <= 56 ? y + 22 : y + 26
+  const subY = h <= 56 ? y + 38 : y + 44
   return (
     <g>
       <rect
@@ -258,22 +271,22 @@ function Node({ x, y, w, h, icon, label, subtext, tone }: NodeProps) {
         rx="10"
         fill="#0c1322"
         stroke={stroke}
-        strokeOpacity="0.4"
+        strokeOpacity="0.45"
         strokeWidth="1"
       />
       <image
         href={`/icons/${icon}`}
-        x={x + 8}
-        y={y + 12}
-        width="20"
-        height="20"
+        x={x + 12}
+        y={y + (h - 24) / 2}
+        width="24"
+        height="24"
         preserveAspectRatio="xMidYMid meet"
       />
       <text
-        x={x + 36}
-        y={y + 24}
+        x={labelX}
+        y={labelY}
         fontFamily="IBM Plex Sans, sans-serif"
-        fontSize="12"
+        fontSize="13"
         fontWeight="600"
         fill="#f1f5f9"
       >
@@ -281,8 +294,8 @@ function Node({ x, y, w, h, icon, label, subtext, tone }: NodeProps) {
       </text>
       {subtext && (
         <text
-          x={x + 36}
-          y={y + 40}
+          x={labelX}
+          y={subY}
           fontFamily="JetBrains Mono, monospace"
           fontSize="10"
           fill="#94a3b8"
