@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { SSEFrame } from './SSEFrame'
+import { SSETimeline } from './SSETimeline'
 import type { SSEEvent } from './data/sseFrames'
 
 interface WalkthroughProps {
@@ -47,7 +47,12 @@ export function Walkthrough({
           </p>
           <p className="font-mono text-[13px] text-slate-200">"{prompt}"</p>
         </div>
-        <SSEFrame caption={`${title} · transcript`} frames={frames} highlightEvent={highlightEvent} />
+        <SSETimeline
+          caption={`${title} · timeline`}
+          frames={frames}
+          highlightEvent={highlightEvent}
+          accent={variant === 'block' ? 'rose' : 'cyan'}
+        />
         <div className="flex items-start gap-3 rounded-md border border-slate-800 bg-slate-950/40 px-4 py-3 text-[13px] text-slate-300">
           <span className="mt-1 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
           <p className="leading-relaxed">{outcome}</p>

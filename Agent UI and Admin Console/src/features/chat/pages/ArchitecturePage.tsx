@@ -17,9 +17,10 @@ import {
   CRMSwimlane,
   CodeBlock,
   COMPOSE_SERVICES,
+  GuardComparison,
   LangGraphDiagram,
   ObservabilityDiagram,
-  SSEFrame,
+  SSETimeline,
   SectionHeader,
   SequenceDiagram,
   TOOL_COUNT,
@@ -262,7 +263,7 @@ function LifecycleSection() {
     >
       <SequenceDiagram />
       <div className="mt-8">
-        <SSEFrame
+        <SSETimeline
           caption="prod transcript · session 019de474-…"
           frames={WALKTHROUGH_A}
           highlightEvent="tool_call"
@@ -306,20 +307,12 @@ if not inline_guard_decision.allow and inline_guard_decision.decision == "block"
         </SectionHeader>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div>
-          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-emerald-300">
-            HAPPY PATH · pass
-          </p>
-          <SSEFrame caption="natural login phrasing" frames={WALKTHROUGH_A} highlightEvent="tool_call" />
-        </div>
-        <div>
-          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-rose-300">
-            BLOCKED · decision=block
-          </p>
-          <SSEFrame caption="literal command-style prompt" frames={WALKTHROUGH_B} highlightEvent="error" />
-        </div>
-      </div>
+      <GuardComparison
+        happyFrames={WALKTHROUGH_A}
+        blockedFrames={WALKTHROUGH_B}
+        happyHighlight="tool_call"
+        blockedHighlight="error"
+      />
       <div className="mt-8">
         <CodeBlock language="python" caption="blocked-path generator" code={blockedSnippet} />
       </div>
