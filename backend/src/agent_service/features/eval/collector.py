@@ -256,6 +256,27 @@ class ShadowEvalCollector:
         if self._inline_guard_decision:
             meta["inline_guard"] = self._inline_guard_decision
 
+        # Denormalise inline_guard fields onto the top-level trace dict so
+        # every persist path (`persist_runtime_trace` and the deferred
+        # `_commit_bundle` from `maybe_shadow_eval_commit`) writes the
+        # canonical EvalTrace columns. Without this, the second writer would
+        # fall back to `trace.get("inline_guard_decision") -> None` and the
+        # ON CONFLICT UPDATE would overwrite the columns with NULL — silently
+        # making allowed traces look unguarded on the admin dashboard.
+        guard_decision: Optional[str] = None
+        guard_reason_code: Optional[str] = None
+        guard_risk_score: Optional[float] = None
+        if isinstance(self._inline_guard_decision, dict):
+            decision_raw = self._inline_guard_decision.get("decision")
+            reason_raw = self._inline_guard_decision.get("reason_code")
+            risk_raw = self._inline_guard_decision.get("risk_score")
+            if isinstance(decision_raw, str) and decision_raw.strip():
+                guard_decision = decision_raw.strip()
+            if isinstance(reason_raw, str) and reason_raw.strip():
+                guard_reason_code = reason_raw.strip()
+            if isinstance(risk_raw, (int, float)):
+                guard_risk_score = float(risk_raw)
+
         trace_data: Dict[str, Any] = {
             "trace_id": self.trace_id,
             "case_id": self.case_id,
@@ -276,6 +297,9 @@ class ShadowEvalCollector:
                 "shadow_eval_capture": SHADOW_EVAL_CAPTURE,
             },
             "meta": meta,
+            "inline_guard_decision": guard_decision,
+            "inline_guard_reason_code": guard_reason_code,
+            "inline_guard_risk_score": guard_risk_score,
         }
 
         # Bake Router Result directly into Trace
