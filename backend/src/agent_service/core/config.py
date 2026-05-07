@@ -270,6 +270,24 @@ INLINE_GUARD_GROQ_MODEL = os.getenv(
 ).strip()
 GROQ_GUARD_BASE_URL = os.getenv("GROQ_GUARD_BASE_URL", "https://api.groq.com/openai/v1").strip()
 
+# Vector-similarity cache for inline guard decisions.
+# Layer 2.5 between regex + classifier — see tasks/inline-guard-vector-cache-plan.md.
+# Off by default; flip after telemetry shows hit-rate ≥ 30 % from a 24 h warm-up.
+INLINE_GUARD_CACHE_ENABLED = os.getenv("INLINE_GUARD_CACHE_ENABLED", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+INLINE_GUARD_CACHE_SIM_THRESHOLD = float(os.getenv("INLINE_GUARD_CACHE_SIM_THRESHOLD", "0.93"))
+INLINE_GUARD_CACHE_TTL_SECONDS = int(
+    os.getenv("INLINE_GUARD_CACHE_TTL_SECONDS", str(60 * 60 * 24 * 30))  # 30 days
+)
+INLINE_GUARD_CACHE_RESHADOW_RATE = float(os.getenv("INLINE_GUARD_CACHE_RESHADOW_RATE", "0.02"))
+LOCAL_EMBEDDER_MODEL = os.getenv(
+    "LOCAL_EMBEDDER_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+).strip()
+LOCAL_EMBEDDER_VERSION = os.getenv("LOCAL_EMBEDDER_VERSION", "MiniLM-L6-v2-2026-05").strip()
+
 # =============================================================================
 # SHARED HTTP CLIENT (ASYNC)
 # =============================================================================

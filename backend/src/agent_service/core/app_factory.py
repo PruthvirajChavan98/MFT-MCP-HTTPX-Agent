@@ -96,8 +96,32 @@ class AppFactory:
 
                 await milvus_mgr.aconnect()
                 log.info(
-                    "✅ Milvus stores initialized (kb_faqs, eval_traces_emb, eval_results_emb)"
+                    "✅ Milvus stores initialized (kb_faqs, eval_traces_emb, eval_results_emb, inline_guard_cache)"
                 )
+
+                # Warm the local embedder if the inline-guard vector cache is
+                # enabled. Loading sentence-transformers is ~1-2 s and one
+                # inference adds ~10-15 ms; doing it at boot avoids paying
+                # that cost on the first guarded request.
+                from src.agent_service.core.config import (  # noqa: WPS433 — late import, lifespan only
+                    INLINE_GUARD_CACHE_ENABLED,
+                )
+
+                if INLINE_GUARD_CACHE_ENABLED:
+                    from src.agent_service.security.local_embedder import (  # noqa: WPS433
+                        get_local_embedder,
+                    )
+
+                    try:
+                        warm_seconds = await get_local_embedder().warm()
+                        log.info(
+                            "✅ Inline-guard vector cache warm — local embedder ready (%.0f ms)",
+                            warm_seconds * 1000,
+                        )
+                    except Exception:  # noqa: BLE001
+                        log.exception(
+                            "Inline-guard local embedder warm failed; cache will fail-open"
+                        )
 
                 if POSTGRES_DSN:
                     postgres_pool = PostgresPoolManager(

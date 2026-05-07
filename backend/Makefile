@@ -1,5 +1,5 @@
 .PHONY: \
-	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard rebuild-eval-results-collection backfill-trace-embeddings \
+	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard rebuild-eval-results-collection backfill-trace-embeddings rebuild-inline-guard-cache-collection warmup-inline-guard-cache \
 	docker-build docker-up docker-down docker-logs docker-restart deploy deploy-prod prod-up prod-down \
 	local-validate prod-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
@@ -113,6 +113,20 @@ rebuild-eval-results-collection:
 # unconditionally (prior behaviour only embedded 5%-sampled rows).
 backfill-trace-embeddings:
 	uv run python -m scripts.backfill_trace_embeddings
+
+# Inline-guard vector cache (Layer 2.5) — see
+# tasks/inline-guard-vector-cache-plan.md.
+# Drops + recreates the inline_guard_cache Milvus collection. Run once
+# when adopting the cache for the first time or after bumping
+# LOCAL_EMBEDDER_VERSION.
+rebuild-inline-guard-cache-collection:
+	uv run python -m scripts.rebuild_inline_guard_cache_collection
+
+# Warm-up: prepopulate the inline-guard cache from the last 30 days of
+# eval_traces with a non-NULL inline_guard_decision. Idempotent (keyed
+# by content_hash). Run once per environment after the rebuild.
+warmup-inline-guard-cache:
+	uv run python -m scripts.warmup_inline_guard_cache
 
 verify-deprecation: test-deprecation
 	@echo "Deprecation verification passed"

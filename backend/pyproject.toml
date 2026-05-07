@@ -43,6 +43,12 @@ dependencies = [
     "cryptography>=46.0.7,<47.0.0",
     "pyotp>=2.9.0,<3.0.0",
     "argon2-cffi>=25.1.0,<26.0.0",
+    # -- Inline-guard vector cache (Layer 2.5) — local CPU embedder.
+    # Runs MiniLM-L6-v2 (~10 ms) so the cache is a real perf win versus the
+    # ~800 ms Groq classifier it fronts. Tracked in
+    # tasks/inline-guard-vector-cache-plan.md.
+    "sentence-transformers>=3.0,<5.0",
+    "torch>=2.4,<3.0",
 ]
 
 [tool.uv.sources]

@@ -12,6 +12,7 @@ from prometheus_client import Counter
 
 from src.agent_service.core.config import (
     GROQ_GUARD_BASE_URL,
+    INLINE_GUARD_CACHE_ENABLED,
     INLINE_GUARD_ENABLED,
     INLINE_GUARD_GROQ_MODEL,
     INLINE_GUARD_GROQ_TIMEOUT_MS,
@@ -19,6 +20,14 @@ from src.agent_service.core.config import (
 )
 from src.agent_service.core.http_client import get_http_client
 from src.agent_service.llm.groq_rotator import next_groq_key
+from src.agent_service.security.inline_guard_cache import (
+    CacheLookup,
+)
+from src.agent_service.security.inline_guard_cache import lookup as cache_lookup
+from src.agent_service.security.inline_guard_cache import (
+    schedule_writeback as cache_schedule_writeback,
+)
+from src.agent_service.security.inline_guard_cache import should_reshadow as cache_should_reshadow
 
 log = logging.getLogger(__name__)
 
@@ -376,6 +385,37 @@ async def evaluate_prompt_safety_decision(prompt: str) -> InlineGuardDecision:
             )
         )
 
+    # Layer 2.5 — vector-similarity cache. Sits between regex and the Groq
+    # classifier so the classifier is skipped when a near-duplicate prompt
+    # was decided recently. The cache is fail-open: any infra error returns
+    # None and the classifier runs as usual.
+    cache_hit_for_reshadow: CacheLookup | None = None
+    if INLINE_GUARD_CACHE_ENABLED:
+        cached = await cache_lookup(clean_prompt)
+        if cached is not None:
+            if cache_should_reshadow():
+                # Treat as miss; the classifier will run and we'll compare
+                # its verdict to the cached one for drift detection.
+                cache_hit_for_reshadow = cached
+            else:
+                return _finalize_decision(
+                    InlineGuardDecision(
+                        allow=(cached.decision != "block"),
+                        decision=cached.decision,
+                        reason_code=cached.reason_code,
+                        risk_score=cached.risk_score,
+                        checks=[
+                            GuardCheckStatus(
+                                name="cache_hit",
+                                outcome="pass",
+                                passed=(cached.decision != "block"),
+                                duration_ms=0.0,
+                                detail=f"sim={cached.score:.3f} model={cached.model_version}",
+                            )
+                        ],
+                    )
+                )
+
     provider_timeout = max(0.05, INLINE_GUARD_GROQ_TIMEOUT_MS / 1000)
     total_timeout = max(0.20, INLINE_GUARD_TOTAL_TIMEOUT_MS / 1000)
 
@@ -418,17 +458,22 @@ async def evaluate_prompt_safety_decision(prompt: str) -> InlineGuardDecision:
     infra_failure = any(check.outcome in ("error", "timeout") for check in checks)
 
     if explicit_unsafe:
+        risk = max(lexical_risk, 0.9)
+        if INLINE_GUARD_CACHE_ENABLED:
+            _emit_reshadow_mismatch_if_any(cache_hit_for_reshadow, "block", clean_prompt)
+            cache_schedule_writeback(clean_prompt, "block", "unsafe_signal", risk)
         return _finalize_decision(
             InlineGuardDecision(
                 allow=False,
                 decision="block",
                 reason_code="unsafe_signal",
-                risk_score=max(lexical_risk, 0.9),
+                risk_score=risk,
                 checks=checks,
             )
         )
 
     if infra_failure:
+        # Don't cache infra-failure verdicts — they're transient by definition.
         high_risk = lexical_risk >= _HIGH_RISK_BLOCK_THRESHOLD
         return _finalize_decision(
             InlineGuardDecision(
@@ -440,6 +485,10 @@ async def evaluate_prompt_safety_decision(prompt: str) -> InlineGuardDecision:
             )
         )
 
+    if INLINE_GUARD_CACHE_ENABLED:
+        _emit_reshadow_mismatch_if_any(cache_hit_for_reshadow, "allow", clean_prompt)
+        cache_schedule_writeback(clean_prompt, "allow", "safe", lexical_risk)
+
     return _finalize_decision(
         InlineGuardDecision(
             allow=True,
@@ -448,6 +497,27 @@ async def evaluate_prompt_safety_decision(prompt: str) -> InlineGuardDecision:
             risk_score=lexical_risk,
             checks=checks,
         )
+    )
+
+
+def _emit_reshadow_mismatch_if_any(
+    cached: CacheLookup | None, classifier_decision: str, prompt: str
+) -> None:
+    """If a reshadow run produced a different verdict than the cached one,
+    log a warning. The fresh classifier decision wins; the writeback that
+    follows overwrites the stale cache entry (Milvus collection is keyed by
+    a content_hash that re-derives identically)."""
+    if cached is None or cached.decision == classifier_decision:
+        return
+    log.warning(
+        "[guard_cache] reshadow mismatch: cached=%s classifier=%s sim=%.3f "
+        "model=%s embedder=%s prompt_len=%d",
+        cached.decision,
+        classifier_decision,
+        cached.score,
+        cached.model_version,
+        cached.embedder_version,
+        len(prompt),
     )
 
 
