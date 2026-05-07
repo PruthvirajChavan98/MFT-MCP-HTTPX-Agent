@@ -130,8 +130,24 @@ def test_verify_access_token_rejects_expired() -> None:
 
 def test_verify_access_token_rejects_tampered_signature() -> None:
     token, _ = issue_access_token("super_admin", ["admin"])
-    # Mutate the last character of the signature segment
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    # Mutate the FIRST character of the signature segment.
+    #
+    # The earlier formulation flipped `token[-1]` between "A" and "B", which
+    # is intermittently silent: a 256-bit (32-byte) HMAC signature
+    # base64url-encodes to 43 characters, but only the high 4 bits of the
+    # *last* character contribute to the decoded signature — the trailing 2
+    # bits are unused padding. When the substitute shares the original's
+    # high 4 bits (e.g. any swap inside A/B/C/D, or E/F/G/H, …), the
+    # decoded bytes are identical, HMAC verifies, and this test silently
+    # fails to detect tampering. Probability ≈ 6 % per run.
+    #
+    # The first character of the signature segment encodes the leading
+    # 6 bits of the signature byte sequence — *all* 6 are meaningful, so
+    # any substitution to a different alphabet character guaranteed
+    # changes byte 0 of the decoded signature and breaks HMAC verify.
+    sig_start = token.rindex(".") + 1
+    substitute = "A" if token[sig_start] != "A" else "B"
+    tampered = token[:sig_start] + substitute + token[sig_start + 1 :]
     with pytest.raises(InvalidAccessToken):
         verify_access_token(tampered)
 
