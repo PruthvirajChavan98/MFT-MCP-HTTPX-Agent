@@ -33,22 +33,32 @@ def _make_embeddings(api_key: str):  # type: ignore[return]  # circular import a
     )
 
 
-def _make_store(collection_name: str, api_key: str) -> "Milvus":
-    from langchain_milvus import Milvus
-    from pymilvus import MilvusClient
-    from pymilvus.orm.connections import connections as _orm_connections
-
+def _connection_args() -> dict:
     conn_args: dict = {"uri": MILVUS_URI}
     if MILVUS_TOKEN:
         conn_args["token"] = MILVUS_TOKEN
+    return conn_args
 
-    # langchain-milvus 0.3.x + pymilvus 2.6.x compat:
-    # MilvusClient._using = "cm-{id(handler)}" — NOT registered in the legacy ORM
-    # connections._alias_handlers that Collection(using=alias) looks up.
-    # ConnectionManager.get_or_create returns the same handler for identical args,
-    # so the alias we register here equals the one Milvus() will use internally.
+
+def _register_orm_alias(conn_args: dict) -> None:
+    """langchain-milvus 0.3.x + pymilvus 2.6.x compat:
+    MilvusClient._using = "cm-{id(handler)}" — NOT registered in the legacy ORM
+    connections._alias_handlers that Collection(using=alias) looks up.
+    ConnectionManager.get_or_create returns the same handler for identical args,
+    so the alias we register here equals the one Milvus() will use internally.
+    """
+    from pymilvus import MilvusClient
+    from pymilvus.orm.connections import connections as _orm_connections
+
     _mc = MilvusClient(**conn_args)
     _orm_connections._alias_handlers[_mc._using] = _mc._handler
+
+
+def _make_store(collection_name: str, api_key: str) -> "Milvus":
+    from langchain_milvus import Milvus
+
+    conn_args = _connection_args()
+    _register_orm_alias(conn_args)
 
     return Milvus(
         embedding_function=_make_embeddings(api_key),
@@ -69,6 +79,36 @@ def _make_store(collection_name: str, api_key: str) -> "Milvus":
     )
 
 
+def _make_guard_cache_store(collection_name: str) -> "Milvus":
+    """Inline-guard vector cache — uses the *local* CPU embedder
+    (`sentence-transformers/all-MiniLM-L6-v2`, 384-dim) so the cache lookup
+    is sub-25 ms, which is the only embedder choice that makes the cache a
+    perf win against the ~800 ms Groq classifier it fronts.
+
+    Different vector dim (384 vs 1536) and different metric reasoning vs
+    the OpenRouter-backed stores, so it gets its own helper."""
+    from langchain_milvus import Milvus
+
+    from src.agent_service.security.local_embedder import get_local_embedder
+
+    conn_args = _connection_args()
+    _register_orm_alias(conn_args)
+
+    return Milvus(
+        embedding_function=get_local_embedder(),
+        collection_name=collection_name,
+        connection_args=conn_args,
+        drop_old=False,
+        auto_id=True,
+        index_params={
+            "metric_type": "COSINE",
+            "index_type": "HNSW",
+            "params": {"M": 16, "efConstruction": 200},
+        },
+        search_params={"metric_type": "COSINE", "params": {"ef": 64}},
+    )
+
+
 class MilvusManager:
     """Manages three Milvus LangChain VectorStore instances.
 
@@ -85,25 +125,34 @@ class MilvusManager:
         self.kb_faqs: "Milvus | None" = None
         self.eval_traces: "Milvus | None" = None
         self.eval_results: "Milvus | None" = None
+        self.guard_cache: "Milvus | None" = None
 
     async def aconnect(self) -> None:
-        """Initialize all three Milvus stores (runs blocking init in executor).
+        """Initialize all four Milvus stores (runs blocking init in executor).
 
         Connectivity is implicitly validated by _init_stores — if Milvus is unreachable
         the Milvus() constructor raises and propagates to the lifespan handler.
         """
+        from src.agent_service.core.config import INLINE_GUARD_CACHE_ENABLED
+
         api_key = OPENROUTER_API_KEY or ""
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._init_stores, api_key)
+        await loop.run_in_executor(None, self._init_stores, api_key, INLINE_GUARD_CACHE_ENABLED)
         log.info(
-            "Milvus stores ready — uri=%s collections=[kb_faqs, eval_traces_emb, eval_results_emb]",
+            "Milvus stores ready — uri=%s collections=[kb_faqs, eval_traces_emb, eval_results_emb%s]",
             MILVUS_URI,
+            ", inline_guard_cache" if INLINE_GUARD_CACHE_ENABLED else "",
         )
 
-    def _init_stores(self, api_key: str) -> None:
+    def _init_stores(self, api_key: str, enable_guard_cache: bool = False) -> None:
         self.kb_faqs = _make_store("kb_faqs", api_key)
         self.eval_traces = _make_store("eval_traces_emb", api_key)
         self.eval_results = _make_store("eval_results_emb", api_key)
+        # Lazy: only initialise the guard cache store when the flag is on so
+        # disabled deployments never load sentence-transformers + torch (~300 MB
+        # of import-time work) at startup.
+        if enable_guard_cache:
+            self.guard_cache = _make_guard_cache_store("inline_guard_cache")
 
     async def close(self) -> None:
         # langchain-milvus manages Milvus connections internally; nothing to close explicitly.
