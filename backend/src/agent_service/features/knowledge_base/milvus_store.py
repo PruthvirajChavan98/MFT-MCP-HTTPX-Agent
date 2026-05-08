@@ -5,7 +5,7 @@ from typing import Any
 
 from langchain_core.documents import Document
 
-from src.common.milvus_mgr import milvus_mgr
+from src.common.vector_store_mgr import vector_store_mgr
 
 from .repo import (
     VECTOR_STATUS_FAILED,
@@ -21,7 +21,7 @@ _repo = KnowledgeBaseRepo()
 
 
 class KBMilvusStore:
-    """Thin async wrapper around ``milvus_mgr.kb_faqs`` for FAQ vector ops.
+    """Thin async wrapper around ``vector_store_mgr.kb_faqs`` for FAQ vector ops.
 
     All public methods are fully async — no executor wrappers needed because
     langchain-milvus implements native async via ``aadd_documents``,
@@ -49,7 +49,7 @@ class KBMilvusStore:
                     "category": item.get("category", ""),
                 },
             )
-            await milvus_mgr.kb_faqs.aadd_documents([doc], ids=[question_key])  # type: ignore[union-attr]
+            await vector_store_mgr.kb_faqs.aadd_documents([doc], ids=[question_key])  # type: ignore[union-attr]
             await _repo.set_vector_status_for_question_keys(
                 pool, [question_key], status=VECTOR_STATUS_SYNCED, error=None
             )
@@ -73,7 +73,7 @@ class KBMilvusStore:
 
     async def semantic_search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """Return top-k FAQ matches by cosine similarity (score 0–1, higher = better)."""
-        results = await milvus_mgr.kb_faqs.asimilarity_search_with_score(  # type: ignore[union-attr]
+        results = await vector_store_mgr.kb_faqs.asimilarity_search_with_score(  # type: ignore[union-attr]
             query, k=limit
         )
         return [
@@ -89,7 +89,7 @@ class KBMilvusStore:
         """Delete all documents from the kb_faqs Milvus collection."""
         try:
             # adelete with expr="" deletes everything (Milvus boolean expr on metadata field)
-            await milvus_mgr.kb_faqs.adelete(expr="question_key != ''")  # type: ignore[union-attr]
+            await vector_store_mgr.kb_faqs.adelete(expr="question_key != ''")  # type: ignore[union-attr]
         except Exception as exc:
             log.warning("Milvus clear (kb_faqs) failed: %s", exc)
 

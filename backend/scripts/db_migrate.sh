@@ -53,6 +53,14 @@ psql "$POSTGRES_ADMIN_DSN" -c "GRANT ALL PRIVILEGES ON DATABASE ${MFT_POSTGRES_D
 APP_DSN="postgresql://${MFT_POSTGRES_USER}:${MFT_POSTGRES_PASSWORD}@$(echo "$POSTGRES_ADMIN_DSN" | sed 's|.*@||')"
 APP_DSN="${APP_DSN%/*}/${MFT_POSTGRES_DB}"
 
+# CREATE EXTENSION needs superuser — pgvector isn't marked "trusted" in
+# pgvector/pgvector:pg18-trixie. We install it in the app database from
+# the admin DSN, then the per-file migrations below (run as the app user)
+# can rely on `vector(N)` types resolving and `hnsw` access methods existing.
+ADMIN_APP_DSN="${POSTGRES_ADMIN_DSN%/*}/${MFT_POSTGRES_DB}"
+echo "==> Installing pgvector extension into '$MFT_POSTGRES_DB' (as admin)..."
+psql "$ADMIN_APP_DSN" -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
 echo "==> Running schema migrations..."
 for sql_file in "$SQL_DIR"/*.sql; do
     [ -f "$sql_file" ] || continue

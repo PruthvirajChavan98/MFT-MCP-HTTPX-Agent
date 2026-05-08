@@ -88,9 +88,9 @@ def _get_store() -> Any | None:
     """Lazy accessor for the Milvus guard-cache store. Imported here so the
     cache module is testable without spinning up the manager singleton."""
     try:
-        from src.common.milvus_mgr import milvus_mgr
+        from src.common.vector_store_mgr import vector_store_mgr
 
-        return milvus_mgr.guard_cache
+        return vector_store_mgr.guard_cache
     except Exception:  # noqa: BLE001
         return None
 

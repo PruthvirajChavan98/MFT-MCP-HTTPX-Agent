@@ -1,5 +1,5 @@
 .PHONY: \
-	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard rebuild-eval-results-collection backfill-trace-embeddings rebuild-inline-guard-cache-collection warmup-inline-guard-cache \
+	help install install-dev dev test test-deprecation verify-deprecation lint format format-check quality pre-commit clean context-docs context-docs-check backfill-question-categories backfill-inline-guard rebuild-eval-results-collection backfill-trace-embeddings rebuild-inline-guard-cache-collection warmup-inline-guard-cache migrate-milvus-to-pgvector migrate-milvus-to-pgvector-dry-run \
 	docker-build docker-up docker-down docker-logs docker-restart deploy deploy-prod prod-up prod-down \
 	local-validate prod-validate local-env-audit backend-env-audit local-setup-check localsetup localsetup-full local-up local-down local-logs \
 	local-ps local-restart local-router-up local-monitoring-up local-geoip-up local-edge-up \
@@ -121,6 +121,15 @@ backfill-trace-embeddings:
 # LOCAL_EMBEDDER_VERSION.
 rebuild-inline-guard-cache-collection:
 	uv run python -m scripts.rebuild_inline_guard_cache_collection
+
+# Milvus → pgvector data migration (one-shot, idempotent on PK).
+# Pass --dry-run to read counts only without writing. After running it,
+# flip VECTOR_STORE_BACKEND=pgvector to switch the live system.
+migrate-milvus-to-pgvector:
+	uv run python -m scripts.migrate_milvus_to_pgvector
+
+migrate-milvus-to-pgvector-dry-run:
+	uv run python -m scripts.migrate_milvus_to_pgvector --dry-run
 
 # Warm-up: prepopulate the inline-guard cache from the last 30 days of
 # eval_traces with a non-NULL inline_guard_decision. Idempotent (keyed

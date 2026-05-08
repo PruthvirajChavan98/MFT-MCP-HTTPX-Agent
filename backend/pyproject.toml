@@ -49,6 +49,10 @@ dependencies = [
     # tasks/inline-guard-vector-cache-plan.md.
     "sentence-transformers>=3.0,<5.0",
     "torch>=2.4,<3.0",
+    # -- pgvector: asyncpg codec for the `vector` PostgreSQL type. Drives
+    # the VECTOR_STORE_BACKEND=pgvector path that replaces Milvus
+    # (see tasks/inline-guard-vector-cache-plan.md, this PR).
+    "pgvector>=0.3.0,<0.5.0",
 ]
 
 [tool.uv.sources]

@@ -24,7 +24,7 @@ from src.agent_service.core.config import (
 from src.agent_service.core.http_client import close_http_client, get_http_client
 from src.agent_service.eval_store.shadow_queue import RedisTraceQueue, trace_queue
 from src.agent_service.llm.groq_rotator import mark_key_cooling, next_groq_key
-from src.common.milvus_mgr import milvus_mgr
+from src.common.vector_store_mgr import vector_store_mgr
 
 log = logging.getLogger(__name__)
 
@@ -322,7 +322,7 @@ class ShadowJudgeWorker:
             raise
 
     async def run_forever(self) -> None:
-        await milvus_mgr.aconnect()
+        await vector_store_mgr.aconnect()
         log.info("Milvus stores initialized.")
 
         if POSTGRES_DSN:

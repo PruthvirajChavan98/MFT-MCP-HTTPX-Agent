@@ -12,11 +12,11 @@ from src.mcp_service import kb_search
 
 @pytest.fixture(autouse=True)
 def _reset_milvus_mgr(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every test starts with a fresh mocked milvus_mgr."""
+    """Every test starts with a fresh mocked vector_store_mgr."""
     mock_mgr = MagicMock()
     mock_mgr.kb_faqs = None
     mock_mgr.aconnect = AsyncMock()
-    monkeypatch.setattr(kb_search, "milvus_mgr", mock_mgr)
+    monkeypatch.setattr(kb_search, "vector_store_mgr", mock_mgr)
 
 
 def _doc(question: str, answer: str) -> Document:
@@ -37,17 +37,17 @@ async def test_semantic_search_returns_empty_on_empty_query() -> None:
 
 @pytest.mark.asyncio
 async def test_semantic_search_returns_empty_when_milvus_aconnect_fails() -> None:
-    kb_search.milvus_mgr.aconnect.side_effect = RuntimeError("milvus unreachable")
+    kb_search.vector_store_mgr.aconnect.side_effect = RuntimeError("milvus unreachable")
     results = await kb_search.semantic_search("how do I pay my loan?")
     assert results == []
-    kb_search.milvus_mgr.aconnect.assert_awaited_once()
+    kb_search.vector_store_mgr.aconnect.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_semantic_search_returns_empty_when_kb_faqs_still_none_after_connect() -> None:
     # aconnect succeeds but kb_faqs never gets assigned
-    kb_search.milvus_mgr.aconnect = AsyncMock()  # no side effect
-    kb_search.milvus_mgr.kb_faqs = None
+    kb_search.vector_store_mgr.aconnect = AsyncMock()  # no side effect
+    kb_search.vector_store_mgr.kb_faqs = None
     results = await kb_search.semantic_search("query")
     assert results == []
 
@@ -61,7 +61,7 @@ async def test_semantic_search_returns_formatted_results_on_hit() -> None:
             (_doc("When is my EMI due?", "Monthly on the 5th."), 0.78),
         ]
     )
-    kb_search.milvus_mgr.kb_faqs = fake_store
+    kb_search.vector_store_mgr.kb_faqs = fake_store
 
     results = await kb_search.semantic_search("how to pay loan")
     assert len(results) == 2
@@ -78,7 +78,7 @@ async def test_semantic_search_returns_formatted_results_on_hit() -> None:
 async def test_semantic_search_respects_limit_parameter() -> None:
     fake_store = MagicMock()
     fake_store.asimilarity_search_with_score = AsyncMock(return_value=[])
-    kb_search.milvus_mgr.kb_faqs = fake_store
+    kb_search.vector_store_mgr.kb_faqs = fake_store
 
     await kb_search.semantic_search("anything", limit=3)
     fake_store.asimilarity_search_with_score.assert_awaited_once_with("anything", k=3)
@@ -88,7 +88,7 @@ async def test_semantic_search_respects_limit_parameter() -> None:
 async def test_semantic_search_default_limit_is_five() -> None:
     fake_store = MagicMock()
     fake_store.asimilarity_search_with_score = AsyncMock(return_value=[])
-    kb_search.milvus_mgr.kb_faqs = fake_store
+    kb_search.vector_store_mgr.kb_faqs = fake_store
 
     await kb_search.semantic_search("anything")
     fake_store.asimilarity_search_with_score.assert_awaited_once_with("anything", k=5)
@@ -100,7 +100,7 @@ async def test_semantic_search_gracefully_handles_search_exception() -> None:
     fake_store.asimilarity_search_with_score = AsyncMock(
         side_effect=RuntimeError("milvus query failed")
     )
-    kb_search.milvus_mgr.kb_faqs = fake_store
+    kb_search.vector_store_mgr.kb_faqs = fake_store
 
     results = await kb_search.semantic_search("anything")
     assert results == []
@@ -111,10 +111,10 @@ async def test_semantic_search_skips_aconnect_when_already_ready() -> None:
     # kb_faqs pre-populated — aconnect should NOT be called
     fake_store = MagicMock()
     fake_store.asimilarity_search_with_score = AsyncMock(return_value=[])
-    kb_search.milvus_mgr.kb_faqs = fake_store
+    kb_search.vector_store_mgr.kb_faqs = fake_store
 
     await kb_search.semantic_search("query")
-    kb_search.milvus_mgr.aconnect.assert_not_awaited()
+    kb_search.vector_store_mgr.aconnect.assert_not_awaited()
 
 
 # ─────────── format_results ───────────

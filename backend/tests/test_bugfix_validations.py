@@ -142,7 +142,7 @@ async def test_eval_search_uses_asyncpg_positional_having_params_and_correct_cou
 async def test_eval_vector_search_uses_req_vector_path(monkeypatch):
     pool = _VectorSearchPool()
     store = _VectorStore()
-    monkeypatch.setattr(eval_read.milvus_mgr, "eval_traces", store)
+    monkeypatch.setattr(eval_read.vector_store_mgr, "eval_traces", store)
 
     result = await eval_read.eval_vector_search(
         request=_FakeRequest(pool),
@@ -163,7 +163,7 @@ async def test_eval_vector_search_uses_req_vector_path(monkeypatch):
 async def test_eval_vector_search_text_path_no_longer_requires_request_openrouter_key(monkeypatch):
     pool = _VectorSearchPool()
     store = _TextVectorStore()
-    monkeypatch.setattr(eval_read.milvus_mgr, "eval_traces", store)
+    monkeypatch.setattr(eval_read.vector_store_mgr, "eval_traces", store)
 
     result = await eval_read.eval_vector_search(
         request=_FakeRequest(pool),
