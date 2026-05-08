@@ -17,7 +17,7 @@ from src.agent_service.eval_store.status import (
     build_eval_status_payload,
     json_load_maybe,
 )
-from src.common.milvus_mgr import milvus_mgr
+from src.common.vector_store_mgr import vector_store_mgr
 
 log = logging.getLogger("eval_read_api")
 router = APIRouter(dependencies=[Depends(require_admin)])
@@ -553,7 +553,9 @@ async def eval_vector_search(
     expr = " and ".join(filters) or None
 
     try:
-        store = milvus_mgr.eval_traces if req.kind == "trace" else milvus_mgr.eval_results
+        store = (
+            vector_store_mgr.eval_traces if req.kind == "trace" else vector_store_mgr.eval_results
+        )
         if store is None:
             raise RuntimeError("Milvus store not initialized")
 

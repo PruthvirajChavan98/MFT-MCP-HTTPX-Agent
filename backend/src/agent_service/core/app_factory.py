@@ -92,11 +92,12 @@ class AppFactory:
                 prompt_manager.load()
                 app.state.prompt_manager = prompt_manager
 
-                from src.common.milvus_mgr import milvus_mgr
+                from src.common.vector_store_mgr import vector_store_mgr
 
-                await milvus_mgr.aconnect()
+                await vector_store_mgr.aconnect()
                 log.info(
-                    "✅ Milvus stores initialized (kb_faqs, eval_traces_emb, eval_results_emb, inline_guard_cache)"
+                    "✅ Vector store manager ready (backend=%s)",
+                    vector_store_mgr.backend,
                 )
 
                 # Warm the local embedder if the inline-guard vector cache is
@@ -204,7 +205,9 @@ class AppFactory:
                     await postgres_pool.stop()
                 await mcp_manager.shutdown()
                 await close_http_client()
-                await milvus_mgr.close()
+                from src.common.vector_store_mgr import vector_store_mgr
+
+                await vector_store_mgr.close()
 
                 # Graceful EventBus Shutdown
                 await event_bus.close()

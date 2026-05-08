@@ -1,8 +1,8 @@
 """FAQ semantic search for MCP tools.
 
-Thin async wrapper over the shared ``milvus_mgr.kb_faqs`` store from
-``src.common.milvus_mgr``. mcp_service runs as a separate process from
-agent_service, so it has its OWN ``milvus_mgr`` module-level singleton
+Thin async wrapper over the shared ``vector_store_mgr.kb_faqs`` store from
+``src.common.vector_store_mgr``. mcp_service runs as a separate process from
+agent_service, so it has its OWN ``vector_store_mgr`` module-level singleton
 with its own connection pool — sharing the implementation code, not the
 runtime state.
 
@@ -11,8 +11,8 @@ Public API:
 - ``format_results(results)``       — sync, formats the list as LLM-friendly plaintext
 
 Design notes (Phase M1 plan 2026-04-11):
-- Lazy connection: if ``milvus_mgr.kb_faqs`` is None on first call, we trigger
-  ``milvus_mgr.aconnect()`` to initialize all three collections. mcp_service
+- Lazy connection: if ``vector_store_mgr.kb_faqs`` is None on first call, we trigger
+  ``vector_store_mgr.aconnect()`` to initialize all three collections. mcp_service
   only uses ``kb_faqs`` but paying for the other two's initialization is
   cheaper than maintaining a separate init path.
 - Graceful degradation: every failure path (empty query, connection failure,
@@ -27,25 +27,25 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.common.milvus_mgr import milvus_mgr
+from src.common.vector_store_mgr import vector_store_mgr
 
 log = logging.getLogger(__name__)
 
 
 async def _ensure_kb_store_ready() -> bool:
-    """Lazy-connect ``milvus_mgr`` if ``kb_faqs`` is not yet initialized.
+    """Lazy-connect ``vector_store_mgr`` if ``kb_faqs`` is not yet initialized.
 
-    Returns True when ``milvus_mgr.kb_faqs`` is populated and ready for queries.
+    Returns True when ``vector_store_mgr.kb_faqs`` is populated and ready for queries.
     Returns False on any connection failure; the caller should bail out cleanly.
     """
-    if milvus_mgr.kb_faqs is not None:
+    if vector_store_mgr.kb_faqs is not None:
         return True
     try:
-        await milvus_mgr.aconnect()
+        await vector_store_mgr.aconnect()
     except Exception as e:
-        log.warning("kb_search: milvus_mgr.aconnect() failed: %s", e)
+        log.warning("kb_search: vector_store_mgr.aconnect() failed: %s", e)
         return False
-    return milvus_mgr.kb_faqs is not None
+    return vector_store_mgr.kb_faqs is not None
 
 
 async def semantic_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
@@ -67,7 +67,7 @@ async def semantic_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     if not await _ensure_kb_store_ready():
         return []
     try:
-        results = await milvus_mgr.kb_faqs.asimilarity_search_with_score(  # type: ignore[union-attr]
+        results = await vector_store_mgr.kb_faqs.asimilarity_search_with_score(  # type: ignore[union-attr]
             stripped, k=limit
         )
     except Exception as e:

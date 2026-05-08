@@ -58,7 +58,7 @@ class _ResultPgPool:
 
 
 class _ResultStore:
-    """Milvus fake for ``milvus_mgr.eval_results``."""
+    """Milvus fake for ``vector_store_mgr.eval_results``."""
 
     def __init__(self, metadata: dict | None = None, raises: Exception | None = None):
         self._metadata = (
@@ -85,7 +85,7 @@ class _ResultStore:
 async def test_kind_result_happy_path_projects_eval_id(monkeypatch):
     pool = _ResultPgPool()
     store = _ResultStore()
-    monkeypatch.setattr(eval_read.milvus_mgr, "eval_results", store)
+    monkeypatch.setattr(eval_read.vector_store_mgr, "eval_results", store)
 
     result = await eval_read.eval_vector_search(
         request=_FakeRequest(pool),
@@ -105,7 +105,7 @@ async def test_kind_result_happy_path_projects_eval_id(monkeypatch):
 async def test_kind_result_surface_store_failure_as_503(monkeypatch):
     pool = _ResultPgPool()
     store = _ResultStore(raises=Exception("field eval_id not exist"))
-    monkeypatch.setattr(eval_read.milvus_mgr, "eval_results", store)
+    monkeypatch.setattr(eval_read.vector_store_mgr, "eval_results", store)
 
     with pytest.raises(Exception) as ei:
         await eval_read.eval_vector_search(
@@ -133,7 +133,7 @@ async def test_kind_result_falls_back_to_doc_id_when_metadata_missing(monkeypatc
     """
     pool = _ResultPgPool()
     store = _ResultStore(metadata={"pk": "eval-1"})  # no eval_id, no trace_id
-    monkeypatch.setattr(eval_read.milvus_mgr, "eval_results", store)
+    monkeypatch.setattr(eval_read.vector_store_mgr, "eval_results", store)
 
     result = await eval_read.eval_vector_search(
         request=_FakeRequest(pool),

@@ -289,6 +289,17 @@ LOCAL_EMBEDDER_MODEL = os.getenv(
 LOCAL_EMBEDDER_VERSION = os.getenv("LOCAL_EMBEDDER_VERSION", "MiniLM-L6-v2-2026-05").strip()
 
 # =============================================================================
+# VECTOR STORE BACKEND
+# =============================================================================
+# Pick the backend that powers all four collections (kb_faqs, eval_traces,
+# eval_results, inline_guard_cache). Defaults to "milvus" so existing
+# deployments are unchanged on merge; flip to "pgvector" once the data has
+# been migrated and the Postgres pgvector extension is verified live.
+#
+# Migration path: tasks/inline-guard-vector-cache-plan.md → Phase 8.
+VECTOR_STORE_BACKEND = os.getenv("VECTOR_STORE_BACKEND", "milvus").strip().lower()
+
+# =============================================================================
 # SHARED HTTP CLIENT (ASYNC)
 # =============================================================================
 SHARED_HTTP_MAX_CONNECTIONS = int(os.getenv("SHARED_HTTP_MAX_CONNECTIONS", "200"))

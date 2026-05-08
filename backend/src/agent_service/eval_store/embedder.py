@@ -9,7 +9,7 @@ from langchain_core.documents import Document
 
 from src.agent_service.core.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from src.agent_service.llm.client import get_owner_embeddings
-from src.common.milvus_mgr import milvus_mgr
+from src.common.vector_store_mgr import vector_store_mgr
 
 log = logging.getLogger("eval_embedder")
 
@@ -128,7 +128,7 @@ class EvalEmbedder:
                     "case_id": str(trace.get("case_id") or ""),
                 },
             )
-            await milvus_mgr.eval_traces.aadd_documents(  # type: ignore[union-attr]
+            await vector_store_mgr.eval_traces.aadd_documents(  # type: ignore[union-attr]
                 [milvus_doc], ids=[trace_id]
             )
             await pool.execute(
@@ -191,7 +191,7 @@ class EvalEmbedder:
                     "score": str(ev.get("score", "")),
                 },
             )
-            await milvus_mgr.eval_results.aadd_documents(  # type: ignore[union-attr]
+            await vector_store_mgr.eval_results.aadd_documents(  # type: ignore[union-attr]
                 [milvus_doc], ids=[eval_id]
             )
             await pool.execute(
