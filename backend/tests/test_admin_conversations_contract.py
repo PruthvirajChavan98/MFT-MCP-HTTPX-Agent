@@ -392,6 +392,190 @@ async def test_checkpoint_trace_detail_strips_raw_follow_up_suffix():
     assert detail["events"][-1]["text"] == "Answer text"
 
 
+def _build_checkpoint_request(messages: list[SimpleNamespace]) -> SimpleNamespace:
+    checkpoint = {"channel_values": {"messages": messages}}
+    fake_ckp = SimpleNamespace(checkpoint=checkpoint)
+
+    class _FakeCheckpointer:
+        async def aget_tuple(self, _config):
+            return fake_ckp
+
+    return SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(checkpointer=_FakeCheckpointer()))
+    )
+
+
+@pytest.mark.asyncio
+async def test_session_traces_collapses_two_consecutive_assistant_turns_into_one_bubble():
+    """Tool-using ReAct turn: AI(tool_call) -> Tool -> AI(text) must render as one bubble."""
+    user = SimpleNamespace(
+        type="human", content="Show me my loan", additional_kwargs={}, response_metadata={}
+    )
+    ai_tool = SimpleNamespace(
+        type="ai",
+        content="",
+        tool_calls=[{"id": "call-1", "name": "select_loan", "args": {}}],
+        additional_kwargs={},
+        response_metadata={"created": 1700000000},
+    )
+    tool_msg = SimpleNamespace(
+        type="tool",
+        content='{"loan_id": "MOCK-LAP-9cb33c", "amount": 69730}',
+        tool_call_id="call-1",
+        additional_kwargs={},
+        response_metadata={},
+    )
+    ai_answer = SimpleNamespace(
+        type="ai",
+        content="The loan amount for your selected loan (MOCK-LAP-9cb33c) is INR 69,730.",
+        tool_calls=[],
+        additional_kwargs={"trace_id": "trace-final"},
+        response_metadata={"created": 1700000010},
+    )
+
+    request = _build_checkpoint_request([user, ai_tool, tool_msg, ai_answer])
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
+
+    assistant_rows = [item for item in response["items"] if item["role"] == "assistant"]
+    assert len(assistant_rows) == 1
+    row = assistant_rows[0]
+    assert row["content"].startswith("The loan amount")
+    assert row["traceId"] == "trace-final"
+    assert [tc["name"] for tc in row["toolCalls"]] == ["select_loan"]
+    assert row["toolCalls"][0]["tool_call_id"] == "call-1"
+
+
+@pytest.mark.asyncio
+async def test_session_traces_collapses_three_consecutive_assistant_turns_in_react_loop():
+    """Multi-hop ReAct: two tool hops + final answer must collapse to ONE bubble with BOTH chips."""
+    user = SimpleNamespace(
+        type="human", content="Show overdue", additional_kwargs={}, response_metadata={}
+    )
+    ai_hop_1 = SimpleNamespace(
+        type="ai",
+        content="",
+        tool_calls=[{"id": "call-a", "name": "select_loan", "args": {}}],
+        additional_kwargs={"reasoning": "I need the loan id first."},
+        response_metadata={"created": 1700000000},
+    )
+    tool_a = SimpleNamespace(
+        type="tool",
+        content='{"loan_id": "L1"}',
+        tool_call_id="call-a",
+        additional_kwargs={},
+        response_metadata={},
+    )
+    ai_hop_2 = SimpleNamespace(
+        type="ai",
+        content="",
+        tool_calls=[{"id": "call-b", "name": "get_overdue_amount", "args": {}}],
+        additional_kwargs={"reasoning": "Now fetch overdue."},
+        response_metadata={"created": 1700000005},
+    )
+    tool_b = SimpleNamespace(
+        type="tool",
+        content='{"overdue": 1234}',
+        tool_call_id="call-b",
+        additional_kwargs={},
+        response_metadata={},
+    )
+    ai_answer = SimpleNamespace(
+        type="ai",
+        content="Your overdue is INR 1,234.",
+        tool_calls=[],
+        additional_kwargs={"trace_id": "trace-final"},
+        response_metadata={"created": 1700000010},
+    )
+
+    request = _build_checkpoint_request([user, ai_hop_1, tool_a, ai_hop_2, tool_b, ai_answer])
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
+
+    assistant_rows = [item for item in response["items"] if item["role"] == "assistant"]
+    assert len(assistant_rows) == 1
+    row = assistant_rows[0]
+    assert row["content"] == "Your overdue is INR 1,234."
+    tool_names = [tc["name"] for tc in row["toolCalls"]]
+    assert tool_names == ["select_loan", "get_overdue_amount"]
+    assert "I need the loan id first." in row["reasoning"]
+    assert "Now fetch overdue." in row["reasoning"]
+
+
+@pytest.mark.asyncio
+async def test_session_traces_collapses_when_first_item_missing_toolcalls_due_to_lookup_failure():
+    """Mismatched tool_call_id: lookup returns nothing for first AI, but second AI must still merge.
+
+    Reproduces the exact failure mode in screenshot session 019e066a-...: the AI tool-call
+    request had a tool_call_id that the ToolMessage couldn't resolve back to it, so
+    _build_tool_call_lookup() left the first AI with no toolCalls. The old pairwise merge
+    required cur.get("toolCalls") truthy and therefore left both as separate bubbles.
+    """
+    user = SimpleNamespace(type="human", content="hi", additional_kwargs={}, response_metadata={})
+    ai_tool_unresolved = SimpleNamespace(
+        type="ai",
+        content="",
+        tool_calls=[{"id": "call-orig", "name": "select_loan", "args": {}}],
+        additional_kwargs={},
+        response_metadata={"created": 1700000000},
+    )
+    # ToolMessage with mismatched id -> lookup fails, first AI ships without toolCalls.
+    tool_msg = SimpleNamespace(
+        type="tool",
+        content="{}",
+        tool_call_id="call-DIFFERENT",
+        additional_kwargs={},
+        response_metadata={},
+    )
+    ai_answer = SimpleNamespace(
+        type="ai",
+        content="Answer text.",
+        tool_calls=[],
+        additional_kwargs={"trace_id": "trace-final"},
+        response_metadata={"created": 1700000010},
+    )
+
+    request = _build_checkpoint_request([user, ai_tool_unresolved, tool_msg, ai_answer])
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
+
+    assistant_rows = [item for item in response["items"] if item["role"] == "assistant"]
+    assert len(assistant_rows) == 1, "tool-call lookup miss must not split the bubble"
+    assert assistant_rows[0]["content"] == "Answer text."
+    assert assistant_rows[0]["traceId"] == "trace-final"
+
+
+@pytest.mark.asyncio
+async def test_session_traces_preserves_two_separate_turns_when_user_message_between_them():
+    """A user message between two AI messages must NOT collapse across the turn boundary."""
+    user_1 = SimpleNamespace(
+        type="human", content="first question", additional_kwargs={}, response_metadata={}
+    )
+    ai_1 = SimpleNamespace(
+        type="ai",
+        content="first answer.",
+        tool_calls=[],
+        additional_kwargs={},
+        response_metadata={"created": 1700000000},
+    )
+    user_2 = SimpleNamespace(
+        type="human", content="second question", additional_kwargs={}, response_metadata={}
+    )
+    ai_2 = SimpleNamespace(
+        type="ai",
+        content="second answer.",
+        tool_calls=[],
+        additional_kwargs={},
+        response_metadata={"created": 1700000010},
+    )
+
+    request = _build_checkpoint_request([user_1, ai_1, user_2, ai_2])
+    response = await traces_mod.session_traces(request=request, session_id="session-1", limit=50)
+
+    roles = [item["role"] for item in response["items"]]
+    assert roles == ["user", "assistant", "user", "assistant"]
+    assistant_rows = [item for item in response["items"] if item["role"] == "assistant"]
+    assert assistant_rows[0]["content"] == "first answer."
+    assert assistant_rows[1]["content"] == "second answer."
+
+
 def test_encode_cursor_handles_datetime():
     """Cursor payloads from DB queries may contain datetime objects."""
     from src.agent_service.api.admin_analytics.utils import _decode_cursor, _encode_cursor
