@@ -129,6 +129,85 @@ def _build_tool_call_lookup(
     return result
 
 
+def _collapse_assistant_run(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse every maximal run of consecutive ``assistant`` items into one.
+
+    LangGraph's ReAct loop persists a tool-using turn as multiple AIMessages
+    (one per tool hop plus a final answer). After ``ToolMessage`` rows are
+    filtered out upstream, those AIMessages land as adjacent assistant items
+    in ``items``. The transcript viewer renders one bot avatar per item, so
+    leaving them separate produces a "two bubbles for one turn" visual bug.
+
+    This helper walks ``items`` left-to-right, buffers each contiguous run of
+    ``role == "assistant"`` items, and merges every run into a single item:
+
+    * ``content`` -- last non-empty content in the run (or last item's content
+      if every item was empty).
+    * ``toolCalls`` -- ordered concatenation across the run, deduped by
+      ``tool_call_id``.
+    * ``reasoning`` -- non-empty reasoning strings joined by ``"\\n\\n"``.
+    * ``id``, ``followUps``, ``traceId``, ``cost``, ``provider``, ``model``,
+      ``totalTokens``, ``timestamp``, ``status`` -- copied from the chosen
+      "answer" item (the last with non-empty content, else the last item).
+
+    Non-assistant items (``user`` / ``system`` / unknown) terminate the run
+    and pass through untouched, preserving turn order.
+    """
+    if not items:
+        return items
+
+    def _flush(run: list[dict[str, Any]]) -> dict[str, Any]:
+        # Pick the answer item: prefer the last with non-empty content, else
+        # the last item. Empty-content runs are rare (model crashed mid-hop)
+        # but we still want to surface their toolCalls.
+        answer = next(
+            (item for item in reversed(run) if str(item.get("content") or "").strip()),
+            run[-1],
+        )
+
+        # Deduplicate toolCalls by tool_call_id (UUID per call, provider-issued).
+        seen_ids: set[str] = set()
+        merged_tool_calls: list[dict[str, Any]] = []
+        for item in run:
+            for tc in item.get("toolCalls") or []:
+                tc_id = str(tc.get("tool_call_id") or "")
+                if tc_id and tc_id in seen_ids:
+                    continue
+                if tc_id:
+                    seen_ids.add(tc_id)
+                merged_tool_calls.append(tc)
+
+        # Join all non-empty reasoning strings across the run.
+        reasonings = [
+            str(item.get("reasoning") or "")
+            for item in run
+            if str(item.get("reasoning") or "").strip()
+        ]
+        merged_reasoning = "\n\n".join(reasonings)
+
+        merged = dict(answer)
+        merged["reasoning"] = merged_reasoning
+        if merged_tool_calls:
+            merged["toolCalls"] = merged_tool_calls
+        else:
+            merged.pop("toolCalls", None)
+        return merged
+
+    out: list[dict[str, Any]] = []
+    run: list[dict[str, Any]] = []
+    for item in items:
+        if item.get("role") == "assistant":
+            run.append(item)
+            continue
+        if run:
+            out.append(_flush(run))
+            run = []
+        out.append(item)
+    if run:
+        out.append(_flush(run))
+    return out
+
+
 def _to_admin_eval_status(payload: dict[str, Any]) -> dict[str, Any]:
     inline_evals = payload.get("inline_evals") or {}
     return {
@@ -390,35 +469,15 @@ async def session_traces(
                 item["toolCalls"] = tool_calls
             items.append(item)
 
-        # Merge consecutive assistant messages produced by LangGraph's ReAct loop.
-        # A tool-using turn produces: AIMessage(tool_calls) → ToolMessage → AIMessage(text).
-        # After skipping ToolMessages above, this leaves two adjacent assistant items:
-        #   [i]   has toolCalls but empty content (the tool-call request)
-        #   [i+1] has content but no toolCalls  (the final text response)
-        # Merge them into a single item so the frontend renders one bubble.
-        merged: list[dict[str, Any]] = []
-        i = 0
-        while i < len(items):
-            cur = items[i]
-            nxt = items[i + 1] if i + 1 < len(items) else None
-            if (
-                nxt is not None
-                and cur.get("role") == "assistant"
-                and nxt.get("role") == "assistant"
-                and cur.get("toolCalls")
-            ):
-                # Merge: keep the second item (final response) as base,
-                # attach toolCalls from the first (tool-calling step).
-                nxt["toolCalls"] = cur["toolCalls"]
-                # Preserve reasoning from tool-call step if response has none.
-                if cur.get("reasoning") and not nxt.get("reasoning", "").strip():
-                    nxt["reasoning"] = cur["reasoning"]
-                merged.append(nxt)
-                i += 2
-            else:
-                merged.append(cur)
-                i += 1
-        items = merged
+        # Collapse runs of consecutive assistant items into a single bubble.
+        # LangGraph's ReAct loop persists a tool-using turn as multiple
+        # AIMessages (one per tool hop plus a final answer). After ToolMessages
+        # are filtered above, they land as adjacent assistant items. The
+        # transcript viewer renders one bot avatar per item, so leaving them
+        # separate produces a "two bubbles for one turn" visual bug -- the
+        # collapse merges every run's content, toolCalls, and reasoning into
+        # one item so the frontend renders exactly one bubble per logical turn.
+        items = _collapse_assistant_run(items)
 
     if not items:
         # Fallback for sessions with missing checkpointer data: reconstruct from eval_traces.
