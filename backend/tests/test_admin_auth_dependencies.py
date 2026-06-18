@@ -98,7 +98,13 @@ async def test_require_admin_rejects_expired_cookie() -> None:
 @pytest.mark.asyncio
 async def test_require_admin_rejects_tampered_cookie() -> None:
     token = _issue_test_jwt("super_admin", ["admin"])
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    # Mutate the FIRST character of the signature segment, not the last —
+    # see the long comment in tests/test_admin_jwt.py on
+    # `test_verify_access_token_rejects_tampered_signature` for why the
+    # `token[-1]` formulation is intermittently silent (~6 % flake rate).
+    sig_start = token.rindex(".") + 1
+    substitute = "A" if token[sig_start] != "A" else "B"
+    tampered = token[:sig_start] + substitute + token[sig_start + 1 :]
     request = _make_request(cookies={"mft_admin_at": tampered})
     with pytest.raises(HTTPException) as exc:
         await require_admin(request)
